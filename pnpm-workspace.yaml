@@ -1,0 +1,5 @@
+# pnpm build-script approvals for scaffolded persianlabsui projects
+allowBuilds:
+  sharp: true
+  unrs-resolver: true
+  esbuild: true
