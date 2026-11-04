@@ -1,0 +1,294 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==========================================
+// 1. GLOBAL IDENTITY (هویت سراسری)
+// ==========================================
+
+model User {
+  id             String    @id @default(uuid())
+  phone          String    @unique
+  password       String?   // هش شده (اختیاری)
+  otpCode        String?
+  otpExpiresAt   DateTime?
+  fullName       String?
+  nationalId     String?
+
+  // روابط کاربر با کل سیستم
+  systemAdmin    SystemAdmin?
+  clinicRoles    ClinicUser[]
+  clientProfiles Client[]
+  createdTickets Ticket[]
+  ticketMessages TicketMessage[]
+}
+
+model SystemAdmin {
+  id        String @id @default(uuid())
+  userId    String @unique
+  user      User   @relation(fields: [userId], references: [id])
+  level     String @default("SUPPORT") // SUPER_ADMIN, SUPPORT
+}
+
+// ==========================================
+// 2. CLINIC & RBAC (کلینیک و کنترل دسترسی)
+// ==========================================
+
+model Clinic {
+  id           String   @id @default(uuid())
+  name         String
+  subdomain    String   @unique
+
+  // روابط کلینیک
+  users        ClinicUser[]
+  roles        ClinicRole[]
+  clients      Client[]
+  services     Service[]
+  products     ClinicProduct[]
+  shifts       Shift[]
+  appointments Appointment[]
+  invoices     Invoice[]
+  tickets      Ticket[]
+  bankAccounts ClinicBankAccount[]
+  terminals    PaymentTerminal[]
+}
+
+model ClinicRole {
+  id          String   @id @default(uuid())
+  clinicId    String
+  clinic      Clinic   @relation(fields: [clinicId], references: [id])
+  name        String   // مثلا: "اپراتور پذیرش"
+  permissions Json     // ["can_add_client", "can_view_finance"]
+
+  users       ClinicUser[]
+}
+
+model ClinicUser {
+  id          String   @id @default(uuid())
+  userId      String
+  clinicId    String
+  roleId      String
+
+  user        User       @relation(fields: [userId], references: [id])
+  clinic      Clinic     @relation(fields: [clinicId], references: [id])
+  role        ClinicRole @relation(fields: [roleId], references: [id])
+
+  // روابط نوبت‌دهی و پورسانت
+  shifts      Shift[]
+  appointments Appointment[] @relation("TherapistAppointments")
+  
+  therapistServices ProvidedService[] @relation("ServiceTherapist")
+  assistantServices ProvidedService[] @relation("ServiceAssistant")
+}
+
+// ==========================================
+// 3. CLIENT & CLINICAL (کلاینت‌ها و خدمات)
+// ==========================================
+
+model Client {
+  id             String   @id @default(uuid())
+  userId         String
+  clinicId       String
+  medicalProfile Json?    // فرم‌های داینامیک پرونده پزشکی مختص کلینیک
+  walletBalance  Int      @default(0) // موجودی کش شده کیف پول در این کلینیک
+
+  user           User     @relation(fields: [userId], references: [id])
+  clinic         Clinic   @relation(fields: [clinicId], references: [id])
+
+  appointments   Appointment[]
+  invoices       Invoice[]
+}
+
+model Service {
+  id          String   @id @default(uuid())
+  clinicId    String
+  clinic      Clinic   @relation(fields: [clinicId], references: [id])
+  title       String
+  basePrice   Int
+
+  providedServices ProvidedService[]
+}
+
+// ==========================================
+// 4. APPOINTMENTS (نوبت‌دهی)
+// ==========================================
+
+model Shift {
+  id          String     @id @default(uuid())
+  clinicId    String
+  therapistId String
+  dayOfWeek   Int        // 1 تا 7
+  startTime   String     // "09:00"
+  endTime     String     // "14:00"
+
+  clinic      Clinic     @relation(fields: [clinicId], references: [id])
+  therapist   ClinicUser @relation(fields: [therapistId], references: [id])
+}
+
+model Appointment {
+  id             String     @id @default(uuid())
+  clinicId       String
+  clientId       String
+  therapistId    String
+  startDatetime  DateTime
+  endDatetime    DateTime
+  status         String     @default("BOOKED") // BOOKED, CHECKED_IN, DONE, CANCELLED
+
+  clinic         Clinic     @relation(fields: [clinicId], references: [id])
+  client         Client     @relation(fields: [clientId], references: [id])
+  therapist      ClinicUser @relation("TherapistAppointments", fields: [therapistId], references: [id])
+}
+
+// ==========================================
+// 5. BILLING & BANKING (مالی، حساب‌ها و پایانه‌ها)
+// ==========================================
+
+model ClinicBankAccount {
+  id            String   @id @default(uuid())
+  clinicId      String
+  bankName      String   // مثلا: "بانک سامان"
+  accountNumber String?  
+  iban          String?  
+  ownerName     String   
+
+  clinic        Clinic   @relation(fields: [clinicId], references: [id])
+  terminals     PaymentTerminal[]
+}
+
+model PaymentTerminal {
+  id            String   @id @default(uuid())
+  clinicId      String
+  bankAccountId String   
+  name          String   // مثلا: "پوز پذیرش 1" یا "درگاه پرداخت"
+  type          String   // POS, ONLINE_GATEWAY, CARD_NUMBER
+
+  clinic        Clinic   @relation(fields: [clinicId], references: [id])
+  bankAccount   ClinicBankAccount @relation(fields: [bankAccountId], references: [id])
+  payments      Payment[]
+}
+
+model Invoice {
+  id            String   @id @default(uuid())
+  clinicId      String
+  clientId      String
+  totalAmount   Int
+  paidAmount    Int      @default(0)
+  status        String   @default("UNPAID") // UNPAID, PARTIAL, PAID
+
+  clinic        Clinic   @relation(fields: [clinicId], references: [id])
+  client        Client   @relation(fields: [clientId], references: [id])
+  
+  items         ProvidedService[]
+  payments      Payment[]
+}
+
+model ProvidedService {
+  id               String   @id @default(uuid())
+  invoiceId        String
+  serviceId        String
+  
+  // ارقام قطعی شده (Snapshot)
+  finalPrice       Int
+  therapistAmount  Int
+  assistantAmount  Int      @default(0)
+  referrerAmount   Int      @default(0)
+  clinicNetProfit  Int
+
+  // روابط پرسنل
+  therapistId      String
+  assistantId      String?
+  referrerId       String?
+
+  invoice          Invoice    @relation(fields: [invoiceId], references: [id])
+  service          Service    @relation(fields: [serviceId], references: [id])
+  therapist        ClinicUser @relation("ServiceTherapist", fields: [therapistId], references: [id])
+  assistant        ClinicUser? @relation("ServiceAssistant", fields: [assistantId], references: [id])
+}
+
+model Payment {
+  id             String   @id @default(uuid())
+  invoiceId      String?
+  amount         Int
+  
+  // CASH, POS, CARD_TO_CARD, ONLINE, CREDIT_SERVICE, CHECK, WALLET
+  paymentMethod  String   
+  status         String   @default("CLEARED") // PENDING, CLEARED, BOUNCED
+  
+  terminalId     String?  
+  trackingCode   String?  // شماره پیگیری رسید پوز یا فیش
+  creditProvider String?  // SNAPPAY, DIGIPAY (برای پرداخت‌های اعتباری)
+  dueDate        DateTime? // برای چک 
+  createdAt      DateTime @default(now())
+
+  invoice        Invoice?         @relation(fields: [invoiceId], references: [id])
+  terminal       PaymentTerminal? @relation(fields: [terminalId], references: [id])
+}
+
+// ==========================================
+// 6. INVENTORY & B2B STORE (انبار و فروشگاه مرکزی)
+// ==========================================
+
+model PlatformProduct {
+  id            String   @id @default(uuid())
+  name          String
+  b2bPrice      Int
+  platformStock Int
+}
+
+model ClinicProduct {
+  id                String   @id @default(uuid())
+  clinicId          String
+  name              String
+  clientPrice       Int      // قیمتی که برای کلاینت فاکتور می‌شود
+  currentStock      Int      @default(0)
+  lowStockThreshold Int      @default(5)
+
+  clinic            Clinic   @relation(fields: [clinicId], references: [id])
+  inventoryLogs     InventoryLog[]
+}
+
+model InventoryLog {
+  id                String   @id @default(uuid())
+  clinicProductId   String
+  quantityChange    Int      // مثبت یا منفی
+  type              String   // B2B_IN, CLIENT_OUT, MANUAL_ADJUST
+  referenceId       String?  
+  createdAt         DateTime @default(now())
+
+  clinicProduct     ClinicProduct @relation(fields: [clinicProductId], references: [id])
+}
+
+// ==========================================
+// 7. TICKETING (سیستم پشتیبانی)
+// ==========================================
+
+model Ticket {
+  id             String   @id @default(uuid())
+  clinicId       String
+  creatorUserId  String
+  subject        String
+  category       String   // CLINICAL, BILLING, PLATFORM_SUPPORT
+  status         String   @default("OPEN") // OPEN, ANSWERED, CLOSED
+
+  clinic         Clinic   @relation(fields: [clinicId], references: [id])
+  creator        User     @relation(fields: [creatorUserId], references: [id])
+  messages       TicketMessage[]
+}
+
+model TicketMessage {
+  id             String   @id @default(uuid())
+  ticketId       String
+  senderUserId   String
+  body           String
+  isInternalNote Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  ticket         Ticket   @relation(fields: [ticketId], references: [id])
+  sender         User     @relation(fields: [senderUserId], references: [id])
+}
