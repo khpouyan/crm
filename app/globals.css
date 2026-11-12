@@ -20,143 +20,180 @@
 @utility num-en {
   font-feature-settings: "ss01" off;
 }
-
-@theme inline {
-    --font-heading: var(--font-sans);
-    --font-sans: var(--font-sans);
-    --font-mono: var(--font-mono);
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
-    --color-chart-5: var(--chart-5);
-    --color-chart-4: var(--chart-4);
-    --color-chart-3: var(--chart-3);
-    --color-chart-2: var(--chart-2);
-    --color-chart-1: var(--chart-1);
-    --color-ring: var(--ring);
-    --color-input: var(--input);
-    --color-border: var(--border);
-    --color-destructive: var(--destructive);
-    --color-accent-foreground: var(--accent-foreground);
-    --color-accent: var(--accent);
-    --color-muted-foreground: var(--muted-foreground);
-    --color-muted: var(--muted);
-    --color-secondary-foreground: var(--secondary-foreground);
-    --color-secondary: var(--secondary);
-    --color-primary-foreground: var(--primary-foreground);
-    --color-primary: var(--primary);
-    --color-popover-foreground: var(--popover-foreground);
-    --color-popover: var(--popover);
-    --color-card-foreground: var(--card-foreground);
-    --color-card: var(--card);
-    --color-foreground: var(--foreground);
-    --color-background: var(--background);
-    --radius-sm: calc(var(--radius) * 0.6);
-    --radius-md: calc(var(--radius) * 0.8);
-    --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) * 1.4);
-    --radius-2xl: calc(var(--radius) * 1.8);
-    --radius-3xl: calc(var(--radius) * 2.2);
-    --radius-4xl: calc(var(--radius) * 2.6);
-}
-
 :root {
-        /* Our custom Vazirmatn cut first (variable, digits + Arabic, NO Latin
-       letters — built by scripts/build-vazirmatn-subset.py). It owns
-       Persian glyphs AND digits; body ss01 (below) turns typed 0-9
-       into Farsi digits. English falls through to Geist — the cut has
-       no Latin letters. No system fallbacks by design. Mono stays
-       Geist Mono first so code numbers keep their width. */
-    --font-sans: var(--font-fa), var(--font-geist);
-    --font-heading: var(--font-fa), var(--font-geist);
-    --font-mono: var(--font-mono-geist-mono), var(--font-fa);
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.491 0.27 292.581);
-    --primary-foreground: oklch(0.969 0.016 293.756);
-    --secondary: oklch(0.967 0.001 286.375);
-    --secondary-foreground: oklch(0.21 0.006 285.885);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.85rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+  --background: oklch(1.0000 0 0);
+  --foreground: oklch(0.2860 0.0354 274.7893);
+  --card: oklch(1.0000 0 0);
+  --card-foreground: oklch(0.2860 0.0354 274.7893);
+  --popover: oklch(1.0000 0 0);
+  --popover-foreground: oklch(0.2860 0.0354 274.7893);
+  --primary: oklch(0.5979 0.1987 282.5292);
+  --primary-foreground: oklch(1.0000 0 0);
+  --secondary: oklch(0.9099 0.0313 291.7571);
+  --secondary-foreground: oklch(0.5979 0.1987 282.5292);
+  --muted: oklch(0.9708 0.0067 277.1638);
+  --muted-foreground: oklch(0.6118 0.0199 275.4465);
+  --accent: oklch(0.7230 0.1252 210.3251);
+  --accent-foreground: oklch(1.0000 0 0);
+  --destructive: oklch(0.6726 0.2150 23.6761);
+  --destructive-foreground: oklch(1.0000 0 0);
+  --border: oklch(0.9099 0.0313 291.7571);
+  --input: oklch(0.9099 0.0313 291.7571);
+  --ring: oklch(0.5979 0.1987 282.5292);
+  --chart-1: oklch(0.5979 0.1987 282.5292);
+  --chart-2: oklch(0.7230 0.1252 210.3251);
+  --chart-3: oklch(0.7316 0.1782 152.8235);
+  --chart-4: oklch(0.8040 0.1659 72.5466);
+  --chart-5: oklch(0.6293 0.2091 13.3913);
+  --sidebar: oklch(1.0000 0 0);
+  --sidebar-foreground: oklch(0.2860 0.0354 274.7893);
+  --sidebar-primary: oklch(0.5979 0.1987 282.5292);
+  --sidebar-primary-foreground: oklch(1.0000 0 0);
+  --sidebar-accent: oklch(0.9099 0.0313 291.7571);
+  --sidebar-accent-foreground: oklch(0.5979 0.1987 282.5292);
+  --sidebar-border: oklch(0.9099 0.0313 291.7571);
+  --sidebar-ring: oklch(0.5979 0.1987 282.5292);
+  --font-sans: var(--font-fa), var(--font-geist);
+  --font-heading: var(--font-fa), var(--font-geist);
+  --font-mono: var(--font-mono-geist-mono), var(--font-fa);
+  --radius: 0.75rem;
+  --shadow-x: 0px;
+  --shadow-y: 0px;
+  --shadow-blur: 0px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0.05;
+  --shadow-color: #25293c;
+  --shadow-2xs: 0px 0px 0px 0px hsl(229.5652 23.7113% 19.0196% / 0.03);
+  --shadow-xs: 0px 0px 0px 0px hsl(229.5652 23.7113% 19.0196% / 0.03);
+  --shadow-sm: 0px 0px 0px 0px hsl(229.5652 23.7113% 19.0196% / 0.05), 0px 1px 2px -1px hsl(229.5652 23.7113% 19.0196% / 0.05);
+  --shadow: 0px 0px 0px 0px hsl(229.5652 23.7113% 19.0196% / 0.05), 0px 1px 2px -1px hsl(229.5652 23.7113% 19.0196% / 0.05);
+  --shadow-md: 0px 0px 0px 0px hsl(229.5652 23.7113% 19.0196% / 0.05), 0px 2px 4px -1px hsl(229.5652 23.7113% 19.0196% / 0.05);
+  --shadow-lg: 0px 0px 0px 0px hsl(229.5652 23.7113% 19.0196% / 0.05), 0px 4px 6px -1px hsl(229.5652 23.7113% 19.0196% / 0.05);
+  --shadow-xl: 0px 0px 0px 0px hsl(229.5652 23.7113% 19.0196% / 0.05), 0px 8px 10px -1px hsl(229.5652 23.7113% 19.0196% / 0.05);
+  --shadow-2xl: 0px 0px 0px 0px hsl(229.5652 23.7113% 19.0196% / 0.13);
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.432 0.232 292.759);
-    --primary-foreground: oklch(0.969 0.016 293.756);
-    --secondary: oklch(0.274 0.006 286.033);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
-    --radius: 0.85rem;
+  --background: oklch(0.2860 0.0354 274.7893);
+  --foreground: oklch(1.0000 0 0);
+  --card: oklch(0.3272 0.0394 276.0479);
+  --card-foreground: oklch(1.0000 0 0);
+  --popover: oklch(0.3272 0.0394 276.0479);
+  --popover-foreground: oklch(1.0000 0 0);
+  --primary: oklch(0.5979 0.1987 282.5292);
+  --primary-foreground: oklch(1.0000 0 0);
+  --secondary: oklch(0.5979 0.1987 282.5292);
+  --secondary-foreground: oklch(1.0000 0 0);
+  --muted: oklch(0.3576 0.0368 276.0109);
+  --muted-foreground: oklch(0.6118 0.0199 275.4465);
+  --accent: oklch(0.3666 0.0381 278.3111);
+  --accent-foreground: oklch(1.0000 0 0);
+  --destructive: oklch(0.6726 0.2150 23.6761);
+  --destructive-foreground: oklch(0.9099 0.0313 291.7571);
+  --border: oklch(0.4698 0.0357 278.8410);
+  --input: oklch(0.2666 0.0291 270.0915);
+  --ring: oklch(0.5979 0.1987 282.5292);
+  --chart-1: oklch(0.5979 0.1987 282.5292);
+  --chart-2: oklch(0.6449 0.1648 248.6423);
+  --chart-3: oklch(0.7230 0.1252 210.3251);
+  --chart-4: oklch(0.7316 0.1782 152.8235);
+  --chart-5: oklch(0.8040 0.1659 72.5466);
+  --sidebar: oklch(0.3272 0.0394 276.0479);
+  --sidebar-foreground: oklch(1.0000 0 0);
+  --sidebar-primary: oklch(0.5979 0.1987 282.5292);
+  --sidebar-primary-foreground: oklch(1.0000 0 0);
+  --sidebar-accent: oklch(0.3666 0.0381 278.3111);
+  --sidebar-accent-foreground: oklch(1.0000 0 0);
+  --sidebar-border: oklch(0.4698 0.0357 278.8410);
+  --sidebar-ring: oklch(0.5979 0.1987 282.5292);
+  --font-sans: var(--font-fa), var(--font-geist);
+  --font-heading: var(--font-fa), var(--font-geist);
+  --font-mono: var(--font-mono-geist-mono), var(--font-fa);
+  --radius: 0.75rem;
+  --shadow-x: 0px;
+  --shadow-y: 0px;
+  --shadow-blur: 0px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0.05;
+  --shadow-color: oklch(0 0 0);
+  --shadow-2xs: 0px 0px 0px 0px hsl(0 0% 0% / 0.03);
+  --shadow-xs: 0px 0px 0px 0px hsl(0 0% 0% / 0.03);
+  --shadow-sm: 0px 0px 0px 0px hsl(0 0% 0% / 0.05), 0px 1px 2px -1px hsl(0 0% 0% / 0.05);
+  --shadow: 0px 0px 0px 0px hsl(0 0% 0% / 0.05), 0px 1px 2px -1px hsl(0 0% 0% / 0.05);
+  --shadow-md: 0px 0px 0px 0px hsl(0 0% 0% / 0.05), 0px 2px 4px -1px hsl(0 0% 0% / 0.05);
+  --shadow-lg: 0px 0px 0px 0px hsl(0 0% 0% / 0.05), 0px 4px 6px -1px hsl(0 0% 0% / 0.05);
+  --shadow-xl: 0px 0px 0px 0px hsl(0 0% 0% / 0.05), 0px 8px 10px -1px hsl(0 0% 0% / 0.05);
+  --shadow-2xl: 0px 0px 0px 0px hsl(0 0% 0% / 0.13);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-heading: var(--font-sans);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --shadow-2xs: var(--shadow-2xs);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow: var(--shadow);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-2xl: var(--shadow-2xl);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
+  }
   body {
     @apply bg-background text-foreground;
     /* The FA font's "Farsi Digits" stylistic set (ss01 Vazirmatn /
        ss20 Estedad): renders every digit (Latin 0-9 and Arabic ٠-٩) as
        Farsi ۰-۹. Tabular numbers: add "tnum". */
     font-feature-settings: "ss01";
-    }
-  html {
+    
+  }
+   html {
     @apply font-sans;
     }
-  font-feature-settings: "ss01" {}
 }

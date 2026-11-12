@@ -14,7 +14,9 @@ function CollapsibleTrigger({ ...props }: CollapsiblePrimitive.Trigger.Props) {
 
 function CollapsibleContent({ ...props }: CollapsiblePrimitive.Panel.Props) {
   return (
-    <CollapsiblePrimitive.Panel data-slot="collapsible-content" {...props} />
+    <CollapsiblePrimitive.Panel data-slot="collapsible-content" className=
+      "overflow-hidden transition-[height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] h-[var(--collapsible-panel-height)] data-[starting-style]:h-0 data-[ending-style]:h-0" 
+      {...props} />
   )
 }
 
