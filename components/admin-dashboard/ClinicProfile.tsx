@@ -36,19 +36,20 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { CitySelector } from "@/components/ui/city-selector"
 
-const IRAN_PROVINCES: Record<string, string[]> = {
-  "تهران": ["تهران", "شهریار", "اسلامشهر", "ورامین", "دماوند", "شمیرانات", "ری"],
-  "خراسان رضوی": ["مشهد", "نیشابور", "سبزوار", "تربت حیدریه", "قوچان", "گناباد"],
-  "اصفهان": ["اصفهان", "کاشان", "خمینی‌شهر", "نجف‌آباد", "شاهین‌شهر", "شهرضا"],
-  "فارس": ["شیراز", "مرودشت", "کازرون", "فسا", "جهرم", "لارستان"],
-  "آذربایجان شرقی": ["تبریز", "مراغه", "مرند", "میانه", "اهر", "بناب"],
-  "خوزستان": ["اهواز", "دزفول", "آبادان", "خرمشهر", "ماهشهر", "شوشتر"],
-  "مازندران": ["ساری", "بابل", "آمل", "قائم‌شهر", "چالوس", "تنکابن"],
-  "گیلان": ["رشت", "بندر انزلی", "لاهیجان", "لنگرود", "تالش", "فومن"],
-  "البرز": ["کرج", "فردیس", "نظرآباد", "ساوجبلاغ", "اشتهارد"],
-  "کرمان": ["کرمان", "سیرجان", "رفسنجان", "جیرفت", "بم"],
-}
+// const IRAN_PROVINCES: Record<string, string[]> = {
+//   "تهران": ["تهران", "شهریار", "اسلامشهر", "ورامین", "دماوند", "شمیرانات", "ری"],
+//   "خراسان رضوی": ["مشهد", "نیشابور", "سبزوار", "تربت حیدریه", "قوچان", "گناباد"],
+//   "اصفهان": ["اصفهان", "کاشان", "خمینی‌شهر", "نجف‌آباد", "شاهین‌شهر", "شهرضا"],
+//   "فارس": ["شیراز", "مرودشت", "کازرون", "فسا", "جهرم", "لارستان"],
+//   "آذربایجان شرقی": ["تبریز", "مراغه", "مرند", "میانه", "اهر", "بناب"],
+//   "خوزستان": ["اهواز", "دزفول", "آبادان", "خرمشهر", "ماهشهر", "شوشتر"],
+//   "مازندران": ["ساری", "بابل", "آمل", "قائم‌شهر", "چالوس", "تنکابن"],
+//   "گیلان": ["رشت", "بندر انزلی", "لاهیجان", "لنگرود", "تالش", "فومن"],
+//   "البرز": ["کرج", "فردیس", "نظرآباد", "ساوجبلاغ", "اشتهارد"],
+//   "کرمان": ["کرمان", "سیرجان", "رفسنجان", "جیرفت", "بم"],
+// }
 
 export interface ClinicProfileProps {
   initialData?: {
@@ -214,32 +215,8 @@ export function ClinicProfile({ initialData }: ClinicProfileProps) {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-foreground">استان</label>
-                    <select
-                      value={selectedProvince}
-                      onChange={(e) => {
-                        const prov = e.target.value
-                        setSelectedProvince(prov)
-                        setSelectedCity(IRAN_PROVINCES[prov]?.[0] || "")
-                      }}
-                      className="h-9 w-full rounded-md border border-input bg-muted/30 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      {Object.keys(IRAN_PROVINCES).map((prov) => (
-                        <option key={prov} value={prov}>{prov}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-foreground">شهرستان / شهر</label>
-                    <select
-                      value={selectedCity}
-                      onChange={(e) => setSelectedCity(e.target.value)}
-                      className="h-9 w-full rounded-md border border-input bg-muted/30 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      {(IRAN_PROVINCES[selectedProvince] || []).map((ct) => (
-                        <option key={ct} value={ct}>{ct}</option>
-                      ))}
-                    </select>
+                    <label className="text-xs font-medium text-foreground">آدرس کلینیک</label>
+                    <CitySelector />
                   </div>
                 </div>
 

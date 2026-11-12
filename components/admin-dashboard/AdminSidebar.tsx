@@ -79,13 +79,16 @@ export const adminSidebarData = {
       items: [
         { title: "کلینیک ها", href: "/admin-dashboard/clinics" },
         { title: "افزودن مرکز جدید", href: "#" },
+        { title: "کلاینت ها", href: "#" },
+        { title: "افزودن مدیر جدید", href: "#" },
       ],
     },
     {
       title: "پنل پیامکی",
       icon: MessageCircleCheck,
       items: [
-        { title: "گزارش ارسال", href: "#" },
+        { title: "داشبورد", href: "#" },
+        { title: "مدیریت قالب ها", href: "#" },
         { title: "شارژ اعتبار", href: "#" },
         { title: "خطوط اختصاصی", href: "#" },
       ],
@@ -192,59 +195,59 @@ function NavMain({ items = adminSidebarData.navMain }: { items?: typeof adminSid
   )
 }
 
-function NavProjects({ projects = adminSidebarData.projects }: { projects?: typeof adminSidebarData.projects }) {
-  const { isMobile } = useSidebar()
+// function NavProjects({ projects = adminSidebarData.projects }: { projects?: typeof adminSidebarData.projects }) {
+//   const { isMobile } = useSidebar()
 
-  return (
-    <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>پروژه‌ها</SidebarGroupLabel>
-      <SidebarGroupAction>
-        <Plus className="size-4" /> <span className="sr-only">افزودن پروژه</span>
-      </SidebarGroupAction>
-      <SidebarMenu>
-        {projects.map((item) => (
-          <SidebarMenuItem key={item.name}>
-            <SidebarMenuButton render={<a href="#" />}>
-              <item.icon className="size-4" />
-              <span>{item.name}</span>
-            </SidebarMenuButton>
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<SidebarMenuAction showOnHover />}>
-                <MoreHorizontal className="size-4" />
-                <span className="sr-only">بیشتر</span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                className="w-48 rounded-lg"
-                side={isMobile ? "bottom" : "left"}
-                align={isMobile ? "end" : "start"}
-              >
-                <DropdownMenuItem>
-                  <Folder className="size-4 text-muted-foreground" />
-                  <span>مشاهده پروژه</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Forward className="size-4 text-muted-foreground" />
-                  <span>اشتراک‌گذاری پروژه</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive">
-                  <Trash2 className="size-4" />
-                  <span>حذف پروژه</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        ))}
-        <SidebarMenuItem>
-          <SidebarMenuButton className="text-sidebar-foreground/70">
-            <MoreHorizontal className="size-4 text-sidebar-foreground/70" />
-            <span>بیشتر</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </SidebarMenu>
-    </SidebarGroup>
-  )
-}
+//   return (
+//     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+//       <SidebarGroupLabel>پروژه‌ها</SidebarGroupLabel>
+//       <SidebarGroupAction>
+//         <Plus className="size-4" /> <span className="sr-only">افزودن پروژه</span>
+//       </SidebarGroupAction>
+//       <SidebarMenu>
+//         {projects.map((item) => (
+//           <SidebarMenuItem key={item.name}>
+//             <SidebarMenuButton render={<a href="#" />}>
+//               <item.icon className="size-4" />
+//               <span>{item.name}</span>
+//             </SidebarMenuButton>
+//             <DropdownMenu>
+//               <DropdownMenuTrigger render={<SidebarMenuAction showOnHover />}>
+//                 <MoreHorizontal className="size-4" />
+//                 <span className="sr-only">بیشتر</span>
+//               </DropdownMenuTrigger>
+//               <DropdownMenuContent
+//                 className="w-48 rounded-lg"
+//                 side={isMobile ? "bottom" : "left"}
+//                 align={isMobile ? "end" : "start"}
+//               >
+//                 <DropdownMenuItem>
+//                   <Folder className="size-4 text-muted-foreground" />
+//                   <span>مشاهده پروژه</span>
+//                 </DropdownMenuItem>
+//                 <DropdownMenuItem>
+//                   <Forward className="size-4 text-muted-foreground" />
+//                   <span>اشتراک‌گذاری پروژه</span>
+//                 </DropdownMenuItem>
+//                 <DropdownMenuSeparator />
+//                 <DropdownMenuItem variant="destructive">
+//                   <Trash2 className="size-4" />
+//                   <span>حذف پروژه</span>
+//                 </DropdownMenuItem>
+//               </DropdownMenuContent>
+//             </DropdownMenu>
+//           </SidebarMenuItem>
+//         ))}
+//         <SidebarMenuItem>
+//           <SidebarMenuButton className="text-sidebar-foreground/70">
+//             <MoreHorizontal className="size-4 text-sidebar-foreground/70" />
+//             <span>بیشتر</span>
+//           </SidebarMenuButton>
+//         </SidebarMenuItem>
+//       </SidebarMenu>
+//     </SidebarGroup>
+//   )
+// }
 
 function NavUser({ user = adminSidebarData.user }: { user?: typeof adminSidebarData.user }) {
   const { isMobile } = useSidebar()
@@ -312,7 +315,7 @@ export function AdminSidebar({ sidebarData = adminSidebarData, ...props }: Admin
       <SidebarContent>
         <NavDashboard dashboard={sidebarData.dashboard} />
         <NavMain items={sidebarData.navMain} />
-        <NavProjects projects={sidebarData.projects} />
+        {/* <NavProjects projects={sidebarData.projects} /> */}
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={sidebarData.user} />
