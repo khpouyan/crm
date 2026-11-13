@@ -1,8 +1,22 @@
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
-import { ClinicSidebar } from "@/components/clinic-dashboard/ClinicSidebar"
-import { ModeToggle } from "@/components/mode-toggle"
+// app/clinic-dashboard/(dashboard)/layout.tsx
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth/session";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { ClinicSidebar } from "@/components/clinic-dashboard/ClinicSidebar";
+import { ModeToggle } from "@/components/mode-toggle";
 
-export default function ClinicLayout({ children }: { children: React.ReactNode }) {
+
+export default async function ClinicLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/clinic-dashboard/login");
+  }
+
   return (
     <SidebarProvider>
       {/* سایدبار سراسری ادمین */}
@@ -13,6 +27,7 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
           <SidebarTrigger />
           <div className="ms-auto flex items-center gap-2">
             <ModeToggle />
+            
           </div>
         </header>
 
@@ -21,5 +36,5 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
         </div>
       </SidebarInset>
     </SidebarProvider>
-  )
+  );
 }

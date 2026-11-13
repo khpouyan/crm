@@ -1,7 +1,8 @@
-"use client";
+// app/clinic-dashboard/(auth)/page.tsx
+"use client"
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import {
   Card,
   CardHeader,
@@ -9,21 +10,28 @@ import {
   CardDescription,
   CardContent,
   CardFooter,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+} from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
+import { Separator } from "@/components/ui/separator"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group"
 import {
   InputOTP,
   InputOTPGroup,
+  InputOTPSeparator,
   InputOTPSlot,
-} from "@/components/ui/input-otp";
+} from "@/components/ui/input-otp"
 import {
   sendOtpAction,
   verifyOtpAction,
   loginWithPasswordAction,
-} from "@/app/actions/auth";
+  setInitialPasswordAction,
+} from "@/app/actions/clinic-auth"
 import {
   ArrowRight,
   KeyRound,
@@ -36,142 +44,188 @@ import {
   Timer,
   Loader2,
   AlertCircle,
-} from "lucide-react";
-import { ModeToggle } from "@/components/mode-toggle";
+  ShieldCheck,
+} from "lucide-react"
+import { ModeToggle } from "@/components/mode-toggle"
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [authMode, setAuthMode] = useState<"password" | "otp_phone" | "otp_verify">("password");
-  const [mobileNumber, setMobileNumber] = useState("");
-  const [password, setPassword] = useState("");
-  const [otpCode, setOtpCode] = useState("");
+  const router = useRouter()
+  const [authMode, setAuthMode] = useState<
+    "password" | "otp_phone" | "otp_verify" | "set_password"
+  >("password")
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [mobileNumber, setMobileNumber] = useState("")
+  const [password, setPassword] = useState("")
+  const [otpCode, setOtpCode] = useState("")
+
+  // استیت‌های مربوط به تنظیم رمز عبور اولیه
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [showNewPassword, setShowNewPassword] = useState(false)
+
+  const [isLoading, setIsLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   // تایمر ۲ دقیقه‌ای (۱۲۰ ثانیه)
-  const [timeLeft, setTimeLeft] = useState(120);
-  const [canResend, setCanResend] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(120)
+  const [canResend, setCanResend] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
-  // افکت شمارش معکوس
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: NodeJS.Timeout
 
     if (authMode === "otp_verify" && timeLeft > 0) {
       timer = setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
-      }, 1000);
+        setTimeLeft((prev) => prev - 1)
+      }, 1000)
     } else if (timeLeft === 0) {
-      setCanResend(true);
+      setCanResend(true)
     }
 
-    return () => clearInterval(timer);
-  }, [authMode, timeLeft]);
+    return () => clearInterval(timer)
+  }, [authMode, timeLeft])
 
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+  }
 
   // ۱. ورود با کلمه عبور
   const handlePasswordLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-    setIsLoading(true);
+    e.preventDefault()
+    setErrorMessage(null)
+    setIsLoading(true)
 
     try {
-      const res = await loginWithPasswordAction(mobileNumber, password);
+      const res = await loginWithPasswordAction(mobileNumber, password)
       if (res.success) {
-        router.push("/clinic-dashboard");
-        router.refresh();
+        router.push("/clinic-dashboard")
+        router.refresh()
       } else {
-        setErrorMessage(res.error || "ورود ناموفق بود.");
+        setErrorMessage(res.error || "ورود ناموفق بود.")
       }
     } catch {
-      setErrorMessage("خطایی در ارتباط با سرور رخ داد.");
+      setErrorMessage("خطایی در ارتباط با سرور رخ داد.")
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   // ۲. ارسال پیامک OTP و انتقال به مرحله کد تایید
   const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-    setIsLoading(true);
+    e.preventDefault()
+    setErrorMessage(null)
+    setIsLoading(true)
 
     try {
-      const res = await sendOtpAction(mobileNumber);
+      const res = await sendOtpAction(mobileNumber)
       if (res.success) {
-        setTimeLeft(120);
-        setCanResend(false);
-        setOtpCode("");
-        setAuthMode("otp_verify");
+        setTimeLeft(120)
+        setCanResend(false)
+        setOtpCode("")
+        setAuthMode("otp_verify")
       } else {
-        setErrorMessage(res.error || "خطا در ارسال کد تایید.");
+        setErrorMessage(res.error || "خطا در ارسال کد تایید.")
       }
     } catch {
-      setErrorMessage("خطایی رخ داد. مجدداً تلاش کنید.");
+      setErrorMessage("خطایی رخ داد. مجدداً تلاش کنید.")
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   // ۳. ارسال مجدد کد تایید
   const handleResendOtp = async () => {
-    if (!canResend || isLoading) return;
-    setErrorMessage(null);
-    setIsLoading(true);
+    if (!canResend || isLoading) return
+    setErrorMessage(null)
+    setIsLoading(true)
 
     try {
-      const res = await sendOtpAction(mobileNumber);
+      const res = await sendOtpAction(mobileNumber)
       if (res.success) {
-        setTimeLeft(120);
-        setCanResend(false);
-        setOtpCode("");
+        setTimeLeft(120)
+        setCanResend(false)
+        setOtpCode("")
       } else {
-        setErrorMessage(res.error || "امکان ارسال مجدد کد وجود ندارد.");
+        setErrorMessage(res.error || "امکان ارسال مجدد کد وجود ندارد.")
       }
     } catch {
-      setErrorMessage("خطا در ارسال کد مجدد.");
+      setErrorMessage("خطا در ارسال کد مجدد.")
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
-  // ۴. بررسی صحت OTP و احراز هویت دیتابیس
+  // ۴. بررسی صحت OTP و انتقال به داشبورد یا صفحه ست کردن پسورد
   const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (otpCode.length < 6) return;
-    setErrorMessage(null);
-    setIsLoading(true);
+    e.preventDefault()
+    if (otpCode.length < 6) return
+    setErrorMessage(null)
+    setIsLoading(true)
 
     try {
-      const res = await verifyOtpAction(mobileNumber, otpCode);
+      const res = await verifyOtpAction(mobileNumber, otpCode)
       if (res.success) {
-        router.push("/clinic-dashboard");
-        router.refresh();
+        if (res.needsPassword) {
+          setAuthMode("set_password")
+        } else {
+          router.push("/clinic-dashboard")
+          router.refresh()
+        }
       } else {
-        setErrorMessage(res.error || "کد وارد شده صحیح نمی‌باشد.");
+        setErrorMessage(res.error || "کد وارد شده صحیح نمی‌باشد.")
       }
     } catch {
-      setErrorMessage("خطایی در اعتبارسنجی رخ داد.");
+      setErrorMessage("خطایی در اعتبارسنجی رخ داد.")
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
+
+  // ۵. ذخیره رمز عبور جدید برای کاربر
+  const handleSetPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErrorMessage(null)
+    setIsLoading(true)
+
+    try {
+      const res = await setInitialPasswordAction(newPassword, confirmPassword)
+      if (res.success) {
+        router.push("/clinic-dashboard")
+        router.refresh()
+      } else {
+        setErrorMessage(res.error || "خطا در ثبت رمز عبور.")
+      }
+    } catch {
+      setErrorMessage("خطایی در ارتباط با سرور رخ داد.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSkipPassword = () => {
+    router.push("/clinic-dashboard")
+    router.refresh()
+  }
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-muted/40 p-4" dir="rtl">
+    <div
+      className="flex min-h-screen w-full items-center justify-center bg-muted/40 p-4"
+      dir="rtl"
+    >
       <div className="absolute top-4 left-4 z-50">
         <ModeToggle />
       </div>
-      <Card className="w-full max-w-md shadow-lg border-border/60">
-        <CardHeader className="space-y-4 text-center pb-6">
+
+      <Card className="w-full max-w-md border-border/60 shadow-lg">
+        <CardHeader className="space-y-4 pb-6 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md ring-4 ring-primary/10">
-            <Sparkles className="h-7 w-7" />
+            {authMode === "set_password" ? (
+              <ShieldCheck className="h-7 w-7" />
+            ) : (
+              <Sparkles className="h-7 w-7" />
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -179,18 +233,23 @@ export default function LoginPage() {
               {authMode === "password" && "ورود به حساب کاربری"}
               {authMode === "otp_phone" && "ورود با رمز یک‌بار مصرف"}
               {authMode === "otp_verify" && "تأیید شماره موبایل"}
+              {authMode === "set_password" && "تنظیم رمز عبور حساب"}
             </CardTitle>
-            <CardDescription className="text-xs sm:text-sm text-muted-foreground">
-              {authMode === "password" && "شماره موبایل و رمز عبور خود را وارد کنید"}
-              {authMode === "otp_phone" && "کد یک‌بار مصرف به شماره همراه شما پیامک خواهد شد"}
-              {authMode === "otp_verify" && `کد ۶ رقمی ارسال‌شده به ${mobileNumber || "شماره شما"} را وارد کنید`}
+            <CardDescription className="text-xs text-muted-foreground sm:text-sm">
+              {authMode === "password" &&
+                "شماره موبایل و رمز عبور خود را وارد کنید"}
+              {authMode === "otp_phone" &&
+                "کد یک‌بار مصرف به شماره همراه شما پیامک خواهد شد"}
+              {authMode === "otp_verify" &&
+                `کد ۶ رقمی ارسال‌شده به ${mobileNumber || "شماره شما"} را وارد کنید`}
+              {authMode === "set_password" &&
+                "برای ورود سریع‌تر در مراجعات بعدی، یک رمز عبور دلخواه انتخاب کنید"}
             </CardDescription>
           </div>
         </CardHeader>
 
-        {/* نمایش پیام خطا در صورت وجود */}
         {errorMessage && (
-          <div className="mx-6 mb-2 p-3 bg-destructive/15 text-destructive text-xs rounded-lg flex items-center gap-2 border border-destructive/20">
+          <div className="mx-6 mb-2 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/15 p-3 text-xs text-destructive">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{errorMessage}</span>
           </div>
@@ -202,54 +261,72 @@ export default function LoginPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="mobile">شماره موبایل</Label>
-                <div className="relative items-center">
-                  <Input
+                <InputGroup dir="ltr" className="h-12">
+                  <InputGroupAddon align="inline-start">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                  </InputGroupAddon>
+                  <InputGroupInput
                     id="mobile"
                     type="tel"
-                    placeholder="۰۹۱۲۳۴۵۶۷۸۹"
-                    className="text-left font-mono tracking-wider py-6 pl-9"
-                    dir="ltr"
+                    inputMode="tel"
+                    placeholder="09123456789"
+                    className="text-left font-mono tracking-wider"
                     value={mobileNumber}
                     onChange={(e) => setMobileNumber(e.target.value)}
                     required
                   />
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                </div>
+                </InputGroup>
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">رمز عبور</Label>
-                  <Button variant="link" size="sm" type="button" className="px-0 h-auto text-xs text-muted-foreground">
+                  <Button
+                    variant="link"
+                    size="sm"
+                    type="button"
+                    className="h-auto px-0 text-xs text-muted-foreground"
+                    onClick={() => {
+                      setErrorMessage(null)
+                      setAuthMode("otp_phone")
+                    }}
+                  >
                     فراموشی رمز؟
                   </Button>
                 </div>
-                <div className="relative">
-                  <Input
+
+                <InputGroup dir="ltr" className="h-12">
+                  <InputGroupAddon align="inline-start">
+                    <Lock className="h-4 w-4 text-muted-foreground" />
+                  </InputGroupAddon>
+                  <InputGroupInput
                     id="password"
                     type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
-                    className="h-12 text-left pl-10 pr-11 font-mono text-base"
-                    dir="ltr"
+                    className="text-left font-mono text-base"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                   />
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1.5 top-2 h-9 w-9 text-muted-foreground hover:text-foreground"
-                    onClick={() => setShowPassword((prev) => !prev)}
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    <span className="sr-only">
-                      {showPassword ? "مخفی کردن رمز عبور" : "نمایش رمز عبور"}
-                    </span>
-                  </Button>
-                </div>
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      tabIndex={-1}
+                      aria-label={
+                        showPassword ? "مخفی کردن رمز عبور" : "نمایش رمز عبور"
+                      }
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </InputGroupButton>
+                  </InputGroupAddon>
+                </InputGroup>
               </div>
 
               <div className="pt-2">
@@ -258,8 +335,16 @@ export default function LoginPage() {
             </CardContent>
 
             <CardFooter className="flex flex-col gap-2.5 pt-2">
-              <Button type="submit" disabled={isLoading} className="w-full py-5">
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "ورود"}
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-5"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "ورود"
+                )}
               </Button>
               <Button
                 type="button"
@@ -267,8 +352,8 @@ export default function LoginPage() {
                 disabled={isLoading}
                 className="w-full gap-2 py-5"
                 onClick={() => {
-                  setErrorMessage(null);
-                  setAuthMode("otp_phone");
+                  setErrorMessage(null)
+                  setAuthMode("otp_phone")
                 }}
               >
                 <KeyRound className="h-4 w-4" />
@@ -284,20 +369,22 @@ export default function LoginPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="otp-mobile">شماره موبایل</Label>
-                <div className="relative">
-                  <Input
+                <InputGroup dir="ltr" className="h-12">
+                  <InputGroupAddon align="inline-start">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                  </InputGroupAddon>
+                  <InputGroupInput
                     id="otp-mobile"
                     type="tel"
-                    placeholder="۰۹۱۲۳۴۵۶۷۸۹"
-                    className="text-left font-mono tracking-wider py-6 pl-9"
-                    dir="ltr"
+                    inputMode="tel"
+                    placeholder="09123456789"
+                    className="text-left font-mono tracking-wider"
                     value={mobileNumber}
                     onChange={(e) => setMobileNumber(e.target.value)}
                     autoFocus
                     required
                   />
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                </div>
+                </InputGroup>
               </div>
 
               <div className="pt-2">
@@ -306,20 +393,28 @@ export default function LoginPage() {
             </CardContent>
 
             <CardFooter className="flex flex-col gap-2.5 pt-2">
-              <Button type="submit" disabled={isLoading} className="w-full py-5">
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "ارسال کد تأیید"}
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-5"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "ارسال کد تأیید"
+                )}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 disabled={isLoading}
-                className="w-full gap-2 text-muted-foreground"
+                className="w-full gap-2 py-5 text-muted-foreground"
                 onClick={() => {
-                  setErrorMessage(null);
-                  setAuthMode("password");
+                  setErrorMessage(null)
+                  setAuthMode("password")
                 }}
               >
-                <ArrowRight className="h-4 py-5 w-4" />
+                <ArrowRight className="h-4 w-4" />
                 ورود با نام کاربری و رمز عبور
               </Button>
             </CardFooter>
@@ -329,31 +424,37 @@ export default function LoginPage() {
         {/* ۳. مرحله ورود کد ۶ رقمی همراه با تایمر معکوس */}
         {authMode === "otp_verify" && (
           <form onSubmit={handleVerifyOtp}>
-            <CardContent className="space-y-6 flex flex-col items-center">
-              <div className="space-y-3 flex flex-col items-center w-full" dir="ltr">
+            <CardContent className="flex flex-col items-center space-y-6">
+              <div className="flex w-full flex-col items-center space-y-3">
                 <InputOTP
                   maxLength={6}
                   value={otpCode}
                   onChange={(val) => setOtpCode(val)}
                   autoFocus
                 >
-                  <InputOTPGroup className="gap-2">
-                    <InputOTPSlot index={0} className="rounded-md border h-11 w-11 text-center font-mono text-lg" />
-                    <InputOTPSlot index={1} className="rounded-md border h-11 w-11 text-center font-mono text-lg" />
-                    <InputOTPSlot index={2} className="rounded-md border h-11 w-11 text-center font-mono text-lg" />
-                    <InputOTPSlot index={3} className="rounded-md border h-11 w-11 text-center font-mono text-lg" />
-                    <InputOTPSlot index={4} className="rounded-md border h-11 w-11 text-center font-mono text-lg" />
-                    <InputOTPSlot index={5} className="rounded-md border h-11 w-11 text-center font-mono text-lg" />
+                  <InputOTPGroup>
+                    <InputOTPSlot index={0} className="h-12 w-11 text-lg" />
+                    <InputOTPSlot index={1} className="h-12 w-11 text-lg" />
+                    <InputOTPSlot index={2} className="h-12 w-11 text-lg" />
+                  </InputOTPGroup>
+                  <InputOTPSeparator />
+                  <InputOTPGroup>
+                    <InputOTPSlot index={3} className="h-12 w-11 text-lg" />
+                    <InputOTPSlot index={4} className="h-12 w-11 text-lg" />
+                    <InputOTPSlot index={5} className="h-12 w-11 text-lg" />
                   </InputOTPGroup>
                 </InputOTP>
               </div>
 
-              <div className="flex items-center justify-center text-xs text-muted-foreground w-full">
+              <div className="flex w-full items-center justify-center text-xs text-muted-foreground">
                 {!canResend ? (
                   <div className="flex items-center gap-1.5 font-medium">
                     <Timer className="h-4 w-4 animate-pulse text-primary" />
                     <span>ارسال مجدد کد پس از</span>
-                    <span className="font-mono text-foreground font-semibold" dir="ltr">
+                    <span
+                      className="font-mono font-semibold text-foreground tabular-nums"
+                      dir="ltr"
+                    >
                       {formatTime(timeLeft)}
                     </span>
                   </div>
@@ -363,10 +464,12 @@ export default function LoginPage() {
                     variant="link"
                     size="sm"
                     disabled={isLoading}
-                    className="gap-1.5 text-primary text-xs h-auto p-0"
+                    className="h-auto gap-1.5 p-0 text-xs text-primary"
                     onClick={handleResendOtp}
                   >
-                    <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+                    <RefreshCw
+                      className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`}
+                    />
                     ارسال مجدد کد تأیید
                   </Button>
                 )}
@@ -378,17 +481,25 @@ export default function LoginPage() {
             </CardContent>
 
             <CardFooter className="flex flex-col gap-2.5 pt-0">
-              <Button type="submit" disabled={isLoading || otpCode.length < 6} className="w-full mt-4 py-5">
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "تأیید و ورود"}
+              <Button
+                type="submit"
+                disabled={isLoading || otpCode.length < 6}
+                className="mt-4 w-full py-5"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "تأیید و ورود"
+                )}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 disabled={isLoading}
-                className="w-full text-xs py-5 text-muted-foreground"
+                className="w-full py-5 text-xs text-muted-foreground"
                 onClick={() => {
-                  setErrorMessage(null);
-                  setAuthMode("otp_phone");
+                  setErrorMessage(null)
+                  setAuthMode("otp_phone")
                 }}
               >
                 تغییر شماره همراه
@@ -396,7 +507,102 @@ export default function LoginPage() {
             </CardFooter>
           </form>
         )}
+
+        {/* ۴. مرحله تنظیم رمز عبور برای کاربران جدید (اختیاری) */}
+        {authMode === "set_password" && (
+          <form onSubmit={handleSetPassword}>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">
+                  رمز عبور جدید (حداقل ۶ کاراکتر)
+                </Label>
+                <InputGroup dir="ltr" className="h-12">
+                  <InputGroupAddon align="inline-start">
+                    <Lock className="h-4 w-4 text-muted-foreground" />
+                  </InputGroupAddon>
+                  <InputGroupInput
+                    id="new-password"
+                    type={showNewPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    className="text-left font-mono text-base"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    minLength={6}
+                    autoFocus
+                    required
+                  />
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setShowNewPassword((prev) => !prev)}
+                      tabIndex={-1}
+                      aria-label={
+                        showNewPassword
+                          ? "مخفی کردن رمز عبور"
+                          : "نمایش رمز عبور"
+                      }
+                    >
+                      {showNewPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </InputGroupButton>
+                  </InputGroupAddon>
+                </InputGroup>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">تکرار رمز عبور جدید</Label>
+                <InputGroup dir="ltr" className="h-12">
+                  <InputGroupAddon align="inline-start">
+                    <Lock className="h-4 w-4 text-muted-foreground" />
+                  </InputGroupAddon>
+                  <InputGroupInput
+                    id="confirm-password"
+                    type={showNewPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    className="text-left font-mono text-base"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    minLength={6}
+                    required
+                  />
+                </InputGroup>
+              </div>
+
+              <div className="pt-2">
+                <Separator />
+              </div>
+            </CardContent>
+
+            <CardFooter className="flex flex-col gap-2.5 pt-2">
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-5"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "ذخیره رمز عبور و ورود"
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isLoading}
+                className="w-full py-5 text-muted-foreground"
+                onClick={handleSkipPassword}
+              >
+                بعداً پسورد ست می‌کنم
+              </Button>
+            </CardFooter>
+          </form>
+        )}
       </Card>
     </div>
-  );
+  )
 }

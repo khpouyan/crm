@@ -13,13 +13,13 @@
    e.g. `num-fa tabular-nums` or `num-en tabular-nums`. Using
    font-variant-numeric for width (not font-feature-settings) is what
    makes that composition work. */
-@utility num-fa {
+/* @utility num-fa {
   font-feature-settings: "ss01" on;
 }
 
 @utility num-en {
   font-feature-settings: "ss01" off;
-}
+} */
 :root {
   --background: oklch(1.0000 0 0);
   --foreground: oklch(0.2860 0.0354 274.7893);
@@ -190,7 +190,7 @@
     /* The FA font's "Farsi Digits" stylistic set (ss01 Vazirmatn /
        ss20 Estedad): renders every digit (Latin 0-9 and Arabic ٠-٩) as
        Farsi ۰-۹. Tabular numbers: add "tnum". */
-    font-feature-settings: "ss01";
+    /* font-feature-settings: "ss01"; */
     
   }
    html {

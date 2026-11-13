@@ -47,11 +47,12 @@ function ThemeHotkey() {
         return
       }
 
-      if (event.key.toLowerCase() !== "d") {
+      if (isTypingTarget(event.target)) {
         return
       }
 
-      if (isTypingTarget(event.target)) {
+      // بررسی وجود event.key برای جلوگیری از کرش هنگام Autofill مرورگر
+      if (typeof event.key !== "string" || event.key.toLowerCase() !== "d") {
         return
       }
 

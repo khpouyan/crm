@@ -1,14 +1,15 @@
+// lib/kavenegar/kavenegar.ts
+
 export interface SendOTPParams {
   receptor: string;
   token: string;
-  template?: string; // overrides KAVENEGAR_VERIFY_TEMPLATE env var
+  template?: string;
   token2?: string;
   token3?: string;
-  token10?: string;
-  token20?: string;
   type?: "sms" | "call";
   tag?: string;
 }
+
 export interface KavenegarResponse {
   return: {
     status: number;
@@ -25,54 +26,72 @@ export interface KavenegarResponse {
     cost: number;
   }>;
 }
+
+/**
+ * تبدیل فرمت‌های مختلف شماره موبایل به فرمت استاندارد کاوه‌نگار (09123456789)
+ * همچنین تبدیل اعداد فارسی/عربی به انگلیسی
+ */
+export function normalizeIranianPhone(phone: string): string {
+  const persianDigits = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
+  const arabicDigits = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /٧/g, /٨/g, /٩/g];
+
+  let normalized = phone.trim();
+  for (let i = 0; i < 10; i++) {
+    normalized = normalized
+      .replace(persianDigits[i], i.toString())
+      .replace(arabicDigits[i], i.toString());
+  }
+
+  const cleaned = normalized.replace(/\D/g, "");
+
+  if (cleaned.startsWith("98") && cleaned.length === 12) {
+    return `0${cleaned.slice(2)}`;
+  }
+  if (cleaned.startsWith("9") && cleaned.length === 10) {
+    return `0${cleaned}`;
+  }
+  return cleaned;
+}
+
+export function isValidIranianMobile(phone: string): boolean {
+  return /^09\d{9}$/.test(phone);
+}
+
 export async function sendOTPWithKavenegar(
   params: SendOTPParams
 ): Promise<KavenegarResponse> {
   const apiKey = process.env.KAVENEGAR_API_KEY;
   const defaultTemplate = process.env.KAVENEGAR_VERIFY_TEMPLATE;
-  if (!apiKey) throw new Error("KAVENEGAR_API_KEY is not set");
-  if (!defaultTemplate) throw new Error("KAVENEGAR_VERIFY_TEMPLATE is not set");
+
+  if (!apiKey) throw new Error("KAVENEGAR_API_KEY در فایل env تنظیم نشده است.");
+  if (!defaultTemplate) throw new Error("KAVENEGAR_VERIFY_TEMPLATE در فایل env تنظیم نشده است.");
+
   const baseUrl = `https://api.kavenegar.com/v1/${apiKey}/verify/lookup.json`;
   const searchParams = new URLSearchParams({
     receptor: params.receptor.replace(/\s/g, ""),
     token: params.token,
     template: params.template ?? defaultTemplate,
   });
+
   if (params.token2) searchParams.set("token2", params.token2);
   if (params.token3) searchParams.set("token3", params.token3);
-  if (params.token10) searchParams.set("token10", params.token10);
-  if (params.token20) searchParams.set("token20", params.token20);
   if (params.type) searchParams.set("type", params.type);
   if (params.tag) searchParams.set("tag", params.tag);
+
   const response = await fetch(`${baseUrl}?${searchParams.toString()}`, {
     method: "GET",
+    cache: "no-store",
   });
+
   if (!response.ok) {
-    throw new Error(
-      `Kavenegar HTTP error: ${response.status} ${response.statusText}`
-    );
+    throw new Error(`خطای ارتباط با کاوه‌نگار: ${response.status} ${response.statusText}`);
   }
+
   const data: KavenegarResponse = await response.json();
+
   if (data.return?.status !== 200) {
-    throw new Error(
-      `Kavenegar rejected request: ${data.return?.message ?? "Unknown error"}`
-    );
+    throw new Error(`خطای سرویس پیامک: ${data.return?.message ?? "خطای نامشخص"}`);
   }
+
   return data;
 }
-/** Normalises a phone number to the format Kavenegar expects. */
-export function toKavenegarReceptor(phone: string): string {
-  const cleaned = phone.replace(/\D/g, "");
-  // Iranian mobile: 989xxxxxxxxx → 09xxxxxxxxx
-  if (cleaned.startsWith("98") && cleaned.length === 12) {
-    return `0${cleaned.slice(2)}`;
-  }
-  // Already local Iranian format
-  if (cleaned.startsWith("09") && cleaned.length === 11) {
-    return cleaned;
-  }
-  // International: ensure 00 prefix
-  if (cleaned.startsWith("00")) return cleaned;
-  return `00${cleaned}`;
-}
-

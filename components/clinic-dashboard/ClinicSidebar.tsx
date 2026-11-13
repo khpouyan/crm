@@ -60,7 +60,7 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar"
-
+import { LogoutButton } from "@/components/clinic-dashboard/logout-button";
 export const clinicSidebarData = {
   user: {
     name: "نرگس کوششی",
@@ -240,8 +240,7 @@ function NavUser({ user = clinicSidebarData.user }: { user?: typeof clinicSideba
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive">
-              <LogOut className="size-4" />
-              خروج از حساب
+              <LogoutButton />
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
