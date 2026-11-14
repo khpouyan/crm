@@ -20,6 +20,7 @@ import {
   Plus,
   Settings2,
   SquareTerminal,
+  Toolbox,
   Trash2,
   User,
 } from "lucide-react"
@@ -75,6 +76,8 @@ export const clinicSidebarData = {
     { name: "داشبورد", icon: ChartColumn, href: "/clinic-dashboard" },
   ],
   files :[{name: "پرونده و سرویس", icon: FolderArchive, href: "/clinic-dashboard"}],
+
+  services:[{name:"تعریف سرویس و خدمات", icon:Toolbox, href: "/clinic-dashboard/services"}],
 
   navMain: [
     
@@ -141,7 +144,7 @@ function NavDashboard({ dashboard = clinicSidebarData.dashboard }: { dashboard?:
     </SidebarMenu>
   )
 }
-function NavFile({ files = clinicSidebarData.dashboard }: { files?: typeof clinicSidebarData.files }) {
+function NavFile({ files = clinicSidebarData.files }: { files?: typeof clinicSidebarData.files }) {
   return (
     <SidebarMenu>
       {files.map((item) => (
@@ -155,7 +158,20 @@ function NavFile({ files = clinicSidebarData.dashboard }: { files?: typeof clini
     </SidebarMenu>
   )
 }
-
+function NavService({ services = clinicSidebarData.services }: { services?: typeof clinicSidebarData.services }) {
+  return (
+    <SidebarMenu>
+      {services.map((item) => (
+        <SidebarMenuItem className="px-3" key={item.name}>
+          <SidebarMenuButton tooltip={item.name} render={<a href={item.href || "#"} />}>
+            {item.icon ? <item.icon className="size-4" /> : null}
+            <span className="font-medium">{item.name}</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      ))}
+    </SidebarMenu>
+  )
+}
 function NavMain({ items = clinicSidebarData.navMain }: { items?: typeof clinicSidebarData.navMain }) {
   return (
     <SidebarGroup>
@@ -263,6 +279,7 @@ export function ClinicSidebar({ sidebarData = clinicSidebarData, ...props }: Cli
         <NavDashboard dashboard={sidebarData.dashboard} />
         <NavFile files={sidebarData.files}/>
         <NavMain items={sidebarData.navMain} />
+        <NavService services={sidebarData.services}/>
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={sidebarData.user} />

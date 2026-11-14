@@ -85,3 +85,25 @@ export async function destroySession() {
 
   cookieStore.delete(SESSION_COOKIE_NAME);
 }
+
+/**
+ * دریافت کلینیک فعال کاربر لاگین‌شده (با بررسی عدم اخراج/غیرفعال‌سازی)
+ */
+export async function getCurrentClinicContext() {
+  const user = await getCurrentUser();
+  if (!user) return null;
+
+  // پیدا کردن اولین کلینیکی که کاربر در آن عضویت فعال دارد
+  const activeMembership = user.clinicUsers.find((cu) => cu.isActive);
+
+  if (!activeMembership) return null;
+
+  return {
+    userId: user.id,
+    fullName: user.fullName,
+    clinicId: activeMembership.clinicId,
+    clinicUserId: activeMembership.id,
+    clinic: activeMembership.clinic,
+    role: activeMembership.role,
+  };
+}

@@ -10,16 +10,16 @@ datasource db {
 // ENUMS (مقادیر استاندارد سیستمی)
 // ==========================================
 enum PlanTier {
-  FREE    // پلن رایگان
-  OFFICE  // پلن مطب
-  CLINIC  // پلن کلینیک
+  FREE // پلن رایگان
+  OFFICE // پلن مطب
+  CLINIC // پلن کلینیک
 }
 
 enum AddonModuleType {
-  SMS_PACKAGE          // بسته شارژ پنل پیامک
-  COMMISSION_PERCASE   // ماژول کمیسیون و پرکیس
-  AI_ASSISTANT         // ماژول دستیار هوش مصنوعی
-  VOICE_DATA_ENTRY     // ماژول ورود صوتی اطلاعات
+  SMS_PACKAGE // بسته شارژ پنل پیامک
+  COMMISSION_PERCASE // ماژول کمیسیون و پرکیس
+  AI_ASSISTANT // ماژول دستیار هوش مصنوعی
+  VOICE_DATA_ENTRY // ماژول ورود صوتی اطلاعات
 }
 
 enum TicketStatus {
@@ -40,25 +40,25 @@ enum TicketPriority {
 // 1. هویت، احراز هویت و دسترسی‌های سراسری
 // ==========================================
 model User {
-  id          String   @id @default(uuid())
-  phone       String   @unique
-  fullName    String?  // اختیاری شد تا در ثبت‌نام اولیه با OTP کرش نکند
-  password    String?
-  nationalId  String?  @unique
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(uuid())
+  phone      String   @unique
+  fullName   String? // اختیاری شد تا در ثبت‌نام اولیه با OTP کرش نکند[cite: 1]
+  password   String?
+  nationalId String?  @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  sessions        Session[]
-  systemAdmins    SystemAdmin[]
-  clinicUsers     ClinicUser[]
-  clientProfiles  Client[]
-  ticketMessages  TicketMessage[]
+  sessions       Session[]
+  systemAdmins   SystemAdmin[]
+  clinicUsers    ClinicUser[]
+  clientProfiles Client[]
+  ticketMessages TicketMessage[]
 }
 
-// جدول نگهداری کدهای تأیید پیامکی کاوه‌نگار
+// جدول نگهداری کدهای تأیید پیامکی کاوه‌نگار[cite: 1]
 model OtpVerification {
   id        String   @id @default(uuid())
-  phone     String   
+  phone     String
   code      String
   attempts  Int      @default(0)
   expiresAt DateTime
@@ -68,7 +68,7 @@ model OtpVerification {
   @@index([phone, expiresAt])
 }
 
-// مدیریت نشست‌ها و احراز هویت کوکی
+// مدیریت نشست‌ها و احراز هویت کوکی[cite: 1]
 model Session {
   id        String   @id @default(uuid())
   userId    String
@@ -76,92 +76,99 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model SystemAdmin {
-  id        String   @id @default(uuid())
-  userId    String
-  level     String   @default("SUPER_ADMIN")
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  level  String @default("SUPER_ADMIN")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // ==========================================
 // 2. ساختار کلینیک، اشتراک و پرسنل (Multi-tenant)
 // ==========================================
 model Clinic {
-  id              String    @id @default(uuid())
-  name            String
-  subdomain       String    @unique
-  
-  // وضعیت پلن فعلی و شارژ پیامک کلینیک
-  currentPlan     PlanTier  @default(FREE)
-  planExpiresAt   DateTime?
-  smsBalance      Int       @default(50) // تعداد پیامک باقی‌مانده در پنل کلینیک
-  
-  createdAt       DateTime  @default(now())
+  id        String @id @default(uuid())
+  name      String
+  subdomain String @unique
 
-  roles             ClinicRole[]
-  users             ClinicUser[]
-  clients           Client[]
-  services          Service[]
-  products          ClinicProduct[]
-  bankAccounts      ClinicBankAccount[]
-  terminals         PaymentTerminal[]
-  invoices          Invoice[]
-  
-  // روابط سیستم پیامک
-  smsSetting        ClinicSmsSetting?
-  careSmsTemplates  CareSmsTemplate[]
-  bulkSmsCampaigns  BulkSmsCampaign[]
-  smsLogs           SmsLog[]
+  // وضعیت پلن فعلی و شارژ پیامک کلینیک[cite: 1]
+  currentPlan   PlanTier  @default(FREE)
+  planExpiresAt DateTime?
+  smsBalance    Int       @default(50) // تعداد پیامک باقی‌مانده در پنل کلینیک[cite: 1]
 
-  // روابط SaaS (پلن، ماژول‌ها، تیکت و خرید از پلتفرم)
-  subscriptions     ClinicSubscription[]
-  purchasedAddons   ClinicPurchasedAddon[]
-  supportTickets    SupportTicket[]
-  b2bOrders         B2BOrder[]
+  createdAt DateTime @default(now())
+
+  roles        ClinicRole[]
+  users        ClinicUser[]
+  clients      Client[]
+  services     Service[]
+  products     ClinicProduct[]
+  bankAccounts ClinicBankAccount[]
+  terminals    PaymentTerminal[]
+  invoices     Invoice[]
+
+  // روابط سیستم پیامک[cite: 1]
+  smsSetting       ClinicSmsSetting?
+  careSmsTemplates CareSmsTemplate[]
+  bulkSmsCampaigns BulkSmsCampaign[]
+  smsLogs          SmsLog[]
+
+  // روابط SaaS (پلن، ماژول‌ها، تیکت و خرید از پلتفرم)[cite: 1]
+  subscriptions   ClinicSubscription[]
+  purchasedAddons ClinicPurchasedAddon[]
+  supportTickets  SupportTicket[]
+  b2bOrders       B2BOrder[]
 }
 
 model ClinicRole {
   id          String   @id @default(uuid())
   clinicId    String
   name        String
-  permissions String[] 
+  permissions String[]
 
-  clinic      Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  users       ClinicUser[]
+  clinic Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  users  ClinicUser[]
 }
 
 model ClinicUser {
-  id          String   @id @default(uuid())
-  userId      String
-  clinicId    String
-  roleId      String
+  id       String    @id @default(uuid())
+  userId   String
+  clinicId String
+  roleId   String
+  isActive Boolean   @default(true) // false = اخراج یا غیرفعال‌سازی دسترسی بدون حذف سوابق
+  leftAt   DateTime? // تاریخ غیرفعال‌سازی / قطع همکاری
 
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  clinic      Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  role        ClinicRole   @relation(fields: [roleId], references: [id])
-  
-  providedServices ProvidedService[] 
+  user   User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  clinic Clinic     @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  role   ClinicRole @relation(fields: [roleId], references: [id])
+
+  assignedServices Service[]         @relation("ServiceStaff") // سرویس‌های منتسب به این پرسنل در کاتالوگ
+  providedServices ProvidedService[] @relation("ServiceTherapist") // خدماتی که به عنوان درمانگر اصلی انجام داده
+  assistedServices ProvidedService[] @relation("ServiceAssistants") // خدماتی که به عنوان دستیار حضور داشته
   exclusiveBatches ProductBatch[]
-  createdTickets   SupportTicket[] // تیکت‌هایی که این عضو کلینیک ثبت کرده
+  createdTickets   SupportTicket[] // تیکت‌هایی که این عضو کلینیک ثبت کرده[cite: 1]
+
+  @@unique([userId, clinicId])
 }
 
 model Client {
-  id            String   @id @default(uuid())
+  id            String @id @default(uuid())
   userId        String
   clinicId      String
-  walletBalance Int      @default(0)
+  walletBalance Int    @default(0)
 
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  clinic        Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  
-  invoices      Invoice[]
-  smsLogs       SmsLog[]
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  providedServices ProvidedService[] // سوابق خدمات ثبت‌شده در پرونده کلاینت
+  invoices         Invoice[]
+  smsLogs          SmsLog[]
 
   @@unique([userId, clinicId])
 }
@@ -171,44 +178,44 @@ model Client {
 // ==========================================
 model SubscriptionPlan {
   id           String   @id @default(uuid())
-  tier         PlanTier @unique // FREE, OFFICE, CLINIC
-  title        String   // پلن رایگان، پلن مطب، پلن کلینیک
+  tier         PlanTier @unique // FREE, OFFICE, CLINIC[cite: 1]
+  title        String // پلن رایگان، پلن مطب، پلن کلینیک[cite: 1]
   monthlyPrice Int
   yearlyPrice  Int
-  maxStaff     Int      // محدودیت تعداد پرسنل
-  features     Json     @default("[]") // لیست امکانات پلن
+  maxStaff     Int // محدودیت تعداد پرسنل[cite: 1]
+  features     Json     @default("[]") // لیست امکانات پلن[cite: 1]
 
   subscriptions ClinicSubscription[]
 }
 
 model ClinicSubscription {
-  id              String   @id @default(uuid())
-  clinicId        String
-  planId          String
-  startDate       DateTime @default(now())
-  endDate         DateTime
-  paidAmount      Int
-  paymentRef      String?
-  status          String   // ACTIVE, EXPIRED, CANCELED
+  id         String   @id @default(uuid())
+  clinicId   String
+  planId     String
+  startDate  DateTime @default(now())
+  endDate    DateTime
+  paidAmount Int
+  paymentRef String?
+  status     String // ACTIVE, EXPIRED, CANCELED[cite: 1]
 
-  clinic          Clinic           @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  plan            SubscriptionPlan @relation(fields: [planId], references: [id])
+  clinic Clinic           @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  plan   SubscriptionPlan @relation(fields: [planId], references: [id])
 }
 
-// کاتالوگ ماژول‌ها و بسته‌های پیامک قابل خرید در پلتفرم
+// کاتالوگ ماژول‌ها و بسته‌های پیامک قابل خرید در پلتفرم[cite: 1]
 model PlatformAddon {
   id           String          @id @default(uuid())
-  code         AddonModuleType // SMS_PACKAGE, COMMISSION_PERCASE, AI_ASSISTANT, VOICE_DATA_ENTRY
-  title        String          // مثلا: "ماژول دستیار هوش مصنوعی" یا "بسته ۱۰۰۰ پیامک"
+  code         AddonModuleType // SMS_PACKAGE, COMMISSION_PERCASE, AI_ASSISTANT, VOICE_DATA_ENTRY[cite: 1]
+  title        String // مثلا: "ماژول دستیار هوش مصنوعی" یا "بسته ۱۰۰۰ پیامک"[cite: 1]
   price        Int
-  smsCount     Int?            // اگر بسته پیامکی است، چند پیامک به کلینیک اضافه کند؟
-  durationDays Int?            // مدت اعتبار ماژول (مثلاً 365 روز، یا null برای دائمی/مصرفی)
+  smsCount     Int? // اگر بسته پیامکی است، چند پیامک به کلینیک اضافه کند؟[cite: 1]
+  durationDays Int? // مدت اعتبار ماژول (مثلاً 365 روز، یا null برای دائمی/مصرفی)[cite: 1]
   description  String?         @db.Text
 
-  purchases    ClinicPurchasedAddon[]
+  purchases ClinicPurchasedAddon[]
 }
 
-// ماژول‌ها و بسته‌های خریداری‌شده توسط هر کلینیک
+// ماژول‌ها و بسته‌های خریداری‌شده توسط هر کلینیک[cite: 1]
 model ClinicPurchasedAddon {
   id          String    @id @default(uuid())
   clinicId    String
@@ -218,58 +225,58 @@ model ClinicPurchasedAddon {
   paidAmount  Int
   isActive    Boolean   @default(true)
 
-  clinic      Clinic        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  addon       PlatformAddon @relation(fields: [addonId], references: [id])
+  clinic Clinic        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  addon  PlatformAddon @relation(fields: [addonId], references: [id])
 }
 
 // ==========================================
 // 4. فروشگاه مرکزی تامین کالا (B2B Supply Store)
 // ==========================================
 model PlatformProductCategory {
-  id        String            @id @default(uuid())
-  title     String            // مثلا: "فیلر و ژل"، "بوتاکس"، "تجهیزات مصرفی پزشکی"
-  slug      String            @unique
-  
-  products  PlatformProduct[]
+  id    String @id @default(uuid())
+  title String // مثلا: "فیلر و ژل"، "بوتاکس"، "تجهیزات مصرفی پزشکی"[cite: 1]
+  slug  String @unique
+
+  products PlatformProduct[]
 }
 
 model PlatformProduct {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   categoryId  String
-  name        String   // نام کالا در فروشگاه مرکزی سایت
-  sku         String   @unique
+  name        String // نام کالا در فروشگاه مرکزی سایت[cite: 1]
+  sku         String  @unique
   brand       String?
-  unit        String   // عدد، جعبه، ویال، پک
-  price       Int      // قیمت فروش عمده به کلینیک
-  stock       Int      @default(100)
-  description String?  @db.Text
+  unit        String // عدد، جعبه، ویال، پک[cite: 1]
+  price       Int // قیمت فروش عمده به کلینیک[cite: 1]
+  stock       Int     @default(100)
+  description String? @db.Text
 
-  category    PlatformProductCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  orderItems  B2BOrderItem[]
+  category   PlatformProductCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orderItems B2BOrderItem[]
 }
 
-// سفارشات خرید کالا توسط کلینیک از سایت اصلی
+// سفارشات خرید کالا توسط کلینیک از سایت اصلی[cite: 1]
 model B2BOrder {
   id           String   @id @default(uuid())
   clinicId     String
   totalAmount  Int
-  status       String   // PENDING, PAID, SHIPPED, DELIVERED
+  status       String // PENDING, PAID, SHIPPED, DELIVERED[cite: 1]
   trackingCode String?
   createdAt    DateTime @default(now())
 
-  clinic       Clinic         @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  items        B2BOrderItem[]
+  clinic Clinic         @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  items  B2BOrderItem[]
 }
 
 model B2BOrderItem {
-  id                String   @id @default(uuid())
+  id                String @id @default(uuid())
   orderId           String
   platformProductId String
   quantity          Int
   unitPrice         Int
 
-  order             B2BOrder        @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  platformProduct   PlatformProduct @relation(fields: [platformProductId], references: [id])
+  order           B2BOrder        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  platformProduct PlatformProduct @relation(fields: [platformProductId], references: [id])
 }
 
 // ==========================================
@@ -278,56 +285,58 @@ model B2BOrderItem {
 model SupportTicket {
   id                  String         @id @default(uuid())
   clinicId            String
-  creatorClinicUserId String         // کاربری از کلینیک که تیکت را باز کرده
+  creatorClinicUserId String? // اختیاری شد تا در صورت حذف پرسنل، تیکت حذف نشود
+  creatorNameSnapshot String? // نام ثبت‌کننده تیکت برای ماندگاری در تاریخچه
   subject             String
-  department          String         // فنی، مالی و اشتراک، تامین کالا (B2B)
+  department          String // فنی، مالی و اشتراک، تامین کالا (B2B)[cite: 1]
   priority            TicketPriority @default(MEDIUM)
   status              TicketStatus   @default(OPEN)
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 
-  clinic              Clinic          @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  creator             ClinicUser      @relation(fields: [creatorClinicUserId], references: [id])
-  messages            TicketMessage[]
+  clinic   Clinic          @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  creator  ClinicUser?     @relation(fields: [creatorClinicUserId], references: [id], onDelete: SetNull)
+  messages TicketMessage[]
 }
 
 model TicketMessage {
-  id            String        @id @default(uuid())
+  id            String   @id @default(uuid())
   ticketId      String
-  senderUserId  String        // ارسال‌کننده (یا پرسنل کلینیک است یا سوپرادمین)
-  isFromAdmin   Boolean       @default(false) // true = پاسخ سوپرادمین، false = پیام کلینیک
-  body          String        @db.Text
+  senderUserId  String? // اختیاری شد تا پیام‌ها با حذف کاربر پاک نشوند
+  isFromAdmin   Boolean  @default(false) // true = پاسخ سوپرادمین، false = پیام کلینیک[cite: 1]
+  body          String   @db.Text
   attachmentUrl String?
-  createdAt     DateTime      @default(now())
+  createdAt     DateTime @default(now())
 
-  ticket        SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  sender        User          @relation(fields: [senderUserId], references: [id])
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender User?         @relation(fields: [senderUserId], references: [id], onDelete: SetNull)
 }
 
 // ==========================================
 // 6. کاتالوگ خدمات کلینیک (ساختار دو سطحی)
 // ==========================================
 model Service {
-  id        String   @id @default(uuid())
-  clinicId  String
-  title     String  
+  id       String @id @default(uuid())
+  clinicId String
+  title    String
 
   clinic           Clinic            @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   subServices      SubService[]
   careSmsTemplates CareSmsTemplate[]
+  assignedStaff    ClinicUser[]      @relation("ServiceStaff") // پرسنل مرتبط با این سرویس
 }
 
 model SubService {
-  id         String   @id @default(uuid())
+  id         String @id @default(uuid())
   serviceId  String
-  title      String  
-  price      Int     
-  attributes Json     @default("{}")
+  title      String
+  price      Int // قیمت اجباری (مبنای فاکتور)
+  attributes Json   @default("[]") // آرایه‌ای از مشخصه‌های دلخواه مثل [{"key": "نوع لیزر", "value": "کندلا"}]
 
   service          Service                 @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  providedServices ProvidedService[] 
-  defaultProducts  ServiceDefaultProduct[] 
-  exclusiveBatches ProductBatch[] 
+  providedServices ProvidedService[]
+  defaultProducts  ServiceDefaultProduct[]
+  exclusiveBatches ProductBatch[]
   careSmsTemplates CareSmsTemplate[]
 }
 
@@ -335,12 +344,12 @@ model SubService {
 // 7. انبارداری داخلی کلینیک (ERP)
 // ==========================================
 model ClinicProduct {
-  id             String   @id @default(uuid())
+  id             String  @id @default(uuid())
   clinicId       String
   name           String
-  code           String?  
-  unit           String   
-  alertThreshold Float    @default(0) 
+  code           String?
+  unit           String
+  alertThreshold Float   @default(0)
 
   clinic             Clinic                  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   batches            ProductBatch[]
@@ -349,30 +358,30 @@ model ClinicProduct {
 }
 
 model ProductBatch {
-  id                    String    @id @default(uuid())
-  clinicProductId       String
-  quantity              Float    
-  purchasePrice         Int      
-  sellingPrice          Int?     
-  expirationDate        DateTime?
-  createdAt             DateTime  @default(now())
+  id              String    @id @default(uuid())
+  clinicProductId String
+  quantity        Float
+  purchasePrice   Int
+  sellingPrice    Int?
+  expirationDate  DateTime?
+  createdAt       DateTime  @default(now())
 
   exclusiveSubServiceId String?
   exclusiveTherapistId  String?
 
   clinicProduct       ClinicProduct @relation(fields: [clinicProductId], references: [id], onDelete: Cascade)
-  exclusiveSubService SubService?   @relation(fields: [exclusiveSubServiceId], references: [id])
-  exclusiveTherapist  ClinicUser?   @relation(fields: [exclusiveTherapistId], references: [id])
+  exclusiveSubService SubService?   @relation(fields: [exclusiveSubServiceId], references: [id], onDelete: SetNull)
+  exclusiveTherapist  ClinicUser?   @relation(fields: [exclusiveTherapistId], references: [id], onDelete: SetNull)
 }
 
 model ServiceDefaultProduct {
-  id              String   @id @default(uuid())
-  subServiceId    String   
+  id              String @id @default(uuid())
+  subServiceId    String
   clinicProductId String
-  quantity        Float    
+  quantity        Float
 
-  subService      SubService    @relation(fields: [subServiceId], references: [id], onDelete: Cascade)
-  clinicProduct   ClinicProduct @relation(fields: [clinicProductId], references: [id], onDelete: Cascade)
+  subService    SubService    @relation(fields: [subServiceId], references: [id], onDelete: Cascade)
+  clinicProduct ClinicProduct @relation(fields: [clinicProductId], references: [id], onDelete: Cascade)
 
   @@unique([subServiceId, clinicProductId])
 }
@@ -381,138 +390,143 @@ model ServiceDefaultProduct {
 // 8. فاکتور، خدمات ارائه‌شده و مصرفیات بیمار
 // ==========================================
 model Invoice {
-  id                String   @id @default(uuid())
-  clinicId          String
-  clientId          String
-  
-  subTotalAmount    Int      @default(0) 
-  discountAmount    Int      @default(0) 
-  discountReason    String?  @db.Text
-  extraChargeAmount Int      @default(0) 
-  extraChargeReason String?  @db.Text
-  totalAmount       Int     
-  
-  status            String   // PENDING, PARTIAL_PAID, PAID
-  paidAmount        Int      @default(0)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id       String @id @default(uuid())
+  clinicId String
+  clientId String
 
-  clinic            Clinic            @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  client            Client            @relation(fields: [clientId], references: [id])
-  providedServices  ProvidedService[]
-  payments          Payment[]
+  subTotalAmount    Int     @default(0)
+  discountAmount    Int     @default(0)
+  discountReason    String? @db.Text
+  extraChargeAmount Int     @default(0)
+  extraChargeReason String? @db.Text
+  totalAmount       Int
+
+  status     String // PENDING, PARTIAL_PAID, PAID[cite: 1]
+  paidAmount Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  clinic           Clinic            @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  client           Client            @relation(fields: [clientId], references: [id])
+  providedServices ProvidedService[]
+  payments         Payment[]
 }
 
 model ProvidedService {
-  id              String   @id @default(uuid())
-  invoiceId       String
-  subServiceId    String
-  therapistId     String
+  id                    String  @id @default(uuid())
+  invoiceId             String? // اختیاری تا بتوان ابتدا در پرونده کلاینت ثبت و سپس به فاکتور متصل کرد
+  clientId              String // اتصال مستقیم به پرونده کلاینت
+  subServiceId          String
+  therapistId           String? // اختیاری شد تا اگر پرسنل حذف شد، سابقه خدمت پاک نشود
+  therapistNameSnapshot String? // نام درمانگر در لحظه ثبت خدمت برای ماندگاری همیشگی در پرونده
 
-  finalPrice      Int     
+  finalPrice      Int
   description     String?  @db.Text
-  therapistAmount Int
-  clinicNetProfit Int
+  therapistAmount Int      @default(0)
+  clinicNetProfit Int      @default(0)
+  createdAt       DateTime @default(now())
 
-  invoice         Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice         Invoice?         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  client          Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
   subService      SubService       @relation(fields: [subServiceId], references: [id])
-  therapist       ClinicUser       @relation(fields: [therapistId], references: [id])
+  therapist       ClinicUser?      @relation("ServiceTherapist", fields: [therapistId], references: [id], onDelete: SetNull)
+  assistants      ClinicUser[]     @relation("ServiceAssistants") // یک یا چند دستیار برای این خدمت
   usedConsumables UsedConsumable[]
 }
 
 model UsedConsumable {
-  id                String   @id @default(uuid())
+  id                String @id @default(uuid())
   providedServiceId String
   clinicProductId   String
-  
-  quantity          Float    
-  sellingPrice      Int?     
-  unitCost          Int      
 
-  providedService   ProvidedService @relation(fields: [providedServiceId], references: [id], onDelete: Cascade)
-  clinicProduct     ClinicProduct   @relation(fields: [clinicProductId], references: [id])
+  quantity     Float
+  sellingPrice Int?
+  unitCost     Int
+
+  providedService ProvidedService @relation(fields: [providedServiceId], references: [id], onDelete: Cascade)
+  clinicProduct   ClinicProduct   @relation(fields: [clinicProductId], references: [id])
 }
 
 // ==========================================
 // 9. مالی و پرداخت‌ها
 // ==========================================
 model ClinicBankAccount {
-  id            String   @id @default(uuid())
+  id            String @id @default(uuid())
   clinicId      String
   bankName      String
   accountNumber String
   ownerName     String
 
-  clinic        Clinic            @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  terminals     PaymentTerminal[]
+  clinic    Clinic            @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  terminals PaymentTerminal[]
 }
 
 model PaymentTerminal {
-  id            String   @id @default(uuid())
+  id            String @id @default(uuid())
   clinicId      String
   bankAccountId String
-  name          String   
-  type          String   // POS, ONLINE_GATEWAY
+  name          String
+  type          String // POS, ONLINE_GATEWAY[cite: 1]
 
-  clinic        Clinic            @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  bankAccount   ClinicBankAccount @relation(fields: [bankAccountId], references: [id])
-  payments      Payment[]
+  clinic      Clinic            @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  bankAccount ClinicBankAccount @relation(fields: [bankAccountId], references: [id])
+  payments    Payment[]
 }
 
 model Payment {
-  id             String   @id @default(uuid())
-  invoiceId      String
-  amount         Int
-  paymentMethod  String   // POS, CASH, CARD_TRANSFER, CREDIT_SERVICE
-  
-  terminalId     String?  
-  creditProvider String?  // SNAPPAY, DIGIPAY
+  id            String @id @default(uuid())
+  invoiceId     String
+  amount        Int
+  paymentMethod String // POS, CASH, CARD_TRANSFER, CREDIT_SERVICE[cite: 1]
+
+  terminalId     String?
+  creditProvider String? // SNAPPAY, DIGIPAY[cite: 1]
   trackingCode   String?
-  status         String   // PENDING, CLEARED, FAILED
+  status         String // PENDING, CLEARED, FAILED[cite: 1]
   createdAt      DateTime @default(now())
 
-  invoice        Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  terminal       PaymentTerminal? @relation(fields: [terminalId], references: [id])
+  invoice  Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  terminal PaymentTerminal? @relation(fields: [terminalId], references: [id])
 }
 
 // ==========================================
 // 10. سیستم اطلاع‌رسانی و پیامک (SMS Center)
 // ==========================================
 model ClinicSmsSetting {
-  id                    String  @id @default(uuid())
-  clinicId              String  @unique
-  
-  appointmentBooked     Boolean @default(true)  
-  appointmentReminder   Boolean @default(true)  
-  appointmentCanceled   Boolean @default(true)  
-  appointmentEdited     Boolean @default(true)  
-  serviceRegistered     Boolean @default(true)  
-  paymentReceived       Boolean @default(true)  
-  surveySent            Boolean @default(false) 
-  birthdayGreeting      Boolean @default(false) 
-  fileRegistered        Boolean @default(true)  
-  discountCodeCreated   Boolean @default(false) 
-  walletIncreased       Boolean @default(true)  
-  walletDecreased       Boolean @default(true)  
+  id       String @id @default(uuid())
+  clinicId String @unique
 
-  clinic                Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointmentBooked   Boolean @default(true)
+  appointmentReminder Boolean @default(true)
+  appointmentCanceled Boolean @default(true)
+  appointmentEdited   Boolean @default(true)
+  serviceRegistered   Boolean @default(true)
+  paymentReceived     Boolean @default(true)
+  surveySent          Boolean @default(false)
+  birthdayGreeting    Boolean @default(false)
+  fileRegistered      Boolean @default(true)
+  discountCodeCreated Boolean @default(false)
+  walletIncreased     Boolean @default(true)
+  walletDecreased     Boolean @default(true)
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 }
 
 model CareSmsTemplate {
-  id            String   @id @default(uuid())
-  clinicId      String
-  serviceId     String?  
-  subServiceId  String?  
-  
-  title         String   
-  triggerType   String   // BEFORE_VISIT, AFTER_VISIT
-  offsetHours   Int      
-  messageBody   String   @db.Text
-  isActive      Boolean  @default(true)
+  id           String  @id @default(uuid())
+  clinicId     String
+  serviceId    String?
+  subServiceId String?
 
-  clinic        Clinic      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  service       Service?    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  subService    SubService? @relation(fields: [subServiceId], references: [id], onDelete: Cascade)
+  title       String
+  triggerType String // BEFORE_VISIT, AFTER_VISIT[cite: 1]
+  offsetHours Int
+  messageBody String  @db.Text
+  isActive    Boolean @default(true)
+
+  clinic     Clinic      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  service    Service?    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  subService SubService? @relation(fields: [subServiceId], references: [id], onDelete: Cascade)
 }
 
 model BulkSmsCampaign {
@@ -520,29 +534,29 @@ model BulkSmsCampaign {
   clinicId      String
   title         String
   messageBody   String    @db.Text
-  scheduledFor  DateTime? 
-  targetFilters Json?     
-  
-  status        String    // PENDING, PROCESSING, COMPLETED, CANCELED
-  createdAt     DateTime  @default(now())
+  scheduledFor  DateTime?
+  targetFilters Json?
 
-  clinic        Clinic    @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  status    String // PENDING, PROCESSING, COMPLETED, CANCELED[cite: 1]
+  createdAt DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 }
 
 model SmsLog {
-  id            String   @id @default(uuid())
-  clinicId      String
-  clientId      String?  
-  
-  mobileNumber  String
-  title         String?  
-  messageBody   String   @db.Text
-  partsCount    Int      @default(1) 
-  
-  type          String   // SYSTEM, CARE, BULK, MANUAL
-  status        String   // SENT, DELIVERED, FAILED
-  sentAt        DateTime @default(now())
+  id       String  @id @default(uuid())
+  clinicId String
+  clientId String?
 
-  clinic        Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  client        Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  mobileNumber String
+  title        String?
+  messageBody  String  @db.Text
+  partsCount   Int     @default(1)
+
+  type   String // SYSTEM, CARE, BULK, MANUAL[cite: 1]
+  status String // SENT, DELIVERED, FAILED[cite: 1]
+  sentAt DateTime @default(now())
+
+  clinic Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  client Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 }
