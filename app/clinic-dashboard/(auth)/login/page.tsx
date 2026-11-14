@@ -31,7 +31,7 @@ import {
   verifyOtpAction,
   loginWithPasswordAction,
   setInitialPasswordAction,
-} from "@/app/actions/clinic-auth"
+} from "@/app/clinic-dashboard/(auth)/login/clinic-auth"
 import {
   ArrowRight,
   KeyRound,

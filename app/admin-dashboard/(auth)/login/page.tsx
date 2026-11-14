@@ -24,7 +24,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
-import { loginSuperAdminAction } from "@/app/actions/admin-auth";
+import { loginSuperAdminAction } from "@/app/admin-dashboard/(auth)/login/admin-auth";
 
 export default function AdminLoginPage() {
   const router = useRouter();

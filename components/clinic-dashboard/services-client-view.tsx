@@ -1,7 +1,7 @@
-// app/components/clinic-dashboard/services-client-view.tsx
-"use client"
+// components/clinic-dashboard/services-client-view.tsx
+"use client";
 
-import { useState, useMemo } from "react"
+import { useState, useMemo } from "react";
 import {
   Plus,
   Search,
@@ -11,17 +11,17 @@ import {
   Users,
   Package,
   Layers,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { TomanIcon } from "@/components/ui/toman-icon"
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { TomanIcon } from "@/components/ui/toman-icon";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from "@/components/ui/accordion"
+} from "@/components/ui/accordion";
 import {
   Table,
   TableBody,
@@ -29,7 +29,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
+} from "@/components/ui/table";
 import {
   Empty,
   EmptyHeader,
@@ -37,139 +37,166 @@ import {
   EmptyTitle,
   EmptyDescription,
   EmptyContent,
-} from "@/components/ui/empty"
-import { ServiceFormDialog } from "./service-form-dialog"
-import { SubServiceFormDialog } from "./sub-service-form-dialog"
+} from "@/components/ui/empty";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { ServiceFormDialog } from "./service-form-dialog";
+import { SubServiceFormDialog } from "./sub-service-form-dialog";
 import {
   deleteServiceAction,
   deleteSubServiceAction,
   ServiceAttributeItem,
-} from "@/app/clinic-dashboard/(dashboard)/services/actions"
-import { toast } from "sonner"
+} from "@/app/clinic-dashboard/(dashboard)/services/actions";
+import { toast } from "sonner";
 
 export type ServiceWithDetails = {
-  id: string
-  title: string
+  id: string;
+  title: string;
   assignedStaff: {
-    id: string
-    user: { id: string; fullName: string | null; phone: string }
-    role: { name: string }
-  }[]
+    id: string;
+    user: { id: string; fullName: string | null; phone: string };
+    role: { name: string };
+  }[];
   subServices: {
-    id: string
-    title: string
-    price: number
-    attributes: unknown
+    id: string;
+    title: string;
+    price: number;
+    attributes: unknown;
     defaultProducts: {
-      id: string
-      quantity: number
-      clinicProduct: { id: string; name: string; unit: string }
-    }[]
-  }[]
-}
+      id: string;
+      quantity: number;
+      clinicProduct: { id: string; name: string; unit: string };
+    }[];
+  }[];
+};
 
 interface ServicesClientViewProps {
-  initialServices: ServiceWithDetails[]
+  initialServices: ServiceWithDetails[];
   activeStaff: {
-    id: string
-    user: { id: string; fullName: string | null; phone: string }
-    role: { name: string }
-  }[]
-  clinicProducts: { id: string; name: string; unit: string }[]
+    id: string;
+    hasAllServicesAccess?: boolean;
+    user: { id: string; fullName: string | null; phone: string };
+    role: { name: string };
+  }[];
+  clinicProducts: { id: string; name: string; unit: string }[];
+  permissions?: {
+    canCreate: boolean;
+    canEdit: boolean;
+    canDelete: boolean;
+  };
 }
 
 export function ServicesClientView({
   initialServices,
   activeStaff,
   clinicProducts,
+  permissions = { canCreate: true, canEdit: true, canDelete: true },
 }: ServicesClientViewProps) {
-  const [searchQuery, setSearchQuery] = useState("")
+  const [searchQuery, setSearchQuery] = useState("");
 
   // استیت مودال خدمت اصلی
-  const [serviceDialogOpen, setServiceDialogOpen] = useState(false)
+  const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
   const [editingService, setEditingService] =
-    useState<ServiceWithDetails | null>(null)
+    useState<ServiceWithDetails | null>(null);
   const [openItems, setOpenItems] = useState<string[]>(() =>
     initialServices.map((s) => s.id)
-  )
+  );
+
   // استیت مودال زیرسرویس
-  const [subDialogOpen, setSubDialogOpen] = useState(false)
+  const [subDialogOpen, setSubDialogOpen] = useState(false);
   const [targetService, setTargetService] = useState<{
-    id: string
-    title: string
-  } | null>(null)
+    id: string;
+    title: string;
+  } | null>(null);
   const [editingSubService, setEditingSubService] = useState<
     ServiceWithDetails["subServices"][number] | null
-  >(null)
+  >(null);
+
+  // استیت دیالوگ تایید حذف
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: "service" | "subService";
+    id: string;
+    title: string;
+  } | null>(null);
 
   const filteredServices = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    if (!q) return initialServices
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return initialServices;
 
     return initialServices
       .map((service) => {
-        const serviceMatches = service.title.toLowerCase().includes(q)
+        const serviceMatches = service.title.toLowerCase().includes(q);
         const matchingSubs = service.subServices.filter((sub) =>
           sub.title.toLowerCase().includes(q)
-        )
+        );
 
-        if (serviceMatches) return service
+        if (serviceMatches) return service;
         if (matchingSubs.length > 0) {
-          return { ...service, subServices: matchingSubs }
+          return { ...service, subServices: matchingSubs };
         }
-        return null
+        return null;
       })
-      .filter((item): item is ServiceWithDetails => item !== null)
-  }, [initialServices, searchQuery])
+      .filter((item): item is ServiceWithDetails => item !== null);
+  }, [initialServices, searchQuery]);
 
   const handleOpenNewService = () => {
-    setEditingService(null)
-    setServiceDialogOpen(true)
-  }
+    if (!permissions.canCreate) return;
+    setEditingService(null);
+    setServiceDialogOpen(true);
+  };
 
   const handleEditService = (service: ServiceWithDetails) => {
-    setEditingService(service)
-    setServiceDialogOpen(true)
-  }
+    if (!permissions.canEdit) return;
+    setEditingService(service);
+    setServiceDialogOpen(true);
+  };
 
-  const handleDeleteService = async (serviceId: string, title: string) => {
-    if (
-      !confirm(`آیا از حذف خدمت «${title}» و تمام زیرسرویس‌های آن مطمئن هستید؟`)
-    ) {
-      return
-    }
-    const res = await deleteServiceAction(serviceId)
-    if (res.success) {
-      toast.success("خدمت حذف شد")
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    setDeleteTarget(null);
+
+    if (target.type === "service") {
+      const res = await deleteServiceAction(target.id);
+      if (res.success) {
+        toast.success("خدمت حذف شد");
+      } else {
+        toast.error(res.error);
+      }
     } else {
-      toast.error(res.error)
+      const res = await deleteSubServiceAction(target.id);
+      if (res.success) {
+        toast.success("زیرسرویس حذف شد");
+      } else {
+        toast.error(res.error);
+      }
     }
-  }
+  };
 
   const handleOpenNewSubService = (service: ServiceWithDetails) => {
-    setTargetService({ id: service.id, title: service.title })
-    setEditingSubService(null)
-    setSubDialogOpen(true)
-  }
+    if (!permissions.canCreate) return;
+    setTargetService({ id: service.id, title: service.title });
+    setEditingSubService(null);
+    setSubDialogOpen(true);
+  };
 
   const handleEditSubService = (
     service: ServiceWithDetails,
     sub: ServiceWithDetails["subServices"][number]
   ) => {
-    setTargetService({ id: service.id, title: service.title })
-    setEditingSubService(sub)
-    setSubDialogOpen(true)
-  }
-
-  const handleDeleteSubService = async (subId: string, title: string) => {
-    if (!confirm(`آیا از حذف زیرسرویس «${title}» مطمئن هستید؟`)) return
-    const res = await deleteSubServiceAction(subId)
-    if (res.success) {
-      toast.success("زیرسرویس حذف شد")
-    } else {
-      toast.error(res.error)
-    }
-  }
+    if (!permissions.canEdit) return;
+    setTargetService({ id: service.id, title: service.title });
+    setEditingSubService(sub);
+    setSubDialogOpen(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -185,10 +212,12 @@ export function ServicesClientView({
           </p>
         </div>
 
-        <Button onClick={handleOpenNewService} className="shrink-0 gap-2">
-          <Plus className="size-4" />
-          افزودن خدمت جدید
-        </Button>
+        {permissions.canCreate && (
+          <Button onClick={handleOpenNewService} className="shrink-0 gap-2">
+            <Plus className="size-4" />
+            افزودن خدمت جدید
+          </Button>
+        )}
       </div>
 
       {/* نوار جستجو و آمار */}
@@ -241,7 +270,7 @@ export function ServicesClientView({
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            {!searchQuery && (
+            {!searchQuery && permissions.canCreate && (
               <Button onClick={handleOpenNewService} className="gap-2">
                 <Plus className="size-4" />
                 ایجاد اولین خدمت
@@ -282,35 +311,45 @@ export function ServicesClientView({
                 </AccordionTrigger>
 
                 <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleOpenNewSubService(service)}
-                    className="h-8 gap-1 text-xs"
-                  >
-                    <Plus className="size-3.5" />
-                    زیرسرویس
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleEditService(service)}
-                    className="size-8"
-                    title="ویرایش خدمت"
-                  >
-                    <Pencil className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() =>
-                      handleDeleteService(service.id, service.title)
-                    }
-                    className="size-8 text-destructive hover:text-destructive"
-                    title="حذف خدمت"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
+                  {permissions.canCreate && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleOpenNewSubService(service)}
+                      className="h-8 gap-1 text-xs"
+                    >
+                      <Plus className="size-3.5" />
+                      زیرسرویس
+                    </Button>
+                  )}
+                  {permissions.canEdit && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEditService(service)}
+                      className="size-8"
+                      title="ویرایش خدمت"
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
+                  )}
+                  {permissions.canDelete && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() =>
+                        setDeleteTarget({
+                          type: "service",
+                          id: service.id,
+                          title: service.title,
+                        })
+                      }
+                      className="size-8 text-destructive hover:text-destructive"
+                      title="حذف خدمت"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -318,13 +357,15 @@ export function ServicesClientView({
                 {service.subServices.length === 0 ? (
                   <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
                     هنوز زیرسرویسی برای این خدمت تعریف نشده است.{" "}
-                    <button
-                      type="button"
-                      onClick={() => handleOpenNewSubService(service)}
-                      className="font-medium text-primary underline underline-offset-4"
-                    >
-                      افزودن اولین زیرسرویس
-                    </button>
+                    {permissions.canCreate && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenNewSubService(service)}
+                        className="font-medium text-primary underline underline-offset-4"
+                      >
+                        افزودن اولین زیرسرویس
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="overflow-hidden rounded-lg border">
@@ -341,16 +382,18 @@ export function ServicesClientView({
                           <TableHead className="text-right">
                             مصرفی دیفالت
                           </TableHead>
-                          <TableHead className="w-24 text-left">
-                            عملیات
-                          </TableHead>
+                          {(permissions.canEdit || permissions.canDelete) && (
+                            <TableHead className="w-24 text-left">
+                              عملیات
+                            </TableHead>
+                          )}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {service.subServices.map((sub) => {
                           const attrs = Array.isArray(sub.attributes)
                             ? (sub.attributes as ServiceAttributeItem[])
-                            : []
+                            : [];
 
                           return (
                             <TableRow key={sub.id}>
@@ -404,32 +447,43 @@ export function ServicesClientView({
                                   </div>
                                 )}
                               </TableCell>
-                              <TableCell className="text-left">
-                                <div className="flex items-center justify-end gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() =>
-                                      handleEditSubService(service, sub)
-                                    }
-                                    className="size-8"
-                                  >
-                                    <Pencil className="size-3.5" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() =>
-                                      handleDeleteSubService(sub.id, sub.title)
-                                    }
-                                    className="size-8 text-destructive hover:text-destructive"
-                                  >
-                                    <Trash2 className="size-3.5" />
-                                  </Button>
-                                </div>
-                              </TableCell>
+                              {(permissions.canEdit ||
+                                permissions.canDelete) && (
+                                <TableCell className="text-left">
+                                  <div className="flex items-center justify-end gap-1">
+                                    {permissions.canEdit && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() =>
+                                          handleEditSubService(service, sub)
+                                        }
+                                        className="size-8"
+                                      >
+                                        <Pencil className="size-3.5" />
+                                      </Button>
+                                    )}
+                                    {permissions.canDelete && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() =>
+                                          setDeleteTarget({
+                                            type: "subService",
+                                            id: sub.id,
+                                            title: sub.title,
+                                          })
+                                        }
+                                        className="size-8 text-destructive hover:text-destructive"
+                                      >
+                                        <Trash2 className="size-3.5" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              )}
                             </TableRow>
-                          )
+                          );
                         })}
                       </TableBody>
                     </Table>
@@ -460,6 +514,37 @@ export function ServicesClientView({
           clinicProducts={clinicProducts}
         />
       )}
+
+      {/* دیالوگ تایید حذف خدمت یا زیرسرویس */}
+      <AlertDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleteTarget?.type === "service"
+                ? "حذف خدمت اصلی"
+                : "حذف زیرسرویس"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              آیا از حذف <strong>«{deleteTarget?.title}»</strong>{" "}
+              {deleteTarget?.type === "service" &&
+                "و تمام زیرسرویس‌های زیرمجموعه آن "}
+              مطمئن هستید؟ این عملیات قابل بازگشت نیست.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:justify-start">
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              تایید و حذف
+            </AlertDialogAction>
+            <AlertDialogCancel>انصراف</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
-  )
+  );
 }

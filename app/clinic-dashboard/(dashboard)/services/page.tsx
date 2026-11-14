@@ -1,6 +1,7 @@
 // app/clinic-dashboard/(dashboard)/services/page.tsx
 import { prisma } from "@/lib/prisma";
 import { getCurrentClinicContext } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import { ServicesClientView } from "@/components/clinic-dashboard/services-client-view";
 
@@ -11,7 +12,21 @@ export default async function ServicesPage() {
   }
 
   const { clinicUser } = ctx;
-  // اگر کاربر مالک کلینیک نیست و دسترسی به همه خدمات ندارد، فقط سرویس‌های منتسب به خودش را ببیند
+
+  // بررسی اینکه آیا کاربر حداقل مجوز مشاهده یا مدیریت سرویس را دارد
+  const canView =
+    hasPermission(clinicUser, "services.view") ||
+    hasPermission(clinicUser, "services.create") ||
+    hasPermission(clinicUser, "services.edit");
+
+  if (!canView) {
+    redirect("/clinic-dashboard");
+  }
+
+  const canCreate = hasPermission(clinicUser, "services.create");
+  const canEdit = hasPermission(clinicUser, "services.edit");
+  const canDelete = hasPermission(clinicUser, "services.delete");
+
   const restrictToAssigned =
     !clinicUser.isOwner && !clinicUser.hasAllServicesAccess;
 
@@ -67,12 +82,14 @@ export default async function ServicesPage() {
     }),
   ]);
 
-  // نرمال‌سازی عنوان شغلی پرسنل با توجه به اختیاری بودن role در اسکیمای جدید
   const formattedStaff = activeStaff.map((staff) => ({
     id: staff.id,
+    hasAllServicesAccess: staff.isOwner || staff.hasAllServicesAccess,
     user: staff.user,
     role: {
-      name: staff.role?.name || staff.jobTitle || "پرسنل",
+      name: staff.isOwner
+        ? "مدیر کلینیک"
+        : staff.role?.name || staff.jobTitle || "پرسنل",
     },
   }));
 
@@ -88,14 +105,13 @@ export default async function ServicesPage() {
   }));
 
   return (
-    <div className="flex flex-1 flex-col">
-      <main className="flex-1 p-4 md:p-6 space-y-6">
-        <ServicesClientView
-          initialServices={formattedServices}
-          activeStaff={formattedStaff}
-          clinicProducts={clinicProducts}
-        />
-      </main>
+    <div className="space-y-6">
+      <ServicesClientView
+        initialServices={formattedServices}
+        activeStaff={formattedStaff}
+        clinicProducts={clinicProducts}
+        permissions={{ canCreate, canEdit, canDelete }}
+      />
     </div>
   );
 }

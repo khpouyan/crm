@@ -28,22 +28,31 @@ export interface KavenegarResponse {
 }
 
 /**
- * تبدیل فرمت‌های مختلف شماره موبایل به فرمت استاندارد کاوه‌نگار (09123456789)
- * همچنین تبدیل اعداد فارسی/عربی به انگلیسی
+ * تبدیل اعداد فارسی و عربی به انگلیسی (مناسب برای کد OTP، کد ملی، قیمت و...)
  */
-export function normalizeIranianPhone(phone: string): string {
+export function toEnglishDigits(input: string): string {
   const persianDigits = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
   const arabicDigits = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /٧/g, /٨/g, /٩/g];
 
-  let normalized = phone.trim();
+  let normalized = input.trim();
   for (let i = 0; i < 10; i++) {
     normalized = normalized
       .replace(persianDigits[i], i.toString())
       .replace(arabicDigits[i], i.toString());
   }
+  return normalized;
+}
 
+/**
+ * تبدیل فرمت‌های مختلف شماره موبایل به فرمت استاندارد (09123456789)
+ */
+export function normalizeIranianPhone(phone: string): string {
+  const normalized = toEnglishDigits(phone);
   const cleaned = normalized.replace(/\D/g, "");
 
+  if (cleaned.startsWith("0098") && cleaned.length === 14) {
+    return `0${cleaned.slice(4)}`;
+  }
   if (cleaned.startsWith("98") && cleaned.length === 12) {
     return `0${cleaned.slice(2)}`;
   }
@@ -61,16 +70,18 @@ export async function sendOTPWithKavenegar(
   params: SendOTPParams
 ): Promise<KavenegarResponse> {
   const apiKey = process.env.KAVENEGAR_API_KEY;
-  const defaultTemplate = process.env.KAVENEGAR_VERIFY_TEMPLATE;
+  const defaultTemplate = params.template ?? process.env.KAVENEGAR_VERIFY_TEMPLATE;
 
   if (!apiKey) throw new Error("KAVENEGAR_API_KEY در فایل env تنظیم نشده است.");
-  if (!defaultTemplate) throw new Error("KAVENEGAR_VERIFY_TEMPLATE در فایل env تنظیم نشده است.");
+  if (!defaultTemplate) {
+    throw new Error("KAVENEGAR_VERIFY_TEMPLATE در فایل env تنظیم نشده است.");
+  }
 
   const baseUrl = `https://api.kavenegar.com/v1/${apiKey}/verify/lookup.json`;
   const searchParams = new URLSearchParams({
-    receptor: params.receptor.replace(/\s/g, ""),
-    token: params.token,
-    template: params.template ?? defaultTemplate,
+    receptor: normalizeIranianPhone(params.receptor),
+    token: toEnglishDigits(params.token),
+    template: defaultTemplate,
   });
 
   if (params.token2) searchParams.set("token2", params.token2);
@@ -81,16 +92,18 @@ export async function sendOTPWithKavenegar(
   const response = await fetch(`${baseUrl}?${searchParams.toString()}`, {
     method: "GET",
     cache: "no-store",
+    signal: AbortSignal.timeout(10000),
   });
 
-  if (!response.ok) {
-    throw new Error(`خطای ارتباط با کاوه‌نگار: ${response.status} ${response.statusText}`);
-  }
+  const data: KavenegarResponse | null = await response.json().catch(() => null);
 
-  const data: KavenegarResponse = await response.json();
-
-  if (data.return?.status !== 200) {
-    throw new Error(`خطای سرویس پیامک: ${data.return?.message ?? "خطای نامشخص"}`);
+  if (!response.ok || data?.return?.status !== 200) {
+    const kavenegarMsg = data?.return?.message;
+    throw new Error(
+      kavenegarMsg
+        ? `خطای سرویس پیامک: ${kavenegarMsg}`
+        : `خطای ارتباط با کاوه‌نگار (${response.status})`
+    );
   }
 
   return data;

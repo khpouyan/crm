@@ -1,10 +1,10 @@
-// app/actions/auth.ts
+// app/clinic-dashboard/(auth)/login/clinic-auth.ts
 "use server";
 
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma"; // مسیر فایل prisma client خود را جایگزین کنید
+import { prisma } from "@/lib/prisma";
 import {
   normalizeIranianPhone,
   isValidIranianMobile,
@@ -20,9 +20,53 @@ const OTP_EXPIRY_MINUTES = 2;
 const MAX_OTP_ATTEMPTS = 5;
 
 /**
+ * تابع کمکی برای بررسی اینکه آیا این شماره موبایل اجازه ورود به پنل کلینیک را دارد یا خیر
+ * (باید عضو فعال کلینیک باشد، حذف نشده باشد و تیک canLogin برایش روشن باشد)
+ */
+async function findEligibleClinicStaffUser(phone: string) {
+  const user = await prisma.user.findUnique({
+    where: { phone },
+    include: {
+      clinicUsers: {
+        where: {
+          deletedAt: null,
+        },
+      },
+    },
+  });
+
+  if (!user || user.clinicUsers.length === 0) {
+    return {
+      allowed: false as const,
+      error: "حساب کاربری پرسنلی با این شماره موبایل یافت نشد.",
+    };
+  }
+
+  const activeLoginMembership = user.clinicUsers.find(
+    (cu) => cu.isActive && cu.canLogin
+  );
+
+  if (!activeLoginMembership) {
+    return {
+      allowed: false as const,
+      error:
+        "دسترسی ورود شما به پنل کلینیک غیرفعال شده است. با مدیر کلینیک تماس بگیرید.",
+    };
+  }
+
+  return {
+    allowed: true as const,
+    user,
+  };
+}
+
+/**
  * ۱. ورود با شماره موبایل و رمز عبور
  */
-export async function loginWithPasswordAction(rawPhone: string, password: string) {
+export async function loginWithPasswordAction(
+  rawPhone: string,
+  password: string
+) {
   try {
     const phone = normalizeIranianPhone(rawPhone);
 
@@ -34,19 +78,18 @@ export async function loginWithPasswordAction(rawPhone: string, password: string
       return { success: false, error: "لطفاً رمز عبور را وارد کنید." };
     }
 
-    const user = await prisma.user.findUnique({
-      where: { phone },
-    });
-
-    if (!user) {
-      return { success: false, error: "شماره موبایل یا رمز عبور اشتباه است." };
+    const eligibility = await findEligibleClinicStaffUser(phone);
+    if (!eligibility.allowed) {
+      return { success: false, error: eligibility.error };
     }
 
-    // اگر کاربر قبلاً با OTP ثبت‌نام کرده اما رمز عبور تعیین نکرده باشد
+    const { user } = eligibility;
+
     if (!user.password) {
       return {
         success: false,
-        error: "برای این حساب رمز عبور تنظیم نشده است. لطفاً با رمز یک‌بار مصرف وارد شوید.",
+        error:
+          "برای این حساب رمز عبور تنظیم نشده است. لطفاً با رمز یک‌بار مصرف وارد شوید.",
       };
     }
 
@@ -64,14 +107,23 @@ export async function loginWithPasswordAction(rawPhone: string, password: string
 }
 
 /**
- * ۲. ارسال کد ۶ رقمی OTP با کاوه‌نگار
+ * ۲. ارسال کد ۶ رقمی OTP با کاوه‌نگار (فقط برای پرسنل مجاز به ورود)
  */
 export async function sendOtpAction(rawPhone: string) {
   try {
     const phone = normalizeIranianPhone(rawPhone);
 
     if (!isValidIranianMobile(phone)) {
-      return { success: false, error: "لطفاً یک شماره موبایل معتبر وارد کنید (مثال: 09123456789)." };
+      return {
+        success: false,
+        error: "لطفاً یک شماره موبایل معتبر وارد کنید (مثال: 09123456789).",
+      };
+    }
+
+    // بررسی مجاز بودن پرسنل قبل از ارسال پیامک و مصرف شارژ کاوه‌نگار
+    const eligibility = await findEligibleClinicStaffUser(phone);
+    if (!eligibility.allowed) {
+      return { success: false, error: eligibility.error };
     }
 
     // جلوگیری از ارسال اسپم (اگر کد قبلی هنوز منقضی نشده باشد)
@@ -95,16 +147,13 @@ export async function sendOtpAction(rawPhone: string) {
       }
     }
 
-    // تولید کد تصادفی ۶ رقمی امن
     const code = crypto.randomInt(100000, 999999).toString();
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-    // پاک کردن کدهای منقضی‌شده قبلی این شماره
     await prisma.otpVerification.deleteMany({
       where: { phone },
     });
 
-    // ذخیره کد در دیتابیس
     await prisma.otpVerification.create({
       data: {
         phone,
@@ -113,7 +162,6 @@ export async function sendOtpAction(rawPhone: string) {
       },
     });
 
-    // ارسال پیامک از طریق کاوه‌نگار
     await sendOTPWithKavenegar({
       receptor: phone,
       token: code,
@@ -131,12 +179,11 @@ export async function sendOtpAction(rawPhone: string) {
 
 /**
  * ۳. بررسی کد OTP و ایجاد سشن
- * اگر کاربر بار اول وارد شود یا پسورد نداشته باشد، needsPassword: true برمی‌گرداند
  */
 export async function verifyOtpAction(rawPhone: string, code: string) {
   try {
     const phone = normalizeIranianPhone(rawPhone);
-    const normalizedCode = normalizeIranianPhone(code); // تبدیل اعداد فارسی احتمالی
+    const normalizedCode = normalizeIranianPhone(code);
 
     if (!isValidIranianMobile(phone) || normalizedCode.length !== 6) {
       return { success: false, error: "اطلاعات وارد شده معتبر نیست." };
@@ -151,14 +198,18 @@ export async function verifyOtpAction(rawPhone: string, code: string) {
     });
 
     if (!otpRecord) {
-      return { success: false, error: "کد تأیید منقضی شده یا وجود ندارد. مجدداً درخواست دهید." };
+      return {
+        success: false,
+        error: "کد تأیید منقضی شده یا وجود ندارد. مجدداً درخواست دهید.",
+      };
     }
 
     if (otpRecord.attempts >= MAX_OTP_ATTEMPTS) {
       await prisma.otpVerification.delete({ where: { id: otpRecord.id } });
       return {
         success: false,
-        error: "تعداد تلاش‌های ناموفق بیش از حد مجاز بود. لطفاً کد جدید دریافت کنید.",
+        error:
+          "تعداد تلاش‌های ناموفق بیش از حد مجاز بود. لطفاً کد جدید دریافت کنید.",
       };
     }
 
@@ -175,28 +226,20 @@ export async function verifyOtpAction(rawPhone: string, code: string) {
       where: { id: otpRecord.id },
     });
 
-    // جستجو یا ایجاد کاربر در صورت ورود اول
-    let user = await prisma.user.findUnique({
-      where: { phone },
-    });
-
-    let isFirstLoginOrNoPassword = false;
-
-    if (!user) {
-      user = await prisma.user.create({
-        data: { phone },
-      });
-      isFirstLoginOrNoPassword = true;
-    } else if (!user.password) {
-      isFirstLoginOrNoPassword = true;
+    // بررسی مجدد وضعیت پرسنل در لحظه ورود
+    const eligibility = await findEligibleClinicStaffUser(phone);
+    if (!eligibility.allowed) {
+      return { success: false, error: eligibility.error };
     }
 
-    // ایجاد سشن ۷ روزه
+    const { user } = eligibility;
+    const needsPassword = !user.password;
+
     await createSession(user.id);
 
     return {
       success: true,
-      needsPassword: isFirstLoginOrNoPassword,
+      needsPassword,
     };
   } catch (error) {
     console.error("Verify OTP error:", error);
@@ -205,13 +248,19 @@ export async function verifyOtpAction(rawPhone: string, code: string) {
 }
 
 /**
- * ۴. تنظیم رمز عبور برای کاربری که با OTP وارد شده است
+ * ۴. تنظیم رمز عبور برای پرسنلی که بدون پسورد و با OTP وارد شده است
  */
-export async function setInitialPasswordAction(newPassword: string, confirmPassword: string) {
+export async function setInitialPasswordAction(
+  newPassword: string,
+  confirmPassword: string
+) {
   try {
     const user = await getCurrentUser();
     if (!user) {
-      return { success: false, error: "نشست شما منقضی شده است. لطفاً مجدداً وارد شوید." };
+      return {
+        success: false,
+        error: "نشست شما منقضی شده است. لطفاً مجدداً وارد شوید.",
+      };
     }
 
     if (newPassword.length < 6) {
@@ -241,5 +290,5 @@ export async function setInitialPasswordAction(newPassword: string, confirmPassw
  */
 export async function logoutAction() {
   await destroySession();
-  redirect("/clinic-dashboard"); // یا مسیر صفحه لاگین شما
+  redirect("/clinic-dashboard/login");
 }

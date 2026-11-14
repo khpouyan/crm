@@ -3,6 +3,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentClinicContext } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 
 export type ServiceAttributeItem = {
@@ -16,7 +17,7 @@ export type DefaultProductInput = {
 };
 
 /**
- * ایجاد یا ویرایش خدمت اصلی (همراه با انتساب پرسنل معتبر و فعال)
+ * ایجاد یا ویرایش خدمت اصلی (همراه با بررسی مجوز عملیاتی و انتساب پرسنل معتبر)
  */
 export async function upsertServiceAction(data: {
   id?: string;
@@ -26,12 +27,22 @@ export async function upsertServiceAction(data: {
   const ctx = await getCurrentClinicContext();
   if (!ctx) return { success: false, error: "دسترسی غیرمجاز" };
 
+  // بررسی مجوز عملیاتی ایجاد یا ویرایش سرویس
+  const requiredPerm = data.id ? "services.edit" : "services.create";
+  if (!hasPermission(ctx.clinicUser, requiredPerm)) {
+    return {
+      success: false,
+      error: data.id
+        ? "شما مجوز ویرایش سرویس را ندارید."
+        : "شما مجوز ثبت سرویس جدید را ندارید.",
+    };
+  }
+
   if (!data.title.trim()) {
     return { success: false, error: "عنوان خدمت الزامی است" };
   }
 
   try {
-    // اعتبارسنجی اینکه پرسنل انتخاب‌شده متعلق به همین کلینیک باشند و حذف یا غیرفعال نشده باشند
     const validStaff = await prisma.clinicUser.findMany({
       where: {
         id: { in: data.assignedStaffIds },
@@ -44,7 +55,6 @@ export async function upsertServiceAction(data: {
 
     const staffIdSet = new Set(validStaff.map((s) => s.id));
 
-    // اگر سازنده خدمت مالک نیست و دسترسی همگانی ندارد، خودش را هم در لیست نگه می‌داریم تا دسترسی‌اش به سرویس ساخته‌شده قطع نشود
     if (!ctx.clinicUser.isOwner && !ctx.clinicUser.hasAllServicesAccess) {
       staffIdSet.add(ctx.clinicUserId);
     }
@@ -52,7 +62,6 @@ export async function upsertServiceAction(data: {
     const finalStaffIds = Array.from(staffIdSet);
 
     if (data.id) {
-      // بررسی مالکیت و دسترسی به سرویس قبل از ویرایش
       const existing = await prisma.service.findFirst({
         where: {
           id: data.id,
@@ -64,7 +73,10 @@ export async function upsertServiceAction(data: {
       });
 
       if (!existing) {
-        return { success: false, error: "خدمت مورد نظر یافت نشد یا دسترسی ندارید" };
+        return {
+          success: false,
+          error: "خدمت مورد نظر یافت نشد یا دسترسی ندارید",
+        };
       }
 
       await prisma.service.update({
@@ -103,6 +115,10 @@ export async function deleteServiceAction(serviceId: string) {
   const ctx = await getCurrentClinicContext();
   if (!ctx) return { success: false, error: "دسترسی غیرمجاز" };
 
+  if (!hasPermission(ctx.clinicUser, "services.delete")) {
+    return { success: false, error: "شما مجوز حذف سرویس را ندارید." };
+  }
+
   try {
     const existing = await prisma.service.findFirst({
       where: {
@@ -115,7 +131,10 @@ export async function deleteServiceAction(serviceId: string) {
     });
 
     if (!existing) {
-      return { success: false, error: "خدمت مورد نظر یافت نشد یا دسترسی ندارید" };
+      return {
+        success: false,
+        error: "خدمت مورد نظر یافت نشد یا دسترسی ندارید",
+      };
     }
 
     await prisma.service.delete({
@@ -127,13 +146,14 @@ export async function deleteServiceAction(serviceId: string) {
   } catch (error) {
     return {
       success: false,
-      error: "امکان حذف این خدمت وجود ندارد (ممکن است در فاکتورها استفاده شده باشد).",
+      error:
+        "امکان حذف این خدمت وجود ندارد (ممکن است در فاکتورها استفاده شده باشد).",
     };
   }
 }
 
 /**
- * ایجاد یا ویرایش زیرسرویس (همراه با قیمت، مشخصه‌های دلخواه و اقلام مصرفی دیفالت)
+ * ایجاد یا ویرایش زیرسرویس
  */
 export async function upsertSubServiceAction(data: {
   id?: string;
@@ -146,6 +166,16 @@ export async function upsertSubServiceAction(data: {
   const ctx = await getCurrentClinicContext();
   if (!ctx) return { success: false, error: "دسترسی غیرمجاز" };
 
+  const requiredPerm = data.id ? "services.edit" : "services.create";
+  if (!hasPermission(ctx.clinicUser, requiredPerm)) {
+    return {
+      success: false,
+      error: data.id
+        ? "شما مجوز ویرایش زیرسرویس را ندارید."
+        : "شما مجوز ثبت زیرسرویس جدید را ندارید.",
+    };
+  }
+
   if (!data.title.trim()) {
     return { success: false, error: "عنوان زیرسرویس الزامی است" };
   }
@@ -153,12 +183,10 @@ export async function upsertSubServiceAction(data: {
     return { success: false, error: "وارد کردن قیمت معتبر اجباری است" };
   }
 
-  // پاکسازی مشخصه‌های خالی
   const cleanAttributes = data.attributes.filter(
     (attr) => attr.key.trim() !== "" && attr.value.trim() !== ""
   );
 
-  // ادغام و پاکسازی مصرفی‌های تکراری (برای جلوگیری از خطای @@unique([subServiceId, clinicProductId]))
   const productMap = new Map<string, number>();
   for (const p of data.defaultProducts) {
     if (p.clinicProductId && p.quantity > 0) {
@@ -176,7 +204,6 @@ export async function upsertSubServiceAction(data: {
   );
 
   try {
-    // اطمینان از اینکه خدمت متعلق به همین کلینیک است و کاربر به آن دسترسی دارد
     const service = await prisma.service.findFirst({
       where: {
         id: data.serviceId,
@@ -187,7 +214,10 @@ export async function upsertSubServiceAction(data: {
       },
     });
     if (!service) {
-      return { success: false, error: "خدمت اصلی یافت نشد یا دسترسی ندارید" };
+      return {
+        success: false,
+        error: "خدمت اصلی یافت نشد یا دسترسی ندارید",
+      };
     }
 
     await prisma.$transaction(async (tx) => {
@@ -247,8 +277,11 @@ export async function deleteSubServiceAction(subServiceId: string) {
   const ctx = await getCurrentClinicContext();
   if (!ctx) return { success: false, error: "دسترسی غیرمجاز" };
 
+  if (!hasPermission(ctx.clinicUser, "services.delete")) {
+    return { success: false, error: "شما مجوز حذف زیرسرویس را ندارید." };
+  }
+
   try {
-    // بررسی تعلق زیرسرویس به کلینیک جاری و دسترسی کاربر
     const subService = await prisma.subService.findFirst({
       where: {
         id: subServiceId,
@@ -262,7 +295,10 @@ export async function deleteSubServiceAction(subServiceId: string) {
     });
 
     if (!subService) {
-      return { success: false, error: "زیرسرویس یافت نشد یا دسترسی ندارید" };
+      return {
+        success: false,
+        error: "زیرسرویس یافت نشد یا دسترسی ندارید",
+      };
     }
 
     await prisma.subService.delete({
@@ -274,7 +310,8 @@ export async function deleteSubServiceAction(subServiceId: string) {
   } catch (error) {
     return {
       success: false,
-      error: "امکان حذف این زیرسرویس وجود ندارد (در پرونده کلاینت‌ها ثبت شده است).",
+      error:
+        "امکان حذف این زیرسرویس وجود ندارد (در پرونده کلاینت‌ها ثبت شده است).",
     };
   }
 }

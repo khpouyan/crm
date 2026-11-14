@@ -6,8 +6,8 @@ import { Check, Loader2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import{DirectionProvider} from "@/components/ui/direction"
 import {
   ResponsiveDialog,
   ResponsiveDialogClose,
@@ -18,7 +18,7 @@ import {
   ResponsiveDialogPanel,
   ResponsiveDialogPopup,
   ResponsiveDialogTitle,
-  ResponsiveDialogTrigger
+  ResponsiveDialogTrigger,
 } from "@/components/ui/responsive-dialog";
 import { upsertServiceAction } from "@/app/clinic-dashboard/(dashboard)/services/actions";
 import { toast } from "sonner";
@@ -33,6 +33,7 @@ interface ServiceFormDialogProps {
   } | null;
   activeStaff: {
     id: string;
+    hasAllServicesAccess?: boolean;
     user: { fullName: string | null; phone: string };
     role: { name: string };
   }[];
@@ -91,20 +92,29 @@ export function ServiceFormDialog({
   };
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange} drawerPosition="bottom" >
-      <ResponsiveDialogTrigger className="sr-only" tabIndex={-1} aria-hidden="true"/>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      drawerPosition="bottom"
+    >
+      <ResponsiveDialogTrigger
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
+      />
       <ResponsiveDialogPopup className="sm:max-w-md">
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>
             {editingService ? "ویرایش خدمت" : "افزودن خدمت جدید"}
           </ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
-            خدمت اصلی دسته‌بندی کلان است و قیمت‌گذاری روی زیرسرویس‌های آن انجام می‌شود.
+            خدمت اصلی دسته‌بندی کلان است و قیمت‌گذاری روی زیرسرویس‌های آن انجام
+            می‌شود.
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
 
         <form onSubmit={handleSubmit}>
-          <ResponsiveDialogPanel className="flex flex-col gap-5 ">
+          <ResponsiveDialogPanel className="flex flex-col gap-5">
             <div className="flex flex-col gap-2">
               <Label htmlFor="service-title">عنوان خدمت *</Label>
               <Input
@@ -117,13 +127,20 @@ export function ServiceFormDialog({
             </div>
 
             <div className="flex flex-col gap-2.5">
-              <Label className="flex items-center gap-1.5">
-                <Users className="size-4 text-muted-foreground" />
-                پرسنل و اپراتورهای مرتبط با این خدمت
-              </Label>
-              <div className="rounded-lg border divide-y max-h-48 overflow-y-auto">
+              <div>
+                <Label className="flex items-center gap-1.5">
+                  <Users className="size-4 text-muted-foreground" />
+                  پرسنل دارای دسترسی اختصاصی به این خدمت
+                </Label>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  افرادی که در مدیریت پرسنل روی «همه خدمات» تنظیم شده‌اند، به
+                  صورت خودکار به این خدمت دسترسی دارند.
+                </p>
+              </div>
+
+              <div className="max-h-52 divide-y overflow-y-auto rounded-lg border">
                 {activeStaff.length === 0 ? (
-                  <p className="p-3 text-xs text-muted-foreground text-center">
+                  <p className="p-3 text-center text-xs text-muted-foreground">
                     پرسنل فعالی ثبت نشده است.
                   </p>
                 ) : (
@@ -132,23 +149,35 @@ export function ServiceFormDialog({
                     return (
                       <label
                         key={staff.id}
-                        className="flex items-center justify-between p-2.5 hover:bg-muted/50 cursor-pointer transition-colors"
+                        className="flex cursor-pointer items-center justify-between gap-2 p-2.5 transition-colors hover:bg-muted/50"
                       >
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
                           <Checkbox
                             checked={checked}
                             onCheckedChange={() => toggleStaff(staff.id)}
                           />
-                          <div className="text-sm">
-                            <div className="font-medium">
-                              {staff.user.fullName || staff.user.phone}
+                          <div className="text-sm min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="truncate font-medium">
+                                {staff.user.fullName || staff.user.phone}
+                              </span>
+                              {staff.hasAllServicesAccess && (
+                                <Badge
+                                  variant="secondary"
+                                  className="h-4 px-1.5 text-[10px] font-normal"
+                                >
+                                  دسترسی همه خدمات
+                                </Badge>
+                              )}
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {staff.role.name}
                             </div>
                           </div>
                         </div>
-                        {checked && <Check className="size-4 text-primary" />}
+                        {checked && (
+                          <Check className="size-4 shrink-0 text-primary" />
+                        )}
                       </label>
                     );
                   })
