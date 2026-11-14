@@ -1,3 +1,4 @@
+//app/clinic-dashboard/page.tsx
 import { PackagesAndModulesCard } from "@/components/clinic-dashboard/PackagesAndModulesCard"
 import { ClinicStatCards } from "@/components/clinic-dashboard/ClinicStatCards"
 import { ClinicAlertsCard } from "@/components/clinic-dashboard/ClinicAlertsCard"

@@ -1,5 +1,5 @@
+//app/clinic-dashboard/
 import { DirectionProvider } from "@base-ui/react/direction-provider"
-
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { fontVariables } from "@/lib/fonts"

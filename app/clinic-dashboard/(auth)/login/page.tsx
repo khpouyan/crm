@@ -1,4 +1,4 @@
-// app/clinic-dashboard/(auth)/page.tsx
+// app/clinic-dashboard/(auth)/login/page.tsx
 "use client"
 
 import React, { useState, useEffect } from "react"

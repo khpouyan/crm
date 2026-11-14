@@ -1,7 +1,7 @@
 // lib/auth/session.ts
 import { cookies } from "next/headers";
 import crypto from "crypto";
-import { prisma } from "@/lib/prisma"; // مسیر فایل prisma client خود را جایگزین کنید
+import { prisma } from "@/lib/prisma";
 
 export const SESSION_COOKIE_NAME = "clinic_session_token";
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // ۷ روز به میلی‌ثانیه
@@ -48,9 +48,13 @@ export async function getCurrentUser() {
       user: {
         include: {
           clinicUsers: {
+            where: { deletedAt: null }, // نادیده گرفتن سوابق حذف نرم‌شده
             include: {
               clinic: true,
               role: true,
+              assignedServices: {
+                select: { id: true },
+              },
             },
           },
         },
@@ -87,23 +91,27 @@ export async function destroySession() {
 }
 
 /**
- * دریافت کلینیک فعال کاربر لاگین‌شده (با بررسی عدم اخراج/غیرفعال‌سازی)
+ * دریافت کلینیک فعال کاربر لاگین‌شده (با بررسی فعال بودن، عدم حذف و مجوز ورود به پنل)
  */
 export async function getCurrentClinicContext() {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  // پیدا کردن اولین کلینیکی که کاربر در آن عضویت فعال دارد
-  const activeMembership = user.clinicUsers.find((cu) => cu.isActive);
+  // پیدا کردن اولین کلینیکی که کاربر در آن عضویت فعال دارد و اجازه ورود به پنل دارد
+  const activeMembership = user.clinicUsers.find(
+    (cu) => cu.isActive && cu.canLogin && !cu.deletedAt
+  );
 
   if (!activeMembership) return null;
 
   return {
     userId: user.id,
     fullName: user.fullName,
+    phone: user.phone,
     clinicId: activeMembership.clinicId,
     clinicUserId: activeMembership.id,
     clinic: activeMembership.clinic,
     role: activeMembership.role,
+    clinicUser: activeMembership, // شامل isOwner، permissions، jobTitle و دسترسی خدمات
   };
 }
