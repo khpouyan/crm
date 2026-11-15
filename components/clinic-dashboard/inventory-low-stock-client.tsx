@@ -135,6 +135,7 @@ export function InventoryLowStockClient({
                           <TableCell className="text-left">
                             <Button
                               variant="outline"
+                              nativeButton={false}
                               size="sm"
                               className="h-8 gap-1 text-xs"
                               render={
