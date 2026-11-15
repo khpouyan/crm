@@ -1,8 +1,8 @@
-"use client";
+"use client"
 
-import * as React from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import * as React from "react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import {
   ChartColumn,
   ChevronRight,
@@ -15,14 +15,14 @@ import {
   Toolbox,
   User,
   Users,
-} from "lucide-react";
+} from "lucide-react"
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+} from "@/components/ui/collapsible"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,7 +30,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu"
 import {
   Sidebar,
   SidebarContent,
@@ -45,39 +45,39 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
   useSidebar,
-} from "@/components/ui/sidebar";
-import { LogoutButton } from "@/components/clinic-dashboard/logout-button";
-import { PermissionKey } from "@/lib/permissions";
+} from "@/components/ui/sidebar"
+import { LogoutButton } from "@/components/clinic-dashboard/logout-button"
+import { PermissionKey } from "@/lib/permissions"
 
 export interface SidebarUserProp {
-  name: string;
-  phone: string;
-  avatar?: string;
-  jobTitle: string;
-  isOwner: boolean;
-  permissions: string[];
+  name: string
+  phone: string
+  avatar?: string
+  jobTitle: string
+  isOwner: boolean
+  permissions: string[]
 }
 
 export interface SidebarClinicProp {
-  name: string;
+  name: string
 }
 
 interface NavSingleItem {
-  name: string;
-  icon: React.ElementType;
-  href: string;
-  requiredAnyPermissions?: PermissionKey[];
+  name: string
+  icon: React.ElementType
+  href: string
+  requiredAnyPermissions?: PermissionKey[]
 }
 
 interface NavGroupItem {
-  title: string;
-  icon: React.ElementType;
-  requiredAnyPermissions?: PermissionKey[];
+  title: string
+  icon: React.ElementType
+  requiredAnyPermissions?: PermissionKey[]
   items: {
-    title: string;
-    href: string;
-    requiredAnyPermissions?: PermissionKey[];
-  }[];
+    title: string
+    href: string
+    requiredAnyPermissions?: PermissionKey[]
+  }[]
 }
 
 const SINGLE_TOP_ITEMS: NavSingleItem[] = [
@@ -85,7 +85,6 @@ const SINGLE_TOP_ITEMS: NavSingleItem[] = [
     name: "داشبورد",
     icon: ChartColumn,
     href: "/clinic-dashboard",
-    // داشبورد نمای کلی برای تمام پرسنل دارای اجازه ورود نمایش داده می‌شود
   },
   {
     name: "پرونده و مراجعین",
@@ -98,7 +97,7 @@ const SINGLE_TOP_ITEMS: NavSingleItem[] = [
       "patients.visit_report",
     ],
   },
-];
+]
 
 const COLLAPSIBLE_GROUPS: NavGroupItem[] = [
   {
@@ -138,7 +137,10 @@ const COLLAPSIBLE_GROUPS: NavGroupItem[] = [
       {
         title: "گزارش",
         href: "/clinic-dashboard/calendar/reports",
-        requiredAnyPermissions: ["patients.visit_report", "finance.visit_report"],
+        requiredAnyPermissions: [
+          "patients.visit_report",
+          "finance.visit_report",
+        ],
       },
     ],
   },
@@ -149,37 +151,42 @@ const COLLAPSIBLE_GROUPS: NavGroupItem[] = [
     items: [
       {
         title: "تعریف کالا و مصرفی",
-        href: "#",
-        requiredAnyPermissions: ["finance.inventory"],
+        href: "/clinic-dashboard/inventory/products",
+        requiredAnyPermissions: ["finance.inventory", "tools.inventory_view"],
       },
       {
         title: "ورود کالا به انبار",
-        href: "#",
+        href: "/clinic-dashboard/inventory/stock-in",
         requiredAnyPermissions: ["finance.inventory"],
       },
       {
         title: "خروج کالا از انبار",
-        href: "#",
+        href: "/clinic-dashboard/inventory/stock-out",
         requiredAnyPermissions: ["finance.inventory"],
       },
       {
+        title: "کالاهای تمام‌شده و رو به اتمام",
+        href: "/clinic-dashboard/inventory/low-stock",
+        requiredAnyPermissions: ["finance.inventory", "tools.inventory_view"],
+      },
+      {
         title: "کالاهای وارد شده با تامین کننده ها",
-        href: "#",
+        href: "/clinic-dashboard/inventory/suppliers",
         requiredAnyPermissions: ["finance.inventory"],
       },
       {
         title: "کالاهای کسر شده با خدمات",
-        href: "#",
+        href: "/clinic-dashboard/inventory/service-usage",
         requiredAnyPermissions: ["finance.inventory", "tools.inventory_view"],
       },
       {
-        title: "گزارش فروش کالاها",
-        href: "#",
+        title: "گزارش فروش و مصرف کالاها",
+        href: "/clinic-dashboard/inventory/sales-report",
         requiredAnyPermissions: ["finance.inventory", "finance.accounting"],
       },
     ],
   },
-];
+]
 
 const SINGLE_BOTTOM_ITEMS: NavSingleItem[] = [
   {
@@ -198,31 +205,33 @@ const SINGLE_BOTTOM_ITEMS: NavSingleItem[] = [
     href: "/clinic-dashboard/staffs",
     requiredAnyPermissions: ["management.settings"],
   },
-];
+]
 
 function canSee(
   user: SidebarUserProp,
   requiredAnyPermissions?: PermissionKey[]
 ): boolean {
   if (!requiredAnyPermissions || requiredAnyPermissions.length === 0) {
-    return true;
+    return true
   }
-  if (user.isOwner) return true;
-  return requiredAnyPermissions.some((perm) => user.permissions.includes(perm));
+  if (user.isOwner) return true
+  return requiredAnyPermissions.some((perm) => user.permissions.includes(perm))
 }
 
-export interface ClinicSidebarProps extends React.ComponentProps<typeof Sidebar> {
-  clinic: SidebarClinicProp;
-  user: SidebarUserProp;
+export interface ClinicSidebarProps extends React.ComponentProps<
+  typeof Sidebar
+> {
+  clinic: SidebarClinicProp
+  user: SidebarUserProp
 }
 
 export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
-  const pathname = usePathname();
-  const { isMobile } = useSidebar();
+  const pathname = usePathname()
+  const { isMobile } = useSidebar()
 
   const visibleTopItems = SINGLE_TOP_ITEMS.filter((item) =>
     canSee(user, item.requiredAnyPermissions)
-  );
+  )
 
   const visibleGroups = COLLAPSIBLE_GROUPS.filter((group) =>
     canSee(user, group.requiredAnyPermissions)
@@ -233,11 +242,37 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
         canSee(user, sub.requiredAnyPermissions)
       ),
     }))
-    .filter((group) => group.items.length > 0);
+    .filter((group) => group.items.length > 0)
 
   const visibleBottomItems = SINGLE_BOTTOM_ITEMS.filter((item) =>
     canSee(user, item.requiredAnyPermissions)
-  );
+  )
+
+  // مدیریت کنترل‌شده وضعیت باز/بسته بودن منوهای کشویی برای جلوگیری از خطای Base UI
+  const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>(
+    () => {
+      const initial: Record<string, boolean> = {}
+      for (const group of visibleGroups) {
+        initial[group.title] = group.items.some((i) =>
+          pathname.startsWith(i.href.split("?")[0])
+        )
+      }
+      return initial
+    }
+  )
+  React.useEffect(() => {
+    setOpenGroups((prev) => {
+      const next = { ...prev }
+      for (const group of visibleGroups) {
+        if (
+          group.items.some((i) => pathname.startsWith(i.href.split("?")[0]))
+        ) {
+          next[group.title] = true
+        }
+      }
+      return next
+    })
+  }, [pathname])
 
   return (
     <Sidebar side="right" dir="rtl" collapsible="icon" {...props}>
@@ -258,7 +293,6 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
       </SidebarHeader>
 
       <SidebarContent>
-        {/* منوهای تکی بالا */}
         <SidebarMenu>
           {visibleTopItems.map((item) => (
             <SidebarMenuItem className="px-3" key={item.name}>
@@ -274,14 +308,19 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
           ))}
         </SidebarMenu>
 
-        {/* منوهای کشویی */}
         {visibleGroups.length > 0 && (
           <SidebarGroup>
             <SidebarMenu>
               {visibleGroups.map((group) => (
                 <Collapsible
                   key={group.title}
-                  defaultOpen={group.items.some((i) => pathname === i.href)}
+                  open={Boolean(openGroups[group.title])}
+                  onOpenChange={(isOpen) =>
+                    setOpenGroups((prev) => ({
+                      ...prev,
+                      [group.title]: isOpen,
+                    }))
+                  }
                   className="group/collapsible"
                 >
                   <SidebarMenuItem>
@@ -297,7 +336,7 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
                         {group.items.map((subItem) => (
                           <SidebarMenuSubItem key={subItem.title}>
                             <SidebarMenuSubButton
-                              isActive={pathname === subItem.href}
+                              isActive={pathname === subItem.href.split("?")[0]}
                               render={
                                 <Link href={subItem.href}>{subItem.title}</Link>
                               }
@@ -313,7 +352,6 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
           </SidebarGroup>
         )}
 
-        {/* منوهای تکی پایین (خدمات و مدیریت پرسنل) */}
         <SidebarMenu>
           {visibleBottomItems.map((item) => (
             <SidebarMenuItem className="px-3" key={item.name}>
@@ -365,7 +403,10 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
                 align="end"
                 sideOffset={4}
               >
-                {canSee(user, ["finance.accounting", "management.settings"]) && (
+                {canSee(user, [
+                  "finance.accounting",
+                  "management.settings",
+                ]) && (
                   <>
                     <DropdownMenuGroup>
                       {canSee(user, ["finance.accounting"]) && (
@@ -396,5 +437,5 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
-  );
+  )
 }

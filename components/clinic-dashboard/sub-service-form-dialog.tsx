@@ -1,7 +1,7 @@
 // components/clinic-dashboard/sub-service-form-dialog.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Plus, Trash2, Loader2, Package, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,7 @@ import {
   ResponsiveDialogPanel,
   ResponsiveDialogPopup,
   ResponsiveDialogTitle,
-  ResponsiveDialogTrigger
+  ResponsiveDialogTrigger,
 } from "@/components/ui/responsive-dialog";
 import {
   upsertSubServiceAction,
@@ -63,8 +63,20 @@ export function SubServiceFormDialog({
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState<number>(0);
   const [attributes, setAttributes] = useState<ServiceAttributeItem[]>([]);
-  const [defaultProducts, setDefaultProducts] = useState<DefaultProductInput[]>([]);
+  const [defaultProducts, setDefaultProducts] = useState<DefaultProductInput[]>(
+    []
+  );
   const [isPending, setIsPending] = useState(false);
+
+  // نگاشت کالاها برای Base UI Select جهت نمایش نام فارسی به جای UUID
+  const productSelectItems = useMemo(
+    () =>
+      clinicProducts.map((prod) => ({
+        value: prod.id,
+        label: `${prod.name} (${prod.unit})`,
+      })),
+    [clinicProducts]
+  );
 
   useEffect(() => {
     if (open) {
@@ -89,7 +101,11 @@ export function SubServiceFormDialog({
     setAttributes((prev) => [...prev, { key: "", value: "" }]);
   };
 
-  const updateAttribute = (index: number, field: "key" | "value", val: string) => {
+  const updateAttribute = (
+    index: number,
+    field: "key" | "value",
+    val: string
+  ) => {
     setAttributes((prev) =>
       prev.map((item, idx) => (idx === index ? { ...item, [field]: val } : item))
     );
@@ -157,23 +173,31 @@ export function SubServiceFormDialog({
   };
 
   return (
-    
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange} drawerPosition="bottom">
-      <ResponsiveDialogTrigger className="sr-only" tabIndex={-1} aria-hidden="true"/>
-      <ResponsiveDialogPopup className="sm:max-w-xl" >
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      drawerPosition="bottom"
+    >
+      <ResponsiveDialogTrigger
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+      <ResponsiveDialogPopup className="sm:max-w-xl">
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>
             {editingSubService ? "ویرایش زیرسرویس" : "افزودن زیرسرویس جدید"}
           </ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
-            زیرمجموعه خدمت: <strong className="text-foreground">{serviceTitle}</strong>
+            زیرمجموعه خدمت:{" "}
+            <strong className="text-foreground">{serviceTitle}</strong>
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
 
         <form onSubmit={handleSubmit}>
           <ResponsiveDialogPanel className="flex flex-col gap-5">
             {/* بخش ۱: نام و قیمت اجباری */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="sub-title">نام زیرسرویس *</Label>
                 <Input
@@ -199,7 +223,7 @@ export function SubServiceFormDialog({
             </div>
 
             {/* بخش ۲: مشخصه‌های دلخواه */}
-            <div className="flex flex-col gap-3 rounded-xl border p-3.5 bg-muted/20">
+            <div className="flex flex-col gap-3 rounded-xl border bg-muted/20 p-3.5">
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-1.5 text-sm font-semibold">
                   <Sparkles className="size-4 text-primary" />
@@ -219,7 +243,8 @@ export function SubServiceFormDialog({
 
               {attributes.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  می‌توانید فیلدهای دلخواه مثل «نوع لیزر: کندلا» یا «تعداد جلسات: ۴» اضافه کنید.
+                  می‌توانید فیلدهای دلخواه مثل «نوع لیزر: کندلا» یا «تعداد
+                  جلسات: ۴» اضافه کنید.
                 </p>
               ) : (
                 <div className="flex flex-col gap-2">
@@ -228,13 +253,17 @@ export function SubServiceFormDialog({
                       <Input
                         placeholder="نام مشخصه (مثلاً: نوع دستگاه)"
                         value={attr.key}
-                        onChange={(e) => updateAttribute(idx, "key", e.target.value)}
+                        onChange={(e) =>
+                          updateAttribute(idx, "key", e.target.value)
+                        }
                         className="h-9 text-sm"
                       />
                       <Input
                         placeholder="مقدار (مثلاً: کندلا)"
                         value={attr.value}
-                        onChange={(e) => updateAttribute(idx, "value", e.target.value)}
+                        onChange={(e) =>
+                          updateAttribute(idx, "value", e.target.value)
+                        }
                         className="h-9 text-sm"
                       />
                       <Button
@@ -253,7 +282,7 @@ export function SubServiceFormDialog({
             </div>
 
             {/* بخش ۳: اقلام مصرفی پیش‌فرض */}
-            <div className="flex flex-col gap-3 rounded-xl border p-3.5 bg-muted/20">
+            <div className="flex flex-col gap-3 rounded-xl border bg-muted/20 p-3.5">
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-1.5 text-sm font-semibold">
                   <Package className="size-4 text-primary" />
@@ -273,7 +302,8 @@ export function SubServiceFormDialog({
 
               {defaultProducts.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  اقلامی مثل روتختی یا ژل که با هر بار انجام این زیرسرویس مصرف می‌شوند را انتخاب کنید.
+                  اقلامی مثل روتختی یا ژل که با هر بار انجام این زیرسرویس مصرف
+                  می‌شوند را انتخاب کنید.
                 </p>
               ) : (
                 <div className="flex flex-col gap-2">
@@ -284,24 +314,29 @@ export function SubServiceFormDialog({
                     return (
                       <div key={idx} className="flex items-center gap-2">
                         <Select
+                          items={productSelectItems}
                           value={item.clinicProductId}
                           onValueChange={(val) => {
-                            if (val) updateDefaultProduct(idx, "clinicProductId", val);
+                            if (val)
+                              updateDefaultProduct(idx, "clinicProductId", val);
                           }}
                         >
                           <SelectTrigger className="h-9 flex-1 text-sm">
                             <SelectValue placeholder="انتخاب کالا از انبار" />
                           </SelectTrigger>
                           <SelectContent>
-                            {clinicProducts.map((prod) => (
-                              <SelectItem key={prod.id} value={prod.id}>
-                                {prod.name} ({prod.unit})
+                            {productSelectItems.map((prodItem) => (
+                              <SelectItem
+                                key={prodItem.value}
+                                value={prodItem.value}
+                              >
+                                {prodItem.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
 
-                        <div className="flex items-center gap-1.5 w-32">
+                        <div className="flex w-32 items-center gap-1.5">
                           <Input
                             type="number"
                             step="any"
@@ -314,9 +349,9 @@ export function SubServiceFormDialog({
                                 parseFloat(e.target.value) || 0
                               )
                             }
-                            className="h-9 text-sm text-center"
+                            className="h-9 text-center text-sm"
                           />
-                          <span className="text-xs text-muted-foreground shrink-0">
+                          <span className="shrink-0 text-xs text-muted-foreground">
                             {selectedProd?.unit || "عدد"}
                           </span>
                         </div>

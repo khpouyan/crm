@@ -1,69 +1,103 @@
-"use client";
+"use client"
 
-import * as React from "react";
-import { cn } from "@/lib/utils";
-import { eventInside, FloatPortal, useFloat } from "@/lib/float";
+import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
+import * as React from "react"
 
-export interface PopoverProps {
-  trigger: React.ReactNode;
-  children: React.ReactNode;
-  side?: "top" | "bottom";
-  align?: "start" | "center" | "end";
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  className?: string;
-}
+import { cn } from "@/lib/utils"
 
 /**
- * پاپ‌آور. A small panel anchored to its trigger; closes on outside click and Escape.
- * Rendered into `document.body` so a parent with overflow hidden cannot clip it.
- * `align="start"` hugs the trigger's inline-start (right in RTL).
+ * PopoverContent renders through a Portal, so it doesn't inherit `dir` from a
+ * nearby wrapper (only from document.documentElement). PopoverTrigger
+ * measures the ambient direction where it's actually rendered and pushes it
+ * here so PopoverContent can apply it explicitly to the portaled popup.
  */
-export function Popover({ trigger, children, side = "bottom", align = "start", open, onOpenChange, className }: PopoverProps) {
-  const [internal, setInternal] = React.useState(false);
-  const isOpen = open ?? internal;
-  const set = (v: boolean) => { if (open === undefined) setInternal(v); onOpenChange?.(v); };
-  const root = React.useRef<HTMLDivElement>(null);
-  const id = React.useId();
-  const { mounted, style, theme, panel, update } = useFloat(isOpen, root, { side, align });
+const PopoverDirContext = React.createContext<{
+  dir: "ltr" | "rtl"
+  setDir: (dir: "ltr" | "rtl") => void
+}>({ dir: "ltr", setDir: () => {} })
 
-  React.useEffect(() => {
-    if (!isOpen) return;
-    const onDoc = (e: MouseEvent) => { if (!eventInside(e, root.current, panel.current)) set(false); };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && set(false);
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+function Popover({ ...props }: PopoverPrimitive.Root.Props) {
+  const [dir, setDir] = React.useState<"ltr" | "rtl">("ltr")
+  const contextValue = React.useMemo(() => ({ dir, setDir }), [dir])
 
   return (
-    <div ref={root} className="inline-block">
-      <span
-        onClick={() => { if (!isOpen) update(); set(!isOpen); }}
-        aria-haspopup="dialog"
-        aria-expanded={isOpen}
-        aria-controls={id}
-        className="inline-flex cursor-pointer"
-      >
-        {trigger}
-      </span>
-      <FloatPortal
-        open={isOpen}
-        mounted={mounted}
-        style={style}
-        theme={theme}
-        panelRef={panel}
-        id={id}
-        role="dialog"
-        className={cn(
-          "fixed z-50 min-w-56 rounded-overlay border-line border-border bg-popover p-4 text-sm text-popover-foreground shadow-overlay [backdrop-filter:var(--surface-filter)]",
-          "animate-fade-up [animation-duration:180ms]",
-          className,
-        )}
-      >
-        {children}
-      </FloatPortal>
-    </div>
-  );
+    <PopoverDirContext.Provider value={contextValue}>
+      <PopoverPrimitive.Root data-slot="popover" {...props} />
+    </PopoverDirContext.Provider>
+  )
 }
+
+function PopoverTrigger({
+  className,
+  ...props
+}: PopoverPrimitive.Trigger.Props) {
+  const ref = React.useRef<HTMLButtonElement>(null)
+  const { setDir } = React.useContext(PopoverDirContext)
+
+  React.useEffect(() => {
+    function update() {
+      if (!ref.current) return
+      setDir(getComputedStyle(ref.current).direction === "rtl" ? "rtl" : "ltr")
+    }
+
+    update()
+
+    const observer = new MutationObserver(update)
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["dir"],
+      subtree: true,
+    })
+
+    return () => observer.disconnect()
+  }, [setDir])
+
+  return (
+    <PopoverPrimitive.Trigger
+      ref={ref}
+      data-slot="popover-trigger"
+      className={className}
+      {...props}
+    />
+  )
+}
+
+function PopoverContent({
+  className,
+  sideOffset = 6,
+  align,
+  side,
+  children,
+  ...props
+}: PopoverPrimitive.Popup.Props &
+  Pick<PopoverPrimitive.Positioner.Props, "align" | "side"> & {
+    sideOffset?: number
+  }) {
+  const { dir } = React.useContext(PopoverDirContext)
+
+  return (
+    <PopoverPrimitive.Portal>
+      <PopoverPrimitive.Positioner
+        dir={dir}
+        data-slot="popover-positioner"
+        sideOffset={sideOffset}
+        align={align}
+        side={side}
+        className="z-50 outline-none"
+      >
+        <PopoverPrimitive.Popup
+          data-slot="popover-content"
+          className={cn(
+            "w-72 origin-[var(--transform-origin)] rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-md duration-150 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            className
+          )}
+          {...props}
+        >
+          {children}
+        </PopoverPrimitive.Popup>
+      </PopoverPrimitive.Positioner>
+    </PopoverPrimitive.Portal>
+  )
+}
+
+export { Popover, PopoverContent, PopoverTrigger }
