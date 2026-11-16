@@ -56,7 +56,7 @@
   --font-sans: var(--font-fa), var(--font-geist);
   --font-heading: var(--font-fa), var(--font-geist);
   --font-mono: var(--font-mono-geist-mono), var(--font-fa);
-  --radius: 0.75rem;
+  --radius: 0.3rem;
   --shadow-x: 0px;
   --shadow-y: 0px;
   --shadow-blur: 0px;
@@ -111,7 +111,7 @@
   --font-sans: var(--font-fa), var(--font-geist);
   --font-heading: var(--font-fa), var(--font-geist);
   --font-mono: var(--font-mono-geist-mono), var(--font-fa);
-  --radius: 0.75rem;
+  --radius: 0.3rem;
   --shadow-x: 0px;
   --shadow-y: 0px;
   --shadow-blur: 0px;
