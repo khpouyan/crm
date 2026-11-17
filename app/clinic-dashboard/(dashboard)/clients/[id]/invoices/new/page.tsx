@@ -6,6 +6,10 @@ import { hasPermission, buildServiceScopeFilter } from "@/lib/permissions";
 import { InvoiceWizardContainer } from "@/components/clinic-dashboard/invoice-wizard/invoice-wizard-container";
 import type { AttributeEntry } from "@/components/clinic-dashboard/invoice-wizard/types";
 
+export const metadata = {
+  title: "ثبت سرویس و صدور فاکتور جدید | پنل کلینیک",
+};
+
 function parseAttributes(raw: unknown): AttributeEntry[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -19,9 +23,6 @@ function parseAttributes(raw: unknown): AttributeEntry[] {
     }))
     .filter((item) => item.key !== "");
 }
-export const metadata = {
-  title: "ثبت سرویس و صدور فاکتور جدید | پنل کلینیک",
-};
 
 export default async function NewClientInvoicePage({
   params,
@@ -74,6 +75,13 @@ export default async function NewClientInvoicePage({
         ...serviceScopeFilter,
       },
       include: {
+        defaultServiceProducts: {
+          include: {
+            clinicProduct: {
+              select: { id: true, name: true, unit: true },
+            },
+          },
+        },
         subServices: {
           include: {
             defaultProducts: {
@@ -156,6 +164,12 @@ export default async function NewClientInvoicePage({
       catalogServices={catalogServices.map((s) => ({
         id: s.id,
         title: s.title,
+        defaultServiceProducts: s.defaultServiceProducts.map((dp) => ({
+          clinicProductId: dp.clinicProductId,
+          productName: dp.clinicProduct.name,
+          unit: dp.clinicProduct.unit,
+          quantity: dp.quantity,
+        })),
         subServices: s.subServices.map((sub) => ({
           id: sub.id,
           title: sub.title,

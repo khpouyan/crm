@@ -186,22 +186,19 @@ model Client {
   id            String   @id @default(uuid())
   userId        String
   clinicId      String
-  fileNumber    Int?     // شماره پرونده اختصاصی کلینیک (افزایشی)
+  fileNumber    Int?
   walletBalance Int      @default(0)
 
-  gender         String?   // FEMALE | MALE
+  gender         String?
   birthDate      DateTime?
-  referralSource String?   // نحوه آشنایی با کلینیک
-  tag            String?   // برچسب پرونده
+  referralSource String?
+  tag            String?
   notes          String?   @db.Text
 
-  // معرف پرونده (یا یکی از مراجعین قبلی است یا یکی از پرسنل کلینیک)
   referrerClientId String?
   referrerStaffId  String?
 
-  // اطلاعات تکمیلی (نام پدر، شماره دوم، تاهل، تاریخ ازدواج، تحصیلات، شغل، بیمه، کدپستی، آدرس)
   additionalInfo Json @default("{}")
-  // پرونده پزشکی (بیماری‌های زمینه‌ای، حساسیت‌ها، قد، وزن، سابقه جراحی و زیبایی، توضیحات)
   medicalRecord  Json @default("{}")
 
   createdAt DateTime @default(now())
@@ -229,7 +226,7 @@ model ClientAttachment {
   clientId     String
   title        String
   fileUrl      String
-  fileType     String?  // IMAGE | PDF | VIDEO | OTHER
+  fileType     String?
   uploadedById String?
   createdAt    DateTime @default(now())
 
@@ -241,9 +238,9 @@ model ClientAttachment {
 model WalletTransaction {
   id            String   @id @default(uuid())
   clientId      String
-  type          String   // DEPOSIT | WITHDRAW | REFUND
+  type          String
   amount        Int
-  paymentMethod String?  // POS | CASH | CARD_TO_CARD | INVOICE_PAYMENT
+  paymentMethod String?
   terminalId    String?
   description   String?  @db.Text
   createdById   String?
@@ -264,7 +261,7 @@ model SubscriptionPlan {
   monthlyPrice  Int
   yearlyPrice   Int
   maxStaff      Int
-  canExportData Boolean  @default(false) // دسترسی خروجی اکسل و JSON روی پلن
+  canExportData Boolean  @default(false)
   features      Json     @default("[]")
 
   subscriptions ClinicSubscription[]
@@ -278,7 +275,7 @@ model ClinicSubscription {
   endDate    DateTime
   paidAmount Int
   paymentRef String?
-  status     String   // ACTIVE, EXPIRED, CANCELED
+  status     String
 
   clinic Clinic           @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   plan   SubscriptionPlan @relation(fields: [planId], references: [id])
@@ -286,7 +283,7 @@ model ClinicSubscription {
 
 model PlatformAddon {
   id           String          @id @default(uuid())
-  code         AddonModuleType // SMS_PACKAGE, COMMISSION_PERCASE, AI_ASSISTANT, VOICE_DATA_ENTRY, DATA_EXPORT
+  code         AddonModuleType
   title        String
   price        Int
   smsCount     Int?
@@ -313,8 +310,8 @@ model DataExportLog {
   id           String   @id @default(uuid())
   clinicId     String
   clinicUserId String?
-  entityType   String   // INVENTORY_PRODUCTS, INVENTORY_BATCHES, INVENTORY_REPORT, CLIENTS, PROVIDED_SERVICES, SERVICES, STAFFS
-  format       String   // XLSX, JSON
+  entityType   String
+  format       String
   recordCount  Int      @default(0)
   createdAt    DateTime @default(now())
 
@@ -407,17 +404,18 @@ model TicketMessage {
 }
 
 // ==========================================
-// 6. کاتالوگ خدمات کلینیک (ساختار دو سطحی)
+// 6. کاتالوگ خدمات کلینیک (ساختار دو سطحی + مصرفی دیفالت در هر دو سطح)
 // ==========================================
 model Service {
   id       String @id @default(uuid())
   clinicId String
   title    String
 
-  clinic           Clinic            @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  subServices      SubService[]
-  careSmsTemplates CareSmsTemplate[]
-  assignedStaff    ClinicUser[]      @relation("ServiceStaff")
+  clinic                 Clinic                        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  subServices            SubService[]
+  defaultServiceProducts ServiceCategoryDefaultProduct[]
+  careSmsTemplates       CareSmsTemplate[]
+  assignedStaff          ClinicUser[]                  @relation("ServiceStaff")
 }
 
 model SubService {
@@ -442,16 +440,17 @@ model ClinicProduct {
   clinicId        String
   name            String
   code            String?
-  unit            String  // واحد مصرف/جزء: سرنگ، عدد، سی‌سی، برش روتختی
-  packageUnit     String? // واحد بسته‌بندی/خرید: جعبه، رول، پک (اختیاری)
-  unitsPerPackage Float   @default(1) // تعداد واحد مصرف در هر بسته (مثلاً 3 سرنگ در جعبه یا 10 برش در رول)
-  alertThreshold  Float   @default(0) // نقطه هشدار بر اساس واحد مصرف
+  unit            String
+  packageUnit     String?
+  unitsPerPackage Float   @default(1)
+  alertThreshold  Float   @default(0)
 
-  clinic             Clinic                  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  batches            ProductBatch[]
-  usedInServices     UsedConsumable[]
-  stockOuts          InventoryStockOut[]
-  defaultForServices ServiceDefaultProduct[]
+  clinic                     Clinic                        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  batches                    ProductBatch[]
+  usedInServices             UsedConsumable[]
+  stockOuts                  InventoryStockOut[]
+  defaultForServices         ServiceDefaultProduct[]
+  defaultForServiceCategories ServiceCategoryDefaultProduct[]
 
   @@index([clinicId])
 }
@@ -459,10 +458,10 @@ model ClinicProduct {
 model ProductBatch {
   id              String    @id @default(uuid())
   clinicProductId String
-  quantity        Float     // موجودی فعلی به واحد مصرف (جزء)
-  initialQuantity Float     @default(0) // مقدار اولیه واردشده به واحد مصرف
-  purchasePrice   Int       // قیمت خرید به ازای هر واحد مصرف (جزء)
-  sellingPrice    Int?      // قیمت فروش به ازای هر واحد مصرف (اختیاری)
+  quantity        Float
+  initialQuantity Float     @default(0)
+  purchasePrice   Int
+  sellingPrice    Int?
   expirationDate  DateTime?
   createdAt       DateTime  @default(now())
 
@@ -476,16 +475,15 @@ model ProductBatch {
   @@index([clinicProductId, createdAt])
 }
 
-// ثبت تاریخچه خروج دستی / ضایعات / فروش مستقیم از انبار
 model InventoryStockOut {
   id              String   @id @default(uuid())
   clinicId        String
   clinicProductId String
   createdById     String?
-  quantity        Float    // مقدار خارج‌شده به واحد مصرف
-  unitCost        Int      // میانگین بهای تمام‌شده بچ‌های کسرشده
-  sellingPrice    Int?     // در صورت فروش مستقیم (اگر null باشد یعنی مصرف داخلی/ضایعات)
-  reason          String?  // مصرف داخلی، ضایعات، فروش مستقیم و...
+  quantity        Float
+  unitCost        Int
+  sellingPrice    Int?
+  reason          String?
   createdAt       DateTime @default(now())
 
   clinic        Clinic        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
@@ -495,11 +493,25 @@ model InventoryStockOut {
   @@index([clinicId, createdAt])
 }
 
+// کالاهای مصرفی پیش‌فرض در سطح خدمت اصلی (که به ازای کل خدمت یک‌بار کسر می‌شوند)
+model ServiceCategoryDefaultProduct {
+  id              String @id @default(uuid())
+  serviceId       String
+  clinicProductId String
+  quantity        Float
+
+  service       Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  clinicProduct ClinicProduct @relation(fields: [clinicProductId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, clinicProductId])
+}
+
+// کالاهای مصرفی پیش‌فرض در سطح زیرسرویس (که به ازای هر زیرسرویس کسر می‌شوند)
 model ServiceDefaultProduct {
   id              String @id @default(uuid())
   subServiceId    String
   clinicProductId String
-  quantity        Float  // بر اساس واحد مصرف (مثلاً 1 روتختی یا 1 سرنگ)
+  quantity        Float
 
   subService    SubService    @relation(fields: [subServiceId], references: [id], onDelete: Cascade)
   clinicProduct ClinicProduct @relation(fields: [clinicProductId], references: [id], onDelete: Cascade)
@@ -514,20 +526,20 @@ model Invoice {
   id            String @id @default(uuid())
   clinicId      String
   clientId      String
-  invoiceNumber Int?   // شماره تراکنش/فاکتور افزایشی در هر کلینیک
+  invoiceNumber Int?
 
   subTotalAmount    Int     @default(0)
   discountAmount    Int     @default(0)
   discountReason    String? @db.Text
   extraChargeAmount Int     @default(0)
   extraChargeReason String? @db.Text
-  creditFeeAmount   Int     @default(0) // کارمزد سرویس اعتباری دریافتی از مراجع
+  creditFeeAmount   Int     @default(0)
   totalAmount       Int
 
-  depositAmount       Int     @default(0) // مبلغ بیعانه واریزشده به کیف پول در این فاکتور
-  depositServiceTitle String? // عنوان سرویس آینده بابت بیعانه
+  depositAmount       Int     @default(0)
+  depositServiceTitle String?
 
-  status     String   // PAID | PARTIAL | UNPAID | INSTALLMENT
+  status     String
   paidAmount Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -549,7 +561,7 @@ model InvoiceInstallment {
   dueDate           DateTime
   isCheck           Boolean   @default(false)
   checkNumber       String?
-  status            String    @default("PENDING") // PENDING | PAID
+  status            String    @default("PENDING")
   paidAt            DateTime?
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
@@ -564,12 +576,12 @@ model ProvidedService {
   subServiceId          String
   therapistId           String?
   therapistNameSnapshot String?
-  referrerId            String? // معرف همکار (پرسنل)
-  referrerClientId      String? // معرف مراجعه‌کننده (مشتری دیگر)
+  referrerId            String?
+  referrerClientId      String?
   createdById           String?
   tag                   String?
 
-  performedAt     DateTime @default(now()) // تاریخ و ساعت انجام سرویس
+  performedAt     DateTime @default(now())
   finalPrice      Int
   description     String?  @db.Text
   therapistAmount Int      @default(0)
@@ -586,14 +598,14 @@ model ProvidedService {
   referrerClient  Client?          @relation("ServiceClientReferrer", fields: [referrerClientId], references: [id], onDelete: SetNull)
   assistants      ClinicUser[]     @relation("ServiceAssistants")
   usedConsumables UsedConsumable[]
-  attributes      Json     @default("[]") // مشخصه‌های ثبت‌شده هنگام انجام سرویس (مثل تعداد جلسات لیزر)
+  attributes      Json             @default("[]")
 }
 
 model UsedConsumable {
   id                String  @id @default(uuid())
   providedServiceId String
   clinicProductId   String
-  productBatchId    String? // بچ کسرشده برای ردیابی دقیق قیمت خرید و انقضا
+  productBatchId    String?
 
   quantity     Float
   sellingPrice Int?
@@ -625,7 +637,7 @@ model PaymentTerminal {
   clinicId      String
   bankAccountId String
   name          String
-  type          String  @default("POS") // POS | IPG | MOBILE_POS
+  type          String  @default("POS")
   terminalCode  String?
   isActive      Boolean @default(true)
 
@@ -637,9 +649,9 @@ model PaymentTerminal {
 model ClinicCreditProvider {
   id                String   @id @default(uuid())
   clinicId          String
-  title             String   // مثلاً: اسنپ‌پی، دیجی‌پی، تارا، ازکی‌وام
-  commissionPercent Float    @default(0) // درصد کل کارمزد سرویس اعتباری (مثلاً 7)
-  clientFeePercent  Float    @default(0) // درصد کارمزدی که از مراجع دریافت می‌شود (مثلاً 5)
+  title             String
+  commissionPercent Float    @default(0)
+  clientFeePercent  Float    @default(0)
   isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
 
@@ -652,19 +664,19 @@ model ClinicCreditProvider {
 model Payment {
   id            String @id @default(uuid())
   invoiceId     String
-  amount        Int    // کل مبلغ پرداختی این ردیف (شامل اصل مبلغ + سهم کارمزد مراجع)
-  paymentMethod String // POS | CASH | CARD_TO_CARD | WALLET | CREDIT
+  amount        Int
+  paymentMethod String
 
   terminalId       String?
   creditProviderId String?
-  creditProvider   String? // نام سرویس اعتباری (Snapshot یا دستی)
-  creditPrincipal  Int     @default(0) // اصل مبلغ تسویه‌شده با اعتبار (بدون کارمزد)
-  creditClientFee  Int     @default(0) // کارمزد دریافت‌شده از مراجع (اضافه‌شده به فاکتور)
-  creditClinicCost Int     @default(0) // کل کارمزد کسرشده توسط سرویس اعتباری از کلینیک
+  creditProvider   String?
+  creditPrincipal  Int      @default(0)
+  creditClientFee  Int      @default(0)
+  creditClinicCost Int      @default(0)
   trackingCode     String?
   status           String
   createdAt        DateTime @default(now())
-  paidAt           DateTime @default(now()) // تاریخ و ساعت دقیق انجام تراکنش پرداخت
+  paidAt           DateTime @default(now())
 
   invoice              Invoice               @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   terminal             PaymentTerminal?      @relation(fields: [terminalId], references: [id])

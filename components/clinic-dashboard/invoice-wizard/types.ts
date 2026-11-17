@@ -21,6 +21,12 @@ export interface WizardCatalogSubService {
 export interface WizardCatalogService {
   id: string;
   title: string;
+  defaultServiceProducts: {
+    clinicProductId: string;
+    productName: string;
+    unit: string;
+    quantity: number;
+  }[];
   subServices: WizardCatalogSubService[];
 }
 

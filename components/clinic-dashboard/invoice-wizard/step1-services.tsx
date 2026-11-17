@@ -1,7 +1,7 @@
 // components/clinic-dashboard/invoice-wizard/step1-services.tsx
-"use client";
+"use client"
 
-import { useMemo } from "react";
+import { useMemo } from "react"
 import {
   Plus,
   Trash2,
@@ -15,30 +15,30 @@ import {
   Square,
   AlertTriangle,
   ShieldAlert,
-} from "lucide-react";
-import { toast } from "sonner";
+} from "lucide-react"
+import { toast } from "sonner"
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Field,
   FieldGroup,
   FieldLabel,
   FieldDescription,
-} from "@/components/ui/field";
+} from "@/components/ui/field"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { DatePicker } from "@/components/ui/date-picker";
-import { PriceInput } from "@/components/ui/price-input";
-import { formatJalali } from "@/lib/jalali";
+} from "@/components/ui/select"
+import { DatePicker } from "@/components/ui/date-picker"
+import { PriceInput } from "@/components/ui/price-input"
+import { formatJalali } from "@/lib/jalali"
 import type {
   DraftServiceAccordionBlock,
   DraftSubServiceSelection,
@@ -46,37 +46,37 @@ import type {
   WizardCatalogService,
   WizardProduct,
   WizardTherapistOption,
-} from "./types";
+} from "./types"
 
 interface Step1ServicesProps {
-  performedDate: Date | null;
-  onPerformedDateChange: (d: Date | null) => void;
-  performedTime: string;
-  onPerformedTimeChange: (t: string) => void;
-  therapistId: string;
-  onTherapistIdChange: (id: string) => void;
-  assistantId: string;
-  onAssistantIdChange: (id: string) => void;
-  referrerType: "NONE" | "STAFF" | "CLIENT";
-  onReferrerTypeChange: (t: "NONE" | "STAFF" | "CLIENT") => void;
-  referrerId: string;
-  onReferrerIdChange: (id: string) => void;
+  performedDate: Date | null
+  onPerformedDateChange: (d: Date | null) => void
+  performedTime: string
+  onPerformedTimeChange: (t: string) => void
+  therapistId: string
+  onTherapistIdChange: (id: string) => void
+  assistantId: string
+  onAssistantIdChange: (id: string) => void
+  referrerType: "NONE" | "STAFF" | "CLIENT"
+  onReferrerTypeChange: (t: "NONE" | "STAFF" | "CLIENT") => void
+  referrerId: string
+  onReferrerIdChange: (id: string) => void
 
-  therapists: WizardTherapistOption[];
-  assistants: SelectOption[];
-  staffReferrers: SelectOption[];
-  clientReferrers: SelectOption[];
-  catalogServices: WizardCatalogService[];
-  products: WizardProduct[];
+  therapists: WizardTherapistOption[]
+  assistants: SelectOption[]
+  staffReferrers: SelectOption[]
+  clientReferrers: SelectOption[]
+  catalogServices: WizardCatalogService[]
+  products: WizardProduct[]
 
-  serviceBlocks: DraftServiceAccordionBlock[];
+  serviceBlocks: DraftServiceAccordionBlock[]
   onServiceBlocksChange: React.Dispatch<
     React.SetStateAction<DraftServiceAccordionBlock[]>
-  >;
-  openBlockUid: string;
-  onOpenBlockUidChange: (uid: string) => void;
+  >
+  openBlockUid: string
+  onOpenBlockUidChange: (uid: string) => void
 
-  onNextStep: () => void;
+  onNextStep: () => void
 }
 
 export function createEmptyServiceBlock(): DraftServiceAccordionBlock {
@@ -90,7 +90,7 @@ export function createEmptyServiceBlock(): DraftServiceAccordionBlock {
     selectedNewProductId: "NONE",
     selectedBatchForNewProduct: "AUTO",
     description: "",
-  };
+  }
 }
 
 export function Step1Services({
@@ -120,13 +120,13 @@ export function Step1Services({
 }: Step1ServicesProps) {
   // فیلتر هوشمند خدمات بر اساس سطح دسترسی درمانگر انتخاب‌شده
   const allowedServices = useMemo(() => {
-    if (!therapistId || therapistId === "NONE") return catalogServices;
-    const therapist = therapists.find((t) => t.id === therapistId);
-    if (!therapist || therapist.hasAllServicesAccess) return catalogServices;
+    if (!therapistId || therapistId === "NONE") return catalogServices
+    const therapist = therapists.find((t) => t.id === therapistId)
+    if (!therapist || therapist.hasAllServicesAccess) return catalogServices
     return catalogServices.filter((s) =>
       therapist.assignedServiceIds.includes(s.id)
-    );
-  }, [therapistId, therapists, catalogServices]);
+    )
+  }, [therapistId, therapists, catalogServices])
 
   const serviceOptions: SelectOption[] = useMemo(
     () => [
@@ -134,7 +134,7 @@ export function Step1Services({
       ...allowedServices.map((s) => ({ value: s.id, label: s.title })),
     ],
     [allowedServices]
-  );
+  )
 
   const therapistOptions: SelectOption[] = useMemo(
     () => [
@@ -142,12 +142,12 @@ export function Step1Services({
       ...therapists.map((t) => ({ value: t.id, label: t.label })),
     ],
     [therapists]
-  );
+  )
 
   const assistantOptions: SelectOption[] = useMemo(
     () => [{ value: "NONE", label: "انتخاب کنید" }, ...assistants],
     [assistants]
-  );
+  )
 
   const referrerOptions: SelectOption[] = useMemo(
     () => [
@@ -155,11 +155,11 @@ export function Step1Services({
       ...(referrerType === "STAFF"
         ? staffReferrers
         : referrerType === "CLIENT"
-        ? clientReferrers
-        : []),
+          ? clientReferrers
+          : []),
     ],
     [referrerType, staffReferrers, clientReferrers]
-  );
+  )
 
   const productOptions: SelectOption[] = useMemo(
     () => [
@@ -170,34 +170,34 @@ export function Step1Services({
       })),
     ],
     [products]
-  );
+  )
 
   // هنگام تغییر درمانگر، خدماتی که درمانگر به آن‌ها دسترسی ندارد پاک‌سازی می‌شوند
   function handleTherapistChange(newTherapistId: string) {
-    onTherapistIdChange(newTherapistId);
-    if (!newTherapistId || newTherapistId === "NONE") return;
+    onTherapistIdChange(newTherapistId)
+    if (!newTherapistId || newTherapistId === "NONE") return
 
-    const therapist = therapists.find((t) => t.id === newTherapistId);
-    if (!therapist || therapist.hasAllServicesAccess) return;
+    const therapist = therapists.find((t) => t.id === newTherapistId)
+    if (!therapist || therapist.hasAllServicesAccess) return
 
-    let removedCount = 0;
+    let removedCount = 0
     onServiceBlocksChange((prev) =>
       prev.map((block) => {
         if (
           block.serviceId !== "NONE" &&
           !therapist.assignedServiceIds.includes(block.serviceId)
         ) {
-          removedCount++;
-          return createEmptyServiceBlock();
+          removedCount++
+          return createEmptyServiceBlock()
         }
-        return block;
+        return block
       })
-    );
+    )
 
     if (removedCount > 0) {
       toast.warning(
         "برخی خدمات انتخاب‌شده به دلیل عدم دسترسی درمانگر جدید بازنشانی شدند."
-      );
+      )
     }
   }
 
@@ -207,7 +207,7 @@ export function Step1Services({
   ) {
     onServiceBlocksChange((prev) =>
       prev.map((b) => (b.uid === uid ? updater(b) : b))
-    );
+    )
   }
 
   function handleToggleSubService(
@@ -215,35 +215,56 @@ export function Step1Services({
     service: WizardCatalogService,
     subId: string
   ) {
-    const sub = service.subServices.find((ss) => ss.id === subId);
-    if (!sub) return;
+    const sub = service.subServices.find((ss) => ss.id === subId)
+    if (!sub) return
 
     const alreadySelected = block.selectedSubServices.some(
       (s) => s.subServiceId === sub.id
-    );
+    )
 
     // ساخت مصرفی‌های دیفالت زیرسرویس
     const buildDefaultConsumables = (subIds: string[]) => {
       const map = new Map<
         string,
         {
-          clinicProductId: string;
-          productName: string;
-          unit: string;
-          quantity: number;
-          sellingPrice: number;
+          clinicProductId: string
+          productName: string
+          unit: string
+          quantity: number
+          sellingPrice: number
         }
-      >();
+      >()
 
-      for (const id of subIds) {
-        const targetSub = service.subServices.find((x) => x.id === id);
-        if (!targetSub) continue;
-        for (const dp of targetSub.defaultProducts) {
-          const prod = products.find((p) => p.id === dp.clinicProductId);
-          const sp = prod?.batches[0]?.sellingPrice || 0;
-          const prevItem = map.get(dp.clinicProductId);
+      // ۱. مصرفی‌های دیفالت سطح خدمت اصلی (فقط یک‌بار به ازای کل خدمت)
+      if (subIds.length > 0) {
+        for (const sdp of service.defaultServiceProducts ?? []) {
+          const prod = products.find((p) => p.id === sdp.clinicProductId)
+          const sp = prod?.batches[0]?.sellingPrice || 0
+          const prevItem = map.get(sdp.clinicProductId)
           if (prevItem) {
-            prevItem.quantity += dp.quantity;
+            prevItem.quantity += sdp.quantity
+          } else {
+            map.set(sdp.clinicProductId, {
+              clinicProductId: sdp.clinicProductId,
+              productName: sdp.productName,
+              unit: sdp.unit,
+              quantity: sdp.quantity,
+              sellingPrice: sp,
+            })
+          }
+        }
+      }
+
+      // ۲. مصرفی‌های دیفالت اختصاصی هر زیرسرویس انتخاب‌شده
+      for (const id of subIds) {
+        const targetSub = service.subServices.find((x) => x.id === id)
+        if (!targetSub) continue
+        for (const dp of targetSub.defaultProducts) {
+          const prod = products.find((p) => p.id === dp.clinicProductId)
+          const sp = prod?.batches[0]?.sellingPrice || 0
+          const prevItem = map.get(dp.clinicProductId)
+          if (prevItem) {
+            prevItem.quantity += dp.quantity
           } else {
             map.set(dp.clinicProductId, {
               clinicProductId: dp.clinicProductId,
@@ -251,7 +272,7 @@ export function Step1Services({
               unit: dp.unit,
               quantity: dp.quantity,
               sellingPrice: sp,
-            });
+            })
           }
         }
       }
@@ -265,8 +286,8 @@ export function Step1Services({
         quantity: item.quantity,
         sellingPrice: item.sellingPrice,
         isDefault: true,
-      }));
-    };
+      }))
+    }
 
     if (!block.allowMultiSubServices) {
       // حالت رادیو باتن (تک انتخابی)
@@ -277,14 +298,17 @@ export function Step1Services({
           finalPrice: sub.price,
           attributes: sub.attributes.map((a) => ({ ...a })),
         },
-      ];
-      const manualConsumables = block.consumables.filter((c) => !c.isDefault);
+      ]
+      const manualConsumables = block.consumables.filter((c) => !c.isDefault)
       updateBlock(block.uid, (b) => ({
         ...b,
         selectedSubServices: nextSelected,
         expandedSubServiceId: sub.id,
-        consumables: [...buildDefaultConsumables([sub.id]), ...manualConsumables],
-      }));
+        consumables: [
+          ...buildDefaultConsumables([sub.id]),
+          ...manualConsumables,
+        ],
+      }))
     } else {
       // حالت چند انتخابی
       const nextSelected = alreadySelected
@@ -297,9 +321,9 @@ export function Step1Services({
               finalPrice: sub.price,
               attributes: sub.attributes.map((a) => ({ ...a })),
             },
-          ];
+          ]
 
-      const manualConsumables = block.consumables.filter((c) => !c.isDefault);
+      const manualConsumables = block.consumables.filter((c) => !c.isDefault)
       updateBlock(block.uid, (b) => ({
         ...b,
         selectedSubServices: nextSelected,
@@ -308,7 +332,7 @@ export function Step1Services({
           ...buildDefaultConsumables(nextSelected.map((x) => x.subServiceId)),
           ...manualConsumables,
         ],
-      }));
+      }))
     }
   }
 
@@ -317,32 +341,32 @@ export function Step1Services({
       const subSum = block.selectedSubServices.reduce(
         (s, item) => s + (Number(item.finalPrice) || 0),
         0
-      );
+      )
       const consSum = block.consumables.reduce(
         (c, item) =>
           c + (Number(item.quantity) || 0) * (Number(item.sellingPrice) || 0),
         0
-      );
-      return sum + subSum + consSum;
-    }, 0);
-  }, [serviceBlocks]);
+      )
+      return sum + subSum + consSum
+    }, 0)
+  }, [serviceBlocks])
 
   function handleValidateAndContinue() {
     if (!performedDate) {
-      toast.error("لطفاً تاریخ مراجعه را مشخص کنید.");
-      return;
+      toast.error("لطفاً تاریخ مراجعه را مشخص کنید.")
+      return
     }
 
     const validBlocks = serviceBlocks.filter(
       (b) => b.serviceId !== "NONE" && b.selectedSubServices.length > 0
-    );
+    )
 
     if (validBlocks.length === 0) {
-      toast.error("لطفاً حداقل یک خدمت و زیرسرویس را انتخاب کنید.");
-      return;
+      toast.error("لطفاً حداقل یک خدمت و زیرسرویس را انتخاب کنید.")
+      return
     }
 
-    onNextStep();
+    onNextStep()
   }
 
   return (
@@ -398,7 +422,8 @@ export function Step1Services({
                 allowedServices.length < catalogServices.length && (
                   <FieldDescription className="flex items-center gap-1 text-xs text-amber-600">
                     <ShieldAlert className="size-3.5 shrink-0" />
-                    خدمات نمایش‌داده‌شده بر اساس دسترسی این درمانگر محدود شده‌اند.
+                    خدمات نمایش‌داده‌شده بر اساس دسترسی این درمانگر محدود
+                    شده‌اند.
                   </FieldDescription>
                 )}
             </Field>
@@ -440,8 +465,8 @@ export function Step1Services({
                     onClick={() => {
                       onReferrerTypeChange(
                         item.key as "NONE" | "STAFF" | "CLIENT"
-                      );
-                      onReferrerIdChange("NONE");
+                      )
+                      onReferrerIdChange("NONE")
                     }}
                     className={`rounded-md py-1.5 text-xs font-medium transition-colors ${
                       referrerType === item.key
@@ -482,17 +507,17 @@ export function Step1Services({
       {/* آکاردیون‌های انتخاب خدمات و ریزخدمات */}
       <div className="space-y-3">
         {serviceBlocks.map((block, blockIdx) => {
-          const isOpen = openBlockUid === block.uid;
+          const isOpen = openBlockUid === block.uid
           const selectedCatalogService = allowedServices.find(
             (s) => s.id === block.serviceId
-          );
+          )
 
           const selectedSummaryText =
             block.selectedSubServices.length > 0
               ? block.selectedSubServices
                   .map((s) => s.subServiceTitle)
                   .join(" + ")
-              : selectedCatalogService?.title || "انتخاب خدمت جدید";
+              : selectedCatalogService?.title || "انتخاب خدمت جدید"
 
           const blockTotalPrice =
             block.selectedSubServices.reduce(
@@ -503,11 +528,11 @@ export function Step1Services({
               (sum, c) =>
                 sum + (Number(c.quantity) || 0) * (Number(c.sellingPrice) || 0),
               0
-            );
+            )
 
           const selectedProductObj = products.find(
             (p) => p.id === block.selectedNewProductId
-          );
+          )
 
           return (
             <div
@@ -518,12 +543,10 @@ export function Step1Services({
               <div
                 role="button"
                 tabIndex={0}
-                onClick={() =>
-                  onOpenBlockUidChange(isOpen ? "" : block.uid)
-                }
+                onClick={() => onOpenBlockUidChange(isOpen ? "" : block.uid)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
-                    onOpenBlockUidChange(isOpen ? "" : block.uid);
+                    onOpenBlockUidChange(isOpen ? "" : block.uid)
                   }
                 }}
                 className="flex cursor-pointer items-center justify-between gap-3 bg-muted/35 px-4 py-3.5 transition-colors hover:bg-muted/60"
@@ -559,10 +582,10 @@ export function Step1Services({
                       size="icon"
                       className="size-8 text-destructive hover:bg-destructive/10"
                       onClick={(e) => {
-                        e.stopPropagation();
+                        e.stopPropagation()
                         onServiceBlocksChange((prev) =>
                           prev.filter((b) => b.uid !== block.uid)
-                        );
+                        )
                       }}
                     >
                       <Trash2 className="size-4" />
@@ -593,7 +616,9 @@ export function Step1Services({
                             serviceId: val || "NONE",
                             selectedSubServices: [],
                             expandedSubServiceId: "",
-                            consumables: b.consumables.filter((c) => !c.isDefault),
+                            consumables: b.consumables.filter(
+                              (c) => !c.isDefault
+                            ),
                           }))
                         }
                       >
@@ -652,12 +677,12 @@ export function Step1Services({
                               const selectedItem =
                                 block.selectedSubServices.find(
                                   (s) => s.subServiceId === sub.id
-                                );
-                              const isSelected = Boolean(selectedItem);
+                                )
+                              const isSelected = Boolean(selectedItem)
                               const isSubExpanded =
                                 isSelected &&
                                 (block.allowMultiSubServices ||
-                                  block.expandedSubServiceId === sub.id);
+                                  block.expandedSubServiceId === sub.id)
 
                               return (
                                 <div
@@ -680,15 +705,12 @@ export function Step1Services({
                                       )
                                     }
                                     onKeyDown={(e) => {
-                                      if (
-                                        e.key === "Enter" ||
-                                        e.key === " "
-                                      ) {
+                                      if (e.key === "Enter" || e.key === " ") {
                                         handleToggleSubService(
                                           block,
                                           selectedCatalogService,
                                           sub.id
-                                        );
+                                        )
                                       }
                                     }}
                                     className="flex cursor-pointer items-center justify-between gap-3 px-3.5 py-3"
@@ -757,14 +779,16 @@ export function Step1Services({
 
                                         {selectedItem.attributes.map(
                                           (attr, attrIdx) => (
-                                            <Field key={`${attr.key}-${attrIdx}`}>
+                                            <Field
+                                              key={`${attr.key}-${attrIdx}`}
+                                            >
                                               <FieldLabel className="text-xs">
                                                 {attr.key}
                                               </FieldLabel>
                                               <Input
                                                 value={attr.value}
                                                 onChange={(e) => {
-                                                  const nextVal = e.target.value;
+                                                  const nextVal = e.target.value
                                                   updateBlock(
                                                     block.uid,
                                                     (b) => ({
@@ -795,7 +819,7 @@ export function Step1Services({
                                                               : item
                                                         ),
                                                     })
-                                                  );
+                                                  )
                                                 }}
                                               />
                                             </Field>
@@ -805,7 +829,7 @@ export function Step1Services({
                                     </div>
                                   )}
                                 </div>
-                              );
+                              )
                             })}
                           </div>
                         )}
@@ -855,12 +879,12 @@ export function Step1Services({
                               block.selectedNewProductId === "NONE"
                             }
                             onClick={() => {
-                              if (!selectedProductObj) return;
+                              if (!selectedProductObj) return
                               const chosenBatch =
                                 selectedProductObj.batches.find(
                                   (b) =>
                                     b.id === block.selectedBatchForNewProduct
-                                ) || selectedProductObj.batches[0];
+                                ) || selectedProductObj.batches[0]
 
                               updateBlock(block.uid, (b) => ({
                                 ...b,
@@ -881,7 +905,7 @@ export function Step1Services({
                                     isDefault: false,
                                   },
                                 ],
-                              }));
+                              }))
                             }}
                           >
                             افزودن به لیست
@@ -940,8 +964,9 @@ export function Step1Services({
                           {block.consumables.map((cons) => {
                             const prod = products.find(
                               (p) => p.id === cons.clinicProductId
-                            );
-                            const isLow = (prod?.totalStock ?? 0) < cons.quantity;
+                            )
+                            const isLow =
+                              (prod?.totalStock ?? 0) < cons.quantity
 
                             return (
                               <div
@@ -983,7 +1008,7 @@ export function Step1Services({
                                     value={cons.sellingPrice}
                                     onChange={(e) => {
                                       const sp =
-                                        parseInt(e.target.value, 10) || 0;
+                                        parseInt(e.target.value, 10) || 0
                                       updateBlock(block.uid, (b) => ({
                                         ...b,
                                         consumables: b.consumables.map(
@@ -992,7 +1017,7 @@ export function Step1Services({
                                               ? { ...item, sellingPrice: sp }
                                               : item
                                         ),
-                                      }));
+                                      }))
                                     }}
                                   />
                                   <Input
@@ -1002,8 +1027,7 @@ export function Step1Services({
                                     className="h-8 w-16 text-center text-xs"
                                     value={cons.quantity}
                                     onChange={(e) => {
-                                      const q =
-                                        parseFloat(e.target.value) || 0;
+                                      const q = parseFloat(e.target.value) || 0
                                       updateBlock(block.uid, (b) => ({
                                         ...b,
                                         consumables: b.consumables.map(
@@ -1012,7 +1036,7 @@ export function Step1Services({
                                               ? { ...item, quantity: q }
                                               : item
                                         ),
-                                      }));
+                                      }))
                                     }}
                                   />
                                   <span>{cons.unit}</span>
@@ -1034,7 +1058,7 @@ export function Step1Services({
                                   </Button>
                                 </div>
                               </div>
-                            );
+                            )
                           })}
                         </div>
                       )}
@@ -1059,7 +1083,7 @@ export function Step1Services({
                 </div>
               )}
             </div>
-          );
+          )
         })}
 
         {/* دکمه افزودن آکاردیون خدمت جدید */}
@@ -1068,9 +1092,9 @@ export function Step1Services({
           variant="outline"
           className="w-full rounded-xl border-dashed py-5 text-primary hover:bg-primary/5"
           onClick={() => {
-            const newBlock = createEmptyServiceBlock();
-            onServiceBlocksChange((prev) => [...prev, newBlock]);
-            onOpenBlockUidChange(newBlock.uid);
+            const newBlock = createEmptyServiceBlock()
+            onServiceBlocksChange((prev) => [...prev, newBlock])
+            onOpenBlockUidChange(newBlock.uid)
           }}
         >
           <Plus className="ml-2 size-4" />
@@ -1098,5 +1122,5 @@ export function Step1Services({
         </Button>
       </div>
     </div>
-  );
+  )
 }

@@ -65,6 +65,11 @@ export type ServiceWithDetails = {
     user: { id: string; fullName: string | null; phone: string };
     role: { name: string };
   }[];
+  defaultServiceProducts?: {
+    id: string;
+    quantity: number;
+    clinicProduct: { id: string; name: string; unit: string };
+  }[];
   subServices: {
     id: string;
     title: string;
@@ -299,6 +304,18 @@ export function ServicesClientView({
                       {service.subServices.length.toLocaleString("fa-IR")}{" "}
                       زیرسرویس
                     </Badge>
+                    {service.defaultServiceProducts?.map((dp) => (
+                      <Badge
+                        key={dp.id}
+                        variant="outline"
+                        className="gap-1 border-primary/30 bg-primary/5 text-xs font-normal text-primary"
+                      >
+                        <Package className="size-3" />
+                        {dp.clinicProduct.name} (
+                        {dp.quantity.toLocaleString("fa-IR")}{" "}
+                        {dp.clinicProduct.unit})
+                      </Badge>
+                    ))}
                     {service.assignedStaff.length > 0 && (
                       <Badge variant="outline" className="gap-1 font-normal">
                         <Users className="size-3" />
@@ -501,6 +518,7 @@ export function ServicesClientView({
         onOpenChange={setServiceDialogOpen}
         editingService={editingService}
         activeStaff={activeStaff}
+        clinicProducts={clinicProducts}
       />
 
       {/* مودال ایجاد / ویرایش زیرسرویس */}

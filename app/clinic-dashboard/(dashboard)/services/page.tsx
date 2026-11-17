@@ -13,7 +13,6 @@ export default async function ServicesPage() {
 
   const { clinicUser } = ctx;
 
-  // بررسی اینکه آیا کاربر حداقل مجوز مشاهده یا مدیریت سرویس را دارد
   const canView =
     hasPermission(clinicUser, "services.view") ||
     hasPermission(clinicUser, "services.create") ||
@@ -48,6 +47,11 @@ export default async function ServicesPage() {
           include: {
             user: { select: { id: true, fullName: true, phone: true } },
             role: { select: { name: true } },
+          },
+        },
+        defaultServiceProducts: {
+          include: {
+            clinicProduct: { select: { id: true, name: true, unit: true } },
           },
         },
         subServices: {

@@ -11,7 +11,10 @@ import type {
   AttributeEntry,
   DraftServiceAccordionBlock,
 } from "@/components/clinic-dashboard/invoice-wizard/types";
-import { subDays } from "date-fns";
+
+export const metadata = {
+  title: "ویرایش فاکتور و جزئیات سرویس | پنل کلینیک",
+};
 
 function parseAttributes(raw: unknown): AttributeEntry[] {
   if (!Array.isArray(raw)) return [];
@@ -26,9 +29,6 @@ function parseAttributes(raw: unknown): AttributeEntry[] {
     }))
     .filter((item) => item.key !== "");
 }
-export const metadata = {
-  title: "ویرایش فاکتور و جزئیات سرویس | پنل کلینیک",
-};
 
 export default async function EditClientInvoicePage({
   params,
@@ -114,6 +114,13 @@ export default async function EditClientInvoicePage({
         ...serviceScopeFilter,
       },
       include: {
+        defaultServiceProducts: {
+          include: {
+            clinicProduct: {
+              select: { id: true, name: true, unit: true },
+            },
+          },
+        },
         subServices: {
           include: {
             defaultProducts: {
@@ -190,7 +197,7 @@ export default async function EditClientInvoicePage({
       subServiceTitle: ps.subService.title,
       finalPrice: ps.finalPrice,
       attributes: parseAttributes(ps.attributes),
-    }
+    };
 
     const mappedConsumables = ps.usedConsumables.map((uc) => ({
       uid: uc.id,
@@ -222,7 +229,6 @@ export default async function EditClientInvoicePage({
     }
   }
 
-  // پیدا کردن subServiceId مربوط به بیعانه در صورت وجود
   let resolvedDepositSubId = "NONE";
   if (invoice.depositAmount > 0 && invoice.depositServiceTitle) {
     for (const srv of catalogServices) {
@@ -289,7 +295,6 @@ export default async function EditClientInvoicePage({
     })),
   };
 
-  // موجودی کیف پول قابل استفاده در ویرایش = موجودی فعلی + آنچه قبلاً از کیف پول خرج شده - بیعانه قبلی
   const walletSpentBefore = invoice.payments
     .filter((p) => p.paymentMethod === "WALLET")
     .reduce((sum, p) => sum + p.amount, 0);
@@ -315,6 +320,12 @@ export default async function EditClientInvoicePage({
       catalogServices={catalogServices.map((s) => ({
         id: s.id,
         title: s.title,
+        defaultServiceProducts: s.defaultServiceProducts.map((dp) => ({
+          clinicProductId: dp.clinicProductId,
+          productName: dp.clinicProduct.name,
+          unit: dp.clinicProduct.unit,
+          quantity: dp.quantity,
+        })),
         subServices: s.subServices.map((sub) => ({
           id: sub.id,
           title: sub.title,

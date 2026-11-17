@@ -17,17 +17,17 @@ export type DefaultProductInput = {
 };
 
 /**
- * ایجاد یا ویرایش خدمت اصلی (همراه با بررسی مجوز عملیاتی و انتساب پرسنل معتبر)
+ * ایجاد یا ویرایش خدمت اصلی (همراه با انتساب پرسنل و کالاهای مصرفی پیش‌فرض کل خدمت)
  */
 export async function upsertServiceAction(data: {
   id?: string;
   title: string;
   assignedStaffIds: string[];
+  defaultProducts?: DefaultProductInput[];
 }) {
   const ctx = await getCurrentClinicContext();
   if (!ctx) return { success: false, error: "دسترسی غیرمجاز" };
 
-  // بررسی مجوز عملیاتی ایجاد یا ویرایش سرویس
   const requiredPerm = data.id ? "services.edit" : "services.create";
   if (!hasPermission(ctx.clinicUser, requiredPerm)) {
     return {
@@ -41,6 +41,22 @@ export async function upsertServiceAction(data: {
   if (!data.title.trim()) {
     return { success: false, error: "عنوان خدمت الزامی است" };
   }
+
+  const productMap = new Map<string, number>();
+  for (const p of data.defaultProducts ?? []) {
+    if (p.clinicProductId && p.quantity > 0) {
+      productMap.set(
+        p.clinicProductId,
+        (productMap.get(p.clinicProductId) ?? 0) + Number(p.quantity)
+      );
+    }
+  }
+  const cleanProducts = Array.from(productMap.entries()).map(
+    ([clinicProductId, quantity]) => ({
+      clinicProductId,
+      quantity,
+    })
+  );
 
   try {
     const validStaff = await prisma.clinicUser.findMany({
@@ -61,50 +77,75 @@ export async function upsertServiceAction(data: {
 
     const finalStaffIds = Array.from(staffIdSet);
 
-    if (data.id) {
-      const existing = await prisma.service.findFirst({
-        where: {
-          id: data.id,
-          clinicId: ctx.clinicId,
-          ...(!ctx.clinicUser.isOwner && !ctx.clinicUser.hasAllServicesAccess
-            ? { assignedStaff: { some: { id: ctx.clinicUserId } } }
-            : {}),
-        },
-      });
+    await prisma.$transaction(async (tx) => {
+      if (data.id) {
+        const existing = await tx.service.findFirst({
+          where: {
+            id: data.id,
+            clinicId: ctx.clinicId,
+            ...(!ctx.clinicUser.isOwner && !ctx.clinicUser.hasAllServicesAccess
+              ? { assignedStaff: { some: { id: ctx.clinicUserId } } }
+              : {}),
+          },
+        });
 
-      if (!existing) {
-        return {
-          success: false,
-          error: "خدمت مورد نظر یافت نشد یا دسترسی ندارید",
-        };
+        if (!existing) {
+          throw new Error("خدمت مورد نظر یافت نشد یا دسترسی ندارید");
+        }
+
+        await tx.service.update({
+          where: { id: data.id },
+          data: {
+            title: data.title.trim(),
+            assignedStaff: {
+              set: finalStaffIds.map((id) => ({ id })),
+            },
+          },
+        });
+
+        await tx.serviceCategoryDefaultProduct.deleteMany({
+          where: { serviceId: data.id },
+        });
+
+        if (cleanProducts.length > 0) {
+          await tx.serviceCategoryDefaultProduct.createMany({
+            data: cleanProducts.map((p) => ({
+              serviceId: data.id!,
+              clinicProductId: p.clinicProductId,
+              quantity: p.quantity,
+            })),
+          });
+        }
+      } else {
+        await tx.service.create({
+          data: {
+            clinicId: ctx.clinicId,
+            title: data.title.trim(),
+            assignedStaff: {
+              connect: finalStaffIds.map((id) => ({ id })),
+            },
+            defaultServiceProducts:
+              cleanProducts.length > 0
+                ? {
+                    create: cleanProducts.map((p) => ({
+                      clinicProductId: p.clinicProductId,
+                      quantity: p.quantity,
+                    })),
+                  }
+                : undefined,
+          },
+        });
       }
-
-      await prisma.service.update({
-        where: { id: data.id },
-        data: {
-          title: data.title.trim(),
-          assignedStaff: {
-            set: finalStaffIds.map((id) => ({ id })),
-          },
-        },
-      });
-    } else {
-      await prisma.service.create({
-        data: {
-          clinicId: ctx.clinicId,
-          title: data.title.trim(),
-          assignedStaff: {
-            connect: finalStaffIds.map((id) => ({ id })),
-          },
-        },
-      });
-    }
+    });
 
     revalidatePath("/clinic-dashboard/services");
     return { success: true };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("upsertServiceAction error:", error);
-    return { success: false, error: "خطا در ذخیره خدمت" };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "خطا در ذخیره خدمت",
+    };
   }
 }
 
