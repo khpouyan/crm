@@ -186,6 +186,23 @@ const COLLAPSIBLE_GROUPS: NavGroupItem[] = [
       },
     ],
   },
+  {
+    title: "تنظیمات",
+    icon: Settings2,
+    requiredAnyPermissions: ["management.settings", "finance.accounting"],
+    items: [
+      {
+        title: "تنظیمات مالی و اعتباری",
+        href: "/clinic-dashboard/settings/financial",
+        requiredAnyPermissions: ["management.settings", "finance.accounting"],
+      },
+      {
+        title: "مدیریت پرسنل و دسترسی‌ها",
+        href: "/clinic-dashboard/staffs",
+        requiredAnyPermissions: ["management.settings"],
+      },
+    ],
+  },
 ]
 
 const SINGLE_BOTTOM_ITEMS: NavSingleItem[] = [

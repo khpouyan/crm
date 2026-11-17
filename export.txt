@@ -1,0 +1,1 @@
+npx repomix --include "prisma/schema.prisma,lib/permissions.ts,lib/auth/session.ts,lib/export/data-export.ts,components/clinic-dashboard/ClinicSidebar.tsx,package.json,README.md" --include-empty-directories -o gem-knowledge.txt

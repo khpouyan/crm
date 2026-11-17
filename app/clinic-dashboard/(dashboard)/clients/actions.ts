@@ -10,6 +10,7 @@ import {
 } from "@/lib/permissions";
 import { normalizeIranianPhone, isValidIranianMobile } from "@/lib/kavenegar/kavenegar";
 import { normalizePersianDigits } from "@/lib/normalize-persian-digits";
+import { calculateInvoiceFinancials } from "@/lib/finance/invoice-calculator";
 
 // ==========================================
 // 1. ایجاد یا بازیابی پرونده مراجعه‌کننده
@@ -20,7 +21,7 @@ export interface CreateClientInput {
   gender: "FEMALE" | "MALE";
   phone?: string;
   noPhone?: boolean;
-  birthDate?: string | null; // ISO string
+  birthDate?: string | null;
   nationalId?: string;
   noNationalId?: boolean;
   referralSource?: string;
@@ -42,7 +43,6 @@ export async function createClientAction(input: CreateClientInput) {
     return { success: false, error: "نام و نام خانوادگی مراجعه‌کننده الزامی است." };
   }
 
-  // مدیریت شماره موبایل (یا ساخت شماره سیستمی موقت برای مراجعین بدون شماره)
   let normalizedPhone = "";
   if (input.noPhone) {
     normalizedPhone = `NO_PHONE_${ctx.clinicId.slice(0, 6)}_${Date.now()}`;
@@ -54,18 +54,19 @@ export async function createClientAction(input: CreateClientInput) {
     normalizedPhone = normalizeIranianPhone(rawPhone);
   }
 
-  // مدیریت کد ملی
   const cleanNationalId = input.noNationalId
     ? null
     : normalizePersianDigits(input.nationalId || "").trim() || null;
 
   if (!input.noNationalId && (!cleanNationalId || cleanNationalId.length !== 10)) {
-    return { success: false, error: "کد ملی باید ۱۰ رقم باشد یا گزینه فاقد کد ملی را انتخاب کنید." };
+    return {
+      success: false,
+      error: "کد ملی باید ۱۰ رقم باشد یا گزینه فاقد کد ملی را انتخاب کنید.",
+    };
   }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // محاسبه شماره پرونده خودکار در صورت عدم ورود
       let targetFileNumber = input.fileNumber;
       if (!targetFileNumber) {
         const lastClient = await tx.client.findFirst({
@@ -76,7 +77,6 @@ export async function createClientAction(input: CreateClientInput) {
         targetFileNumber = (lastClient?.fileNumber || 1000) + 1;
       }
 
-      // بررسی تکراری نبودن شماره پرونده در کلینیک
       const existingFile = await tx.client.findFirst({
         where: { clinicId: ctx.clinicId, fileNumber: targetFileNumber },
       });
@@ -84,7 +84,6 @@ export async function createClientAction(input: CreateClientInput) {
         throw new Error(`شماره پرونده ${targetFileNumber} قبلاً ثبت شده است.`);
       }
 
-      // پیدا کردن یا ایجاد User سراسری
       let user = await tx.user.findUnique({
         where: { phone: normalizedPhone },
       });
@@ -113,7 +112,6 @@ export async function createClientAction(input: CreateClientInput) {
         });
       }
 
-      // بررسی وجود پرونده در همین کلینیک
       const existingClient = await tx.client.findUnique({
         where: {
           userId_clinicId: {
@@ -186,7 +184,50 @@ export async function updateClientMetaAction(
 }
 
 // ==========================================
-// 3. ثبت همزمان چند سرویس + کسر خودکار انبار + صدور فاکتور واحد
+// 3. تابع کمکی بازگرداندن مصرفی‌ها به انبار
+// ==========================================
+async function restoreConsumablesToInventory(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  consumables: {
+    clinicProductId: string;
+    productBatchId: string | null;
+    quantity: number;
+  }[]
+) {
+  for (const cons of consumables) {
+    if (cons.quantity <= 0) continue;
+
+    if (cons.productBatchId) {
+      const batchExists = await tx.productBatch.findUnique({
+        where: { id: cons.productBatchId },
+        select: { id: true },
+      });
+
+      if (batchExists) {
+        await tx.productBatch.update({
+          where: { id: cons.productBatchId },
+          data: { quantity: { increment: cons.quantity } },
+        });
+        continue;
+      }
+    }
+
+    const fallbackBatch = await tx.productBatch.findFirst({
+      where: { clinicProductId: cons.clinicProductId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (fallbackBatch) {
+      await tx.productBatch.update({
+        where: { id: fallbackBatch.id },
+        data: { quantity: { increment: cons.quantity } },
+      });
+    }
+  }
+}
+
+// ==========================================
+// 4. ثبت یا ویرایش کامل فاکتور و سرویس‌های زیرمجموعه (یکپارچه با ویزارد)
 // ==========================================
 export interface ServiceConsumableItemInput {
   clinicProductId: string;
@@ -195,23 +236,11 @@ export interface ServiceConsumableItemInput {
   sellingPrice: number;
 }
 
-export interface ServiceCartItemInput {
-  serviceId: string;
-  subServiceId: string;
-  performedAt: string;
-  finalPrice: number;
-  therapistId?: string | null;
-  assistantIds: string[];
-  referrerType: "NONE" | "STAFF" | "CLIENT";
-  referrerId?: string | null;
-  description?: string;
-  consumables: ServiceConsumableItemInput[];
-}
-
 export interface InvoicePaymentItemInput {
   paymentMethod: "POS" | "CASH" | "CARD_TO_CARD" | "WALLET" | "CREDIT";
   amount: number;
   terminalId?: string | null;
+  creditProviderId?: string | null;
   creditProvider?: string | null;
   trackingCode?: string | null;
 }
@@ -223,37 +252,50 @@ export interface InvoiceInstallmentItemInput {
   checkNumber?: string | null;
 }
 
-export interface CreateMultiServiceInvoiceInput {
+export interface SaveWizardInvoiceInput {
+  invoiceId?: string;
   clientId: string;
-  services: ServiceCartItemInput[];
+  services: {
+    serviceId: string;
+    subServiceId: string;
+    performedAt: string;
+    finalPrice: number;
+    attributes: { key: string; value: string }[];
+    therapistId?: string | null;
+    assistantIds: string[];
+    referrerType: "NONE" | "STAFF" | "CLIENT";
+    referrerId?: string | null;
+    description?: string;
+    consumables: ServiceConsumableItemInput[];
+  }[];
   discountAmount: number;
   discountReason?: string;
   extraChargeAmount: number;
   extraChargeReason?: string;
+  depositAmount: number;
+  depositServiceTitle?: string;
+  paidAt: string;
   payments: InvoicePaymentItemInput[];
   remainingMode: "PAID" | "DEBT" | "INSTALLMENT";
   installments: InvoiceInstallmentItemInput[];
 }
 
-export async function createMultiServiceInvoiceAction(
-  input: CreateMultiServiceInvoiceInput
+export async function saveMultiServiceInvoiceAction(
+  input: SaveWizardInvoiceInput
 ) {
   const ctx = await getCurrentClinicContext();
   if (!ctx) return { success: false, error: "نشست کاربری معتبر نیست." };
 
-  if (!hasPermission(ctx.clinicUser, "services.create")) {
-    return { success: false, error: "شما مجوز ثبت سرویس ندارید." };
+  const requiredPerm = input.invoiceId ? "services.edit" : "services.create";
+  if (!hasPermission(ctx.clinicUser, requiredPerm)) {
+    return { success: false, error: "مجوز انجام این عملیات را ندارید." };
   }
 
-  if (!input.services || input.services.length === 0) {
-    return { success: false, error: "حداقل یک سرویس باید انتخاب شود." };
-  }
-
-  for (const item of input.services) {
-    if (!canAccessServiceCategory(ctx.clinicUser, "services.create", item.serviceId)) {
+  for (const srv of input.services) {
+    if (!canAccessServiceCategory(ctx.clinicUser, requiredPerm, srv.serviceId)) {
       return {
         success: false,
-        error: "شما مجوز ثبت سرویس در یکی از دسته‌بندی‌های انتخاب‌شده را ندارید.",
+        error: "شما مجوز ثبت/ویرایش یکی از دسته‌بندی‌های انتخاب‌شده را ندارید.",
       };
     }
   }
@@ -267,98 +309,147 @@ export async function createMultiServiceInvoiceAction(
   }
 
   try {
-    const createdInvoice = await prisma.$transaction(async (tx) => {
+    const saved = await prisma.$transaction(async (tx) => {
       const client = await tx.client.findFirst({
         where: { id: input.clientId, clinicId: ctx.clinicId },
       });
       if (!client) throw new Error("پرونده مراجع یافت نشد.");
 
-      let servicesTotal = 0;
-      let consumablesSellTotal = 0;
+      let effectiveWalletBalance = client.walletBalance;
+      let existingInvoiceNumber: number | null = null;
 
-      for (const srv of input.services) {
-        servicesTotal += Math.max(0, Math.round(srv.finalPrice));
-        for (const cons of srv.consumables) {
-          if (cons.quantity > 0 && cons.sellingPrice > 0) {
-            consumablesSellTotal += Math.round(cons.quantity * cons.sellingPrice);
-          }
+      // در حالت ویرایش: بازگردانی آثار مالی، کیف پول و انبار فاکتور قبلی
+      if (input.invoiceId) {
+        const oldInvoice = await tx.invoice.findFirst({
+          where: {
+            id: input.invoiceId,
+            clientId: client.id,
+            clinicId: ctx.clinicId,
+          },
+          include: {
+            providedServices: { include: { usedConsumables: true } },
+            payments: true,
+          },
+        });
+        if (!oldInvoice) throw new Error("فاکتور مورد نظر جهت ویرایش یافت نشد.");
+
+        existingInvoiceNumber = oldInvoice.invoiceNumber;
+
+        for (const oldSrv of oldInvoice.providedServices) {
+          await restoreConsumablesToInventory(tx, oldSrv.usedConsumables);
         }
-      }
 
-      const subTotalAmount = servicesTotal + consumablesSellTotal;
-      const discountAmount = Math.max(0, Math.round(input.discountAmount || 0));
-      const extraChargeAmount = Math.max(0, Math.round(input.extraChargeAmount || 0));
-      const totalAmount = Math.max(
-        0,
-        subTotalAmount - discountAmount + extraChargeAmount
-      );
+        const oldWalletSpent = oldInvoice.payments
+          .filter((p) => p.paymentMethod === "WALLET")
+          .reduce((sum, p) => sum + p.amount, 0);
 
-      const validPayments = input.payments.filter((p) => p.amount > 0);
-      const paidAmount = validPayments.reduce((sum, p) => sum + Math.round(p.amount), 0);
+        const oldDepositCredited = oldInvoice.depositAmount || 0;
+        const walletDelta = oldWalletSpent - oldDepositCredited;
 
-      if (paidAmount > totalAmount) {
-        throw new Error("مجموع مبالغ پرداختی نمی‌تواند بیشتر از مبلغ کل فاکتور باشد.");
-      }
-
-      const walletUsedAmount = validPayments
-        .filter((p) => p.paymentMethod === "WALLET")
-        .reduce((sum, p) => sum + Math.round(p.amount), 0);
-
-      if (walletUsedAmount > client.walletBalance) {
-        throw new Error("موجودی کیف پول مراجع برای پرداخت این مبلغ کافی نیست.");
-      }
-
-      const remainingAmount = totalAmount - paidAmount;
-
-      if (remainingAmount > 0 && input.remainingMode === "INSTALLMENT") {
-        if (!input.installments || input.installments.length === 0) {
-          throw new Error("لطفاً حداقل یک قسط تعریف کنید.");
+        if (walletDelta !== 0) {
+          effectiveWalletBalance += walletDelta;
+          await tx.client.update({
+            where: { id: client.id },
+            data: { walletBalance: { increment: walletDelta } },
+          });
         }
-        const installmentsSum = input.installments.reduce(
-          (sum, ins) => sum + Math.round(ins.amount),
-          0
-        );
-        if (installmentsSum !== remainingAmount) {
-          throw new Error(
-            `مجموع اقساط (${installmentsSum.toLocaleString()}) با مبلغ مانده (${remainingAmount.toLocaleString()}) برابر نیست.`
-          );
-        }
+
+        await tx.providedService.deleteMany({
+          where: { invoiceId: oldInvoice.id },
+        });
+        await tx.payment.deleteMany({
+          where: { invoiceId: oldInvoice.id },
+        });
+        await tx.invoiceInstallment.deleteMany({
+          where: { invoiceId: oldInvoice.id },
+        });
       }
 
-      let invoiceStatus = "PAID";
-      if (remainingAmount > 0) {
-        if (input.remainingMode === "INSTALLMENT") {
-          invoiceStatus = "INSTALLMENT";
-        } else if (paidAmount > 0) {
-          invoiceStatus = "PARTIAL";
-        } else {
-          invoiceStatus = "UNPAID";
-        }
-      }
-
-      const lastInvoice = await tx.invoice.findFirst({
-        where: { clinicId: ctx.clinicId, invoiceNumber: { not: null } },
-        orderBy: { invoiceNumber: "desc" },
-        select: { invoiceNumber: true },
+      const creditProviders = await tx.clinicCreditProvider.findMany({
+        where: { clinicId: ctx.clinicId },
       });
-      const nextInvoiceNumber = (lastInvoice?.invoiceNumber || 150000) + 1;
-
-      const invoice = await tx.invoice.create({
-        data: {
-          clinicId: ctx.clinicId,
-          clientId: client.id,
-          invoiceNumber: nextInvoiceNumber,
-          subTotalAmount,
-          discountAmount,
-          discountReason: input.discountReason?.trim() || null,
-          extraChargeAmount,
-          extraChargeReason: input.extraChargeReason?.trim() || null,
-          totalAmount,
-          paidAmount,
-          status: invoiceStatus,
-        },
+      const activeTerminalsCount = await tx.paymentTerminal.count({
+        where: { clinicId: ctx.clinicId, isActive: true },
       });
 
+      const calc = calculateInvoiceFinancials({
+        services: input.services.map((s) => ({
+          finalPrice: s.finalPrice,
+          consumables: s.consumables.map((c) => ({
+            quantity: c.quantity,
+            sellingPrice: c.sellingPrice,
+          })),
+        })),
+        discountAmount: input.discountAmount,
+        extraChargeAmount: input.extraChargeAmount,
+        depositAmount: input.depositAmount,
+        depositServiceSelected: Boolean(input.depositServiceTitle?.trim()),
+        payments: input.payments,
+        remainingMode:
+          input.remainingMode === "PAID" ? "DEBT" : input.remainingMode,
+        installments: input.installments,
+        creditProviders,
+        clientWalletBalance: effectiveWalletBalance,
+        hasActiveTerminals: activeTerminalsCount > 0,
+      });
+
+      if (calc.validationError) {
+        throw new Error(calc.validationError);
+      }
+
+      const nextInvoiceNumber =
+        existingInvoiceNumber ??
+        ((
+          await tx.invoice.findFirst({
+            where: { clinicId: ctx.clinicId, invoiceNumber: { not: null } },
+            orderBy: { invoiceNumber: "desc" },
+            select: { invoiceNumber: true },
+          })
+        )?.invoiceNumber || 150000) + 1;
+
+      const invoice = input.invoiceId
+        ? await tx.invoice.update({
+            where: { id: input.invoiceId },
+            data: {
+              subTotalAmount: calc.subTotal,
+              discountAmount: calc.discountAmount,
+              discountReason: input.discountReason?.trim() || null,
+              extraChargeAmount: calc.extraChargeAmount,
+              extraChargeReason: input.extraChargeReason?.trim() || null,
+              depositAmount: calc.depositAmount,
+              depositServiceTitle:
+                calc.depositAmount > 0
+                  ? input.depositServiceTitle?.trim() || null
+                  : null,
+              creditFeeAmount: calc.creditFeeTotal,
+              totalAmount: calc.finalTotal,
+              paidAmount: calc.paidSum,
+              status: calc.status,
+            },
+          })
+        : await tx.invoice.create({
+            data: {
+              clinicId: ctx.clinicId,
+              clientId: client.id,
+              invoiceNumber: nextInvoiceNumber,
+              subTotalAmount: calc.subTotal,
+              discountAmount: calc.discountAmount,
+              discountReason: input.discountReason?.trim() || null,
+              extraChargeAmount: calc.extraChargeAmount,
+              extraChargeReason: input.extraChargeReason?.trim() || null,
+              depositAmount: calc.depositAmount,
+              depositServiceTitle:
+                calc.depositAmount > 0
+                  ? input.depositServiceTitle?.trim() || null
+                  : null,
+              creditFeeAmount: calc.creditFeeTotal,
+              totalAmount: calc.finalTotal,
+              paidAmount: calc.paidSum,
+              status: calc.status,
+            },
+          });
+
+      // ثبت سرویس‌ها و کسر از بچ‌های انبار
       for (const srv of input.services) {
         let therapistNameSnapshot: string | null = null;
         if (srv.therapistId) {
@@ -369,8 +460,8 @@ export async function createMultiServiceInvoiceAction(
           therapistNameSnapshot = therapist?.user?.fullName || null;
         }
 
-        let totalConsumableCostForService = 0;
-        const usedConsumablesToCreate: {
+        let totalConsumableCost = 0;
+        const usedConsumablesData: {
           clinicProductId: string;
           productBatchId: string | null;
           quantity: number;
@@ -381,19 +472,16 @@ export async function createMultiServiceInvoiceAction(
         for (const cons of srv.consumables) {
           if (cons.quantity <= 0) continue;
 
-          const availableBatches = await tx.productBatch.findMany({
+          const batches = await tx.productBatch.findMany({
             where: {
               clinicProductId: cons.clinicProductId,
               quantity: { gt: 0 },
               clinicProduct: { clinicId: ctx.clinicId },
             },
-            orderBy: [
-              { expirationDate: "asc" },
-              { createdAt: "asc" },
-            ],
+            orderBy: [{ expirationDate: "asc" }, { createdAt: "asc" }],
           });
 
-          const sortedBatches = [...availableBatches].sort((a, b) => {
+          const sortedBatches = [...batches].sort((a, b) => {
             if (cons.preferredBatchId) {
               if (a.id === cons.preferredBatchId) return -1;
               if (b.id === cons.preferredBatchId) return 1;
@@ -405,61 +493,42 @@ export async function createMultiServiceInvoiceAction(
               b.exclusiveSubServiceId === srv.subServiceId &&
               b.exclusiveTherapistId === srv.therapistId;
             if (aExact !== bExact) return aExact ? -1 : 1;
-
-            const aPartial =
-              a.exclusiveSubServiceId === srv.subServiceId ||
-              a.exclusiveTherapistId === srv.therapistId;
-            const bPartial =
-              b.exclusiveSubServiceId === srv.subServiceId ||
-              b.exclusiveTherapistId === srv.therapistId;
-            if (aPartial !== bPartial) return aPartial ? -1 : 1;
-
             return 0;
           });
 
-          let remainingToDeduct = cons.quantity;
-
+          let rem = cons.quantity;
           for (const batch of sortedBatches) {
-            if (remainingToDeduct <= 0) break;
-
-            const deductFromThisBatch = Math.min(batch.quantity, remainingToDeduct);
+            if (rem <= 0) break;
+            const take = Math.min(batch.quantity, rem);
             await tx.productBatch.update({
               where: { id: batch.id },
-              data: { quantity: { decrement: deductFromThisBatch } },
+              data: { quantity: { decrement: take } },
             });
-
-            totalConsumableCostForService += Math.round(
-              deductFromThisBatch * batch.purchasePrice
-            );
-
-            usedConsumablesToCreate.push({
+            totalConsumableCost += Math.round(take * batch.purchasePrice);
+            usedConsumablesData.push({
               clinicProductId: cons.clinicProductId,
               productBatchId: batch.id,
-              quantity: deductFromThisBatch,
-              sellingPrice: cons.sellingPrice > 0 ? Math.round(cons.sellingPrice) : null,
+              quantity: take,
+              sellingPrice:
+                cons.sellingPrice > 0 ? Math.round(cons.sellingPrice) : null,
               unitCost: batch.purchasePrice,
             });
-
-            remainingToDeduct -= deductFromThisBatch;
+            rem -= take;
           }
 
-          if (remainingToDeduct > 0) {
-            usedConsumablesToCreate.push({
+          if (rem > 0) {
+            usedConsumablesData.push({
               clinicProductId: cons.clinicProductId,
               productBatchId: null,
-              quantity: remainingToDeduct,
-              sellingPrice: cons.sellingPrice > 0 ? Math.round(cons.sellingPrice) : null,
+              quantity: rem,
+              sellingPrice:
+                cons.sellingPrice > 0 ? Math.round(cons.sellingPrice) : null,
               unitCost: 0,
             });
           }
         }
 
-        const serviceRevenue = Math.max(0, Math.round(srv.finalPrice));
-        const clinicNetProfit = Math.max(
-          0,
-          serviceRevenue - totalConsumableCostForService
-        );
-
+        const rev = Math.max(0, Math.round(srv.finalPrice));
         await tx.providedService.create({
           data: {
             invoiceId: invoice.id,
@@ -477,57 +546,92 @@ export async function createMultiServiceInvoiceAction(
                 : null,
             createdById: ctx.clinicUserId,
             performedAt: new Date(srv.performedAt),
-            finalPrice: serviceRevenue,
+            finalPrice: rev,
+            attributes: srv.attributes,
             description: srv.description?.trim() || null,
-            clinicNetProfit,
+            clinicNetProfit: Math.max(0, rev - totalConsumableCost),
             assistants:
               srv.assistantIds.length > 0
                 ? { connect: srv.assistantIds.map((id) => ({ id })) }
                 : undefined,
             usedConsumables:
-              usedConsumablesToCreate.length > 0
-                ? { create: usedConsumablesToCreate }
+              usedConsumablesData.length > 0
+                ? { create: usedConsumablesData }
                 : undefined,
           },
         });
       }
 
-      // ثبت پرداخت‌ها (شامل کارت‌خوان، نقدی، کارت به کارت، کیف پول و سرویس‌های اعتباری)
-      for (const pay of validPayments) {
+      // ثبت پرداخت‌ها با تاریخ و ساعت تراکنش
+      const paidAtDate = new Date(input.paidAt || new Date());
+      for (let i = 0; i < input.payments.length; i++) {
+        const pay = input.payments[i];
+        if ((Number(pay.amount) || 0) <= 0) continue;
+
+        const creditInfo = calc.creditBreakdown[i];
         await tx.payment.create({
           data: {
             invoiceId: invoice.id,
-            amount: Math.round(pay.amount),
+            amount: creditInfo ? creditInfo.totalCharge : Math.round(pay.amount),
             paymentMethod: pay.paymentMethod,
-            terminalId: pay.paymentMethod === "POS" ? pay.terminalId || null : null,
+            terminalId:
+              pay.paymentMethod === "POS" ? pay.terminalId || null : null,
+            creditProviderId:
+              pay.paymentMethod === "CREDIT"
+                ? pay.creditProviderId || null
+                : null,
             creditProvider:
               pay.paymentMethod === "CREDIT"
-                ? pay.creditProvider?.trim() || null
+                ? creditInfo?.providerTitle || pay.creditProvider || null
                 : null,
+            creditPrincipal: creditInfo?.principal ?? 0,
+            creditClientFee: creditInfo?.clientFee ?? 0,
+            creditClinicCost: creditInfo?.clinicCost ?? 0,
             trackingCode: pay.trackingCode?.trim() || null,
             status: "COMPLETED",
+            paidAt: paidAtDate,
           },
         });
       }
 
-      if (walletUsedAmount > 0) {
+      // کسر پرداخت از کیف پول
+      if (calc.walletUsedTotal > 0) {
         await tx.client.update({
           where: { id: client.id },
-          data: { walletBalance: { decrement: walletUsedAmount } },
+          data: { walletBalance: { decrement: calc.walletUsedTotal } },
         });
         await tx.walletTransaction.create({
           data: {
             clientId: client.id,
             type: "WITHDRAW",
-            amount: walletUsedAmount,
+            amount: calc.walletUsedTotal,
             paymentMethod: "INVOICE_PAYMENT",
-            description: `پرداخت فاکتور شماره ${nextInvoiceNumber}`,
+            description: `${input.invoiceId ? "ویرایش پرداخت" : "پرداخت"} فاکتور شماره ${nextInvoiceNumber}`,
             createdById: ctx.clinicUserId,
           },
         });
       }
 
-      if (remainingAmount > 0 && input.remainingMode === "INSTALLMENT") {
+      // واریز بیعانه سرویس آینده به کیف پول
+      if (calc.depositAmount > 0) {
+        await tx.client.update({
+          where: { id: client.id },
+          data: { walletBalance: { increment: calc.depositAmount } },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            clientId: client.id,
+            type: "DEPOSIT",
+            amount: calc.depositAmount,
+            paymentMethod: "DEPOSIT",
+            description: `بیعانه بابت سرویس «${input.depositServiceTitle}» — فاکتور #${nextInvoiceNumber}`,
+            createdById: ctx.clinicUserId,
+          },
+        });
+      }
+
+      // ثبت اقساط در صورت وجود مانده قسطی
+      if (calc.remaining > 0 && input.remainingMode === "INSTALLMENT") {
         await tx.invoiceInstallment.createMany({
           data: input.installments.map((ins, idx) => ({
             invoiceId: invoice.id,
@@ -546,22 +650,122 @@ export async function createMultiServiceInvoiceAction(
 
     revalidatePath("/clinic-dashboard/clients");
     revalidatePath(`/clinic-dashboard/clients/${input.clientId}`);
+    revalidatePath(`/clinic-dashboard/clients/${input.clientId}/wallet`);
+    revalidatePath(`/clinic-dashboard/clients/${input.clientId}/financial-records`);
     revalidatePath("/clinic-dashboard/inventory/products");
 
     return {
       success: true,
-      invoiceId: createdInvoice.id,
-      invoiceNumber: createdInvoice.invoiceNumber,
+      invoiceId: saved.id,
+      invoiceNumber: saved.invoiceNumber,
     };
   } catch (err: unknown) {
-    const message =
-      err instanceof Error ? err.message : "خطا در ثبت سرویس و صدور فاکتور.";
-    return { success: false, error: message };
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "خطا در ثبت فاکتور.",
+    };
   }
 }
 
 // ==========================================
-// 4. شارژ یا استرداد کیف پول مراجع
+// 5. حذف کامل یک فاکتور به همراه تمام سرویس‌های آن + بازگشت انبار + اصلاح کامل کیف پول
+// ==========================================
+export async function deleteFullInvoiceAction(
+  clientId: string,
+  invoiceId: string
+) {
+  const ctx = await getCurrentClinicContext();
+  if (!ctx) return { success: false, error: "نشست کاربری معتبر نیست." };
+
+  if (!hasPermission(ctx.clinicUser, "services.delete")) {
+    return { success: false, error: "شما مجوز حذف سرویس و فاکتور را ندارید." };
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.findFirst({
+        where: {
+          id: invoiceId,
+          clientId,
+          clinicId: ctx.clinicId,
+        },
+        include: {
+          providedServices: { include: { usedConsumables: true } },
+          payments: true,
+        },
+      });
+
+      if (!invoice) throw new Error("فاکتور مورد نظر یافت نشد.");
+
+      // ۱. بازگشت کالاهای مصرفی تمام سرویس‌های فاکتور به انبار
+      for (const srv of invoice.providedServices) {
+        await restoreConsumablesToInventory(tx, srv.usedConsumables);
+      }
+
+      // ۲. بازگشت مبالغ پرداخت‌شده از کیف پول به حساب مراجع
+      const walletPaid = invoice.payments
+        .filter((p) => p.paymentMethod === "WALLET")
+        .reduce((sum, p) => sum + p.amount, 0);
+
+      if (walletPaid > 0) {
+        await tx.client.update({
+          where: { id: clientId },
+          data: { walletBalance: { increment: walletPaid } },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            clientId,
+            type: "REFUND",
+            amount: walletPaid,
+            paymentMethod: "WALLET_REFUND",
+            description: `بازگشت وجه پرداختی بابت حذف فاکتور #${invoice.invoiceNumber ?? ""}`,
+            createdById: ctx.clinicUserId,
+          },
+        });
+      }
+
+      // ۳. کسر بیعانه‌ای که در این فاکتور به کیف پول واریز شده بود
+      const depositToRevert = invoice.depositAmount || 0;
+      if (depositToRevert > 0) {
+        await tx.client.update({
+          where: { id: clientId },
+          data: { walletBalance: { decrement: depositToRevert } },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            clientId,
+            type: "WITHDRAW",
+            amount: depositToRevert,
+            paymentMethod: "INVOICE_CANCEL",
+            description: `کسر بیعانه بابت حذف فاکتور #${invoice.invoiceNumber ?? ""}`,
+            createdById: ctx.clinicUserId,
+          },
+        });
+      }
+
+      // ۴. حذف کامل فاکتور و تمام سرویس‌های زیرمجموعه
+      await tx.invoice.delete({
+        where: { id: invoice.id },
+      });
+    });
+
+    revalidatePath("/clinic-dashboard/clients");
+    revalidatePath(`/clinic-dashboard/clients/${clientId}`);
+    revalidatePath(`/clinic-dashboard/clients/${clientId}/wallet`);
+    revalidatePath(`/clinic-dashboard/clients/${clientId}/financial-records`);
+    revalidatePath("/clinic-dashboard/inventory/products");
+
+    return { success: true };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "خطا در حذف فاکتور.",
+    };
+  }
+}
+
+// ==========================================
+// 6. شارژ یا استرداد کیف پول مراجع
 // ==========================================
 export async function createWalletTransactionAction(input: {
   clientId: string;
@@ -628,7 +832,7 @@ export async function createWalletTransactionAction(input: {
 }
 
 // ==========================================
-// 5. پرداخت قسط یا تسویه بدهی فاکتور
+// 7. پرداخت قسط یا تسویه بدهی فاکتور
 // ==========================================
 export async function settleInvoiceOrInstallmentAction(input: {
   clientId: string;
@@ -744,7 +948,7 @@ export async function settleInvoiceOrInstallmentAction(input: {
 }
 
 // ==========================================
-// 6. ذخیره اطلاعات تکمیلی و ویرایش مشخصات پرونده
+// 8. ذخیره اطلاعات تکمیلی و ویرایش مشخصات پرونده
 // ==========================================
 export interface UpdateClientAdditionalInfoInput {
   clientId: string;
@@ -842,12 +1046,12 @@ export async function updateClientAdditionalInfoAction(
 }
 
 // ==========================================
-// 7. ذخیره پرونده پزشکی مراجع
+// 9. ذخیره پرونده پزشکی مراجع
 // ==========================================
 export interface UpdateClientMedicalRecordInput {
   clientId: string;
   medicalRecord: {
-    conditions: string[]; // لیست بیماری‌های علامت‌خورده
+    conditions: string[];
     surgeryCount?: string;
     allergies?: string;
     cosmeticHistory?: string;
@@ -888,7 +1092,7 @@ export async function updateClientMedicalRecordAction(
 }
 
 // ==========================================
-// 8. افزودن و حذف ضمیمه پرونده
+// 10. افزودن و حذف ضمیمه پرونده
 // ==========================================
 export async function addClientAttachmentAction(input: {
   clientId: string;
@@ -949,7 +1153,7 @@ export async function deleteClientAttachmentAction(
 }
 
 // ==========================================
-// 9. ارسال پیامک فوری به مراجع و ثبت در SmsLog
+// 11. ارسال پیامک فوری به مراجع و ثبت در SmsLog
 // ==========================================
 export async function sendClientQuickSmsAction(input: {
   clientId: string;
@@ -1011,472 +1215,7 @@ export async function sendClientQuickSmsAction(input: {
 }
 
 // ==========================================
-// 10. تابع کمکی بازگرداندن مصرفی‌ها به انبار
-// ==========================================
-async function restoreConsumablesToInventory(
-  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
-  consumables: {
-    clinicProductId: string;
-    productBatchId: string | null;
-    quantity: number;
-  }[]
-) {
-  for (const cons of consumables) {
-    if (cons.quantity <= 0) continue;
-
-    if (cons.productBatchId) {
-      const batchExists = await tx.productBatch.findUnique({
-        where: { id: cons.productBatchId },
-        select: { id: true },
-      });
-
-      if (batchExists) {
-        await tx.productBatch.update({
-          where: { id: cons.productBatchId },
-          data: { quantity: { increment: cons.quantity } },
-        });
-        continue;
-      }
-    }
-
-    // اگر بچ قبلی وجود نداشت، به جدیدترین بچ همان کالا اضافه شود
-    const fallbackBatch = await tx.productBatch.findFirst({
-      where: { clinicProductId: cons.clinicProductId },
-      orderBy: { createdAt: "desc" },
-    });
-
-    if (fallbackBatch) {
-      await tx.productBatch.update({
-        where: { id: fallbackBatch.id },
-        data: { quantity: { increment: cons.quantity } },
-      });
-    }
-  }
-}
-
-// ==========================================
-// 11. حذف کامل یک فاکتور به همراه تمام سرویس‌ها و بازگشت انبار/کیف پول
-// ==========================================
-export async function deleteInvoiceWithServicesAction(
-  clientId: string,
-  invoiceId: string
-) {
-  const ctx = await getCurrentClinicContext();
-  if (!ctx) return { success: false, error: "نشست کاربری معتبر نیست." };
-
-  if (!hasPermission(ctx.clinicUser, "services.delete")) {
-    return { success: false, error: "شما مجوز حذف سرویس و فاکتور را ندارید." };
-  }
-
-  try {
-    await prisma.$transaction(async (tx) => {
-      const invoice = await tx.invoice.findFirst({
-        where: {
-          id: invoiceId,
-          clientId,
-          clinicId: ctx.clinicId,
-        },
-        include: {
-          providedServices: {
-            include: { usedConsumables: true },
-          },
-          payments: true,
-        },
-      });
-
-      if (!invoice) throw new Error("فاکتور مورد نظر یافت نشد.");
-
-      // ۱. بازگشت تمام مصرفی‌های سرویس‌های این فاکتور به انبار
-      for (const srv of invoice.providedServices) {
-        await restoreConsumablesToInventory(tx, srv.usedConsumables);
-      }
-
-      // ۲. بازگشت مبالغ پرداخت‌شده از کیف پول به حساب مراجع
-      const walletPaid = invoice.payments
-        .filter((p) => p.paymentMethod === "WALLET")
-        .reduce((sum, p) => sum + p.amount, 0);
-
-      if (walletPaid > 0) {
-        await tx.client.update({
-          where: { id: clientId },
-          data: { walletBalance: { increment: walletPaid } },
-        });
-        await tx.walletTransaction.create({
-          data: {
-            clientId,
-            type: "REFUND",
-            amount: walletPaid,
-            paymentMethod: "WALLET_REFUND",
-            description: `بازگشت وجه بابت حذف فاکتور #${invoice.invoiceNumber ?? ""}`,
-            createdById: ctx.clinicUserId,
-          },
-        });
-      }
-
-      // ۳. حذف فاکتور (سرویس‌ها، مصرفی‌ها، پرداخت‌ها و اقساط به صورت Cascade حذف می‌شوند)
-      await tx.invoice.delete({
-        where: { id: invoice.id },
-      });
-    });
-
-    revalidatePath("/clinic-dashboard/clients");
-    revalidatePath(`/clinic-dashboard/clients/${clientId}`);
-    revalidatePath(`/clinic-dashboard/clients/${clientId}/financial-records`);
-    revalidatePath(`/clinic-dashboard/clients/${clientId}/wallet`);
-    revalidatePath("/clinic-dashboard/inventory/products");
-
-    return { success: true };
-  } catch (err: unknown) {
-    const message =
-      err instanceof Error ? err.message : "خطا در حذف فاکتور و سرویس‌ها.";
-    return { success: false, error: message };
-  }
-}
-
-// ==========================================
-// 12. حذف یک سرویس تکی (و به‌روزرسانی فاکتور یا حذف کل فاکتور در صورت تک‌سرویسی بودن)
-// ==========================================
-export async function deleteSingleProvidedServiceAction(
-  clientId: string,
-  providedServiceId: string
-) {
-  const ctx = await getCurrentClinicContext();
-  if (!ctx) return { success: false, error: "نشست کاربری معتبر نیست." };
-
-  if (!hasPermission(ctx.clinicUser, "services.delete")) {
-    return { success: false, error: "شما مجوز حذف سرویس را ندارید." };
-  }
-
-  try {
-    const target = await prisma.providedService.findFirst({
-      where: {
-        id: providedServiceId,
-        clientId,
-        client: { clinicId: ctx.clinicId },
-      },
-      include: {
-        usedConsumables: true,
-        invoice: {
-          include: {
-            providedServices: {
-              include: { usedConsumables: true },
-            },
-          },
-        },
-      },
-    });
-
-    if (!target) {
-      return { success: false, error: "سرویس مورد نظر یافت نشد." };
-    }
-
-    // اگر فاکتور فقط همین یک سرویس را دارد، کل فاکتور را حذف کن
-    if (target.invoice && target.invoice.providedServices.length <= 1) {
-      return deleteInvoiceWithServicesAction(clientId, target.invoice.id);
-    }
-
-    await prisma.$transaction(async (tx) => {
-      // بازگشت مصرفی‌های همین سرویس به انبار
-      await restoreConsumablesToInventory(tx, target.usedConsumables);
-
-      // حذف خود سرویس
-      await tx.providedService.delete({
-        where: { id: target.id },
-      });
-
-      // اگر به فاکتوری متصل است، مبالغ فاکتور را مجدداً محاسبه کن
-      if (target.invoice) {
-        const remainingServices = target.invoice.providedServices.filter(
-          (s) => s.id !== target.id
-        );
-
-        let newSubTotal = 0;
-        for (const srv of remainingServices) {
-          newSubTotal += srv.finalPrice;
-          for (const uc of srv.usedConsumables) {
-            if (uc.sellingPrice && uc.sellingPrice > 0) {
-              newSubTotal += Math.round(uc.quantity * uc.sellingPrice);
-            }
-          }
-        }
-
-        const newTotal = Math.max(
-          0,
-          newSubTotal -
-            target.invoice.discountAmount +
-            target.invoice.extraChargeAmount
-        );
-
-        const newStatus =
-          target.invoice.paidAmount >= newTotal
-            ? "PAID"
-            : target.invoice.status === "INSTALLMENT"
-            ? "INSTALLMENT"
-            : target.invoice.paidAmount > 0
-            ? "PARTIAL"
-            : "UNPAID";
-
-        await tx.invoice.update({
-          where: { id: target.invoice.id },
-          data: {
-            subTotalAmount: newSubTotal,
-            totalAmount: newTotal,
-            status: newStatus,
-          },
-        });
-      }
-    });
-
-    revalidatePath("/clinic-dashboard/clients");
-    revalidatePath(`/clinic-dashboard/clients/${clientId}`);
-    revalidatePath(`/clinic-dashboard/clients/${clientId}/financial-records`);
-    revalidatePath("/clinic-dashboard/inventory/products");
-
-    return { success: true };
-  } catch (err: unknown) {
-    const message =
-      err instanceof Error ? err.message : "خطا در حذف سرویس.";
-    return { success: false, error: message };
-  }
-}
-
-// ==========================================
-// 13. ویرایش سرویس انجام‌شده و به‌روزرسانی مصرفی‌ها و فاکتور
-// ==========================================
-export interface UpdateProvidedServiceInput {
-  clientId: string;
-  providedServiceId: string;
-  serviceId: string;
-  subServiceId: string;
-  performedAt: string;
-  finalPrice: number;
-  therapistId?: string | null;
-  assistantIds: string[];
-  referrerType: "NONE" | "STAFF" | "CLIENT";
-  referrerId?: string | null;
-  description?: string;
-  consumables: ServiceConsumableItemInput[];
-}
-
-export async function updateProvidedServiceAction(
-  input: UpdateProvidedServiceInput
-) {
-  const ctx = await getCurrentClinicContext();
-  if (!ctx) return { success: false, error: "نشست کاربری معتبر نیست." };
-
-  if (!hasPermission(ctx.clinicUser, "services.edit")) {
-    return { success: false, error: "شما مجوز ویرایش سرویس را ندارید." };
-  }
-
-  if (!canAccessServiceCategory(ctx.clinicUser, "services.edit", input.serviceId)) {
-    return {
-      success: false,
-      error: "شما مجوز ویرایش در این دسته‌بندی خدمت را ندارید.",
-    };
-  }
-
-  try {
-    await prisma.$transaction(async (tx) => {
-      const existing = await tx.providedService.findFirst({
-        where: {
-          id: input.providedServiceId,
-          clientId: input.clientId,
-          client: { clinicId: ctx.clinicId },
-        },
-        include: {
-          usedConsumables: true,
-          assistants: { select: { id: true } },
-          invoice: {
-            include: {
-              providedServices: {
-                include: { usedConsumables: true },
-              },
-            },
-          },
-        },
-      });
-
-      if (!existing) throw new Error("سرویس مورد نظر یافت نشد.");
-
-      // ۱. بازگشت مصرفی‌های قبلی به انبار و حذف رکوردهای قبلی
-      await restoreConsumablesToInventory(tx, existing.usedConsumables);
-      await tx.usedConsumable.deleteMany({
-        where: { providedServiceId: existing.id },
-      });
-
-      // ۲. کسر مصرفی‌های جدید از انبار
-      let totalConsumableCost = 0;
-      const newConsumablesData: {
-        clinicProductId: string;
-        productBatchId: string | null;
-        quantity: number;
-        sellingPrice: number | null;
-        unitCost: number;
-      }[] = [];
-
-      for (const cons of input.consumables) {
-        if (cons.quantity <= 0) continue;
-
-        const availableBatches = await tx.productBatch.findMany({
-          where: {
-            clinicProductId: cons.clinicProductId,
-            quantity: { gt: 0 },
-            clinicProduct: { clinicId: ctx.clinicId },
-          },
-          orderBy: [{ expirationDate: "asc" }, { createdAt: "asc" }],
-        });
-
-        const sortedBatches = [...availableBatches].sort((a, b) => {
-          if (cons.preferredBatchId) {
-            if (a.id === cons.preferredBatchId) return -1;
-            if (b.id === cons.preferredBatchId) return 1;
-          }
-          const aExact =
-            a.exclusiveSubServiceId === input.subServiceId &&
-            a.exclusiveTherapistId === input.therapistId;
-          const bExact =
-            b.exclusiveSubServiceId === input.subServiceId &&
-            b.exclusiveTherapistId === input.therapistId;
-          if (aExact !== bExact) return aExact ? -1 : 1;
-          return 0;
-        });
-
-        let remainingToDeduct = cons.quantity;
-        for (const batch of sortedBatches) {
-          if (remainingToDeduct <= 0) break;
-          const deduct = Math.min(batch.quantity, remainingToDeduct);
-          await tx.productBatch.update({
-            where: { id: batch.id },
-            data: { quantity: { decrement: deduct } },
-          });
-
-          totalConsumableCost += Math.round(deduct * batch.purchasePrice);
-          newConsumablesData.push({
-            clinicProductId: cons.clinicProductId,
-            productBatchId: batch.id,
-            quantity: deduct,
-            sellingPrice: cons.sellingPrice > 0 ? Math.round(cons.sellingPrice) : null,
-            unitCost: batch.purchasePrice,
-          });
-          remainingToDeduct -= deduct;
-        }
-
-        if (remainingToDeduct > 0) {
-          newConsumablesData.push({
-            clinicProductId: cons.clinicProductId,
-            productBatchId: null,
-            quantity: remainingToDeduct,
-            sellingPrice: cons.sellingPrice > 0 ? Math.round(cons.sellingPrice) : null,
-            unitCost: 0,
-          });
-        }
-      }
-
-      // ۳. واکشی نام درمانگر جدید
-      let therapistNameSnapshot: string | null = null;
-      if (input.therapistId) {
-        const therapist = await tx.clinicUser.findUnique({
-          where: { id: input.therapistId },
-          include: { user: { select: { fullName: true } } },
-        });
-        therapistNameSnapshot = therapist?.user?.fullName || null;
-      }
-
-      const serviceRevenue = Math.max(0, Math.round(input.finalPrice));
-      const clinicNetProfit = Math.max(0, serviceRevenue - totalConsumableCost);
-
-      // ۴. به‌روزرسانی خود سرویس
-      await tx.providedService.update({
-        where: { id: existing.id },
-        data: {
-          subServiceId: input.subServiceId,
-          therapistId: input.therapistId || null,
-          therapistNameSnapshot,
-          referrerId:
-            input.referrerType === "STAFF" && input.referrerId
-              ? input.referrerId
-              : null,
-          referrerClientId:
-            input.referrerType === "CLIENT" && input.referrerId
-              ? input.referrerId
-              : null,
-          performedAt: new Date(input.performedAt),
-          finalPrice: serviceRevenue,
-          description: input.description?.trim() || null,
-          clinicNetProfit,
-          assistants: {
-            set: input.assistantIds.map((id) => ({ id })),
-          },
-          usedConsumables:
-            newConsumablesData.length > 0
-              ? { create: newConsumablesData }
-              : undefined,
-        },
-      });
-
-      // ۵. محاسبه مجدد مبالغ فاکتور متصل
-      if (existing.invoice) {
-        const otherServices = existing.invoice.providedServices.filter(
-          (s) => s.id !== existing.id
-        );
-
-        let newSubTotal = serviceRevenue;
-        for (const nc of newConsumablesData) {
-          if (nc.sellingPrice && nc.sellingPrice > 0) {
-            newSubTotal += Math.round(nc.quantity * nc.sellingPrice);
-          }
-        }
-        for (const srv of otherServices) {
-          newSubTotal += srv.finalPrice;
-          for (const uc of srv.usedConsumables) {
-            if (uc.sellingPrice && uc.sellingPrice > 0) {
-              newSubTotal += Math.round(uc.quantity * uc.sellingPrice);
-            }
-          }
-        }
-
-        const newTotal = Math.max(
-          0,
-          newSubTotal -
-            existing.invoice.discountAmount +
-            existing.invoice.extraChargeAmount
-        );
-
-        const newStatus =
-          existing.invoice.paidAmount >= newTotal
-            ? "PAID"
-            : existing.invoice.status === "INSTALLMENT"
-            ? "INSTALLMENT"
-            : existing.invoice.paidAmount > 0
-            ? "PARTIAL"
-            : "UNPAID";
-
-        await tx.invoice.update({
-          where: { id: existing.invoice.id },
-          data: {
-            subTotalAmount: newSubTotal,
-            totalAmount: newTotal,
-            status: newStatus,
-          },
-        });
-      }
-    });
-
-    revalidatePath("/clinic-dashboard/clients");
-    revalidatePath(`/clinic-dashboard/clients/${input.clientId}`);
-    revalidatePath(`/clinic-dashboard/clients/${input.clientId}/financial-records`);
-    revalidatePath("/clinic-dashboard/inventory/products");
-
-    return { success: true };
-  } catch (err: unknown) {
-    const message =
-      err instanceof Error ? err.message : "خطا در ویرایش سرویس.";
-    return { success: false, error: message };
-  }
-}
-
-// ==========================================
-// 14. ویرایش اطلاعات پایه پرونده از لیست پرونده‌ها
+// 12. ویرایش اطلاعات پایه پرونده از لیست پرونده‌ها
 // ==========================================
 export interface QuickUpdateClientInput {
   clientId: string;
@@ -1511,7 +1250,6 @@ export async function quickUpdateClientAction(input: QuickUpdateClientInput) {
       return { success: false, error: "پرونده مورد نظر یافت نشد." };
     }
 
-    // بررسی تکراری نبودن شماره پرونده جدید در کلینیک
     if (input.fileNumber && input.fileNumber !== client.fileNumber) {
       const duplicateFile = await prisma.client.findFirst({
         where: {
@@ -1528,7 +1266,6 @@ export async function quickUpdateClientAction(input: QuickUpdateClientInput) {
       }
     }
 
-    // مدیریت شماره موبایل
     let updatedPhone = client.user.phone;
     if (input.noPhone) {
       if (!client.user.phone.startsWith("NO_PHONE_")) {
@@ -1591,7 +1328,7 @@ export async function quickUpdateClientAction(input: QuickUpdateClientInput) {
 }
 
 // ==========================================
-// 15. حذف پرونده مراجع + بازگشت خودکار انبار و حذف فاکتورها
+// 13. حذف پرونده مراجع + بازگشت خودکار انبار و حذف فاکتورها
 // ==========================================
 export async function deleteClientAction(clientId: string) {
   const ctx = await getCurrentClinicContext();
@@ -1616,12 +1353,10 @@ export async function deleteClientAction(clientId: string) {
         throw new Error("پرونده مورد نظر یافت نشد.");
       }
 
-      // ۱. بازگرداندن تمام کالاهای مصرفی ثبت‌شده در سوابق این مراجع به انبار
       for (const srv of client.providedServices) {
         await restoreConsumablesToInventory(tx, srv.usedConsumables);
       }
 
-      // ۲. حذف فاکتورها و سرویس‌های متصل به این مراجع
       await tx.invoice.deleteMany({
         where: { clientId: client.id, clinicId: ctx.clinicId },
       });
@@ -1630,7 +1365,6 @@ export async function deleteClientAction(clientId: string) {
         where: { clientId: client.id },
       });
 
-      // ۳. حذف رکورد پرونده (ضمیمه‌ها، تراکنش‌های کیف پول و لاگ پیامک به صورت Cascade پاک می‌شوند)
       await tx.client.delete({
         where: { id: client.id },
       });

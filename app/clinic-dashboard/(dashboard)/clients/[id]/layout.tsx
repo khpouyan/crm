@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentClinicContext } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/permissions";
-import { ClientProfileHeader } from "@/components/clinic-dashboard/client-profile-header";
+import { ClientProfileShell } from "@/components/clinic-dashboard/client-profile-shell";
 
 export default async function ClientProfileLayout({
   children,
@@ -44,19 +44,18 @@ export default async function ClientProfileLayout({
   const isNoPhone = client.user.phone.startsWith("NO_PHONE_");
 
   return (
-    <div className="flex min-h-full flex-col">
-      <ClientProfileHeader
-        client={{
-          id: client.id,
-          fileNumber: client.fileNumber,
-          fullName: client.user.fullName || "بدون نام",
-          phone: isNoPhone ? null : client.user.phone,
-          nationalId: client.user.nationalId,
-          walletBalance: client.walletBalance,
-          servicesCount: client._count.providedServices,
-        }}
-      />
-      <div className="flex-1">{children}</div>
-    </div>
+    <ClientProfileShell
+      client={{
+        id: client.id,
+        fileNumber: client.fileNumber,
+        fullName: client.user.fullName || "بدون نام",
+        phone: isNoPhone ? null : client.user.phone,
+        nationalId: client.user.nationalId,
+        walletBalance: client.walletBalance,
+        servicesCount: client._count.providedServices,
+      }}
+    >
+      {children}
+    </ClientProfileShell>
   );
 }

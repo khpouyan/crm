@@ -1,3 +1,4 @@
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -102,16 +103,17 @@ model Clinic {
 
   createdAt DateTime @default(now())
 
-  roles         ClinicRole[]
-  users         ClinicUser[]
-  clients       Client[]
-  services      Service[]
-  products      ClinicProduct[]
-  stockOuts     InventoryStockOut[]
-  bankAccounts  ClinicBankAccount[]
-  terminals     PaymentTerminal[]
-  invoices      Invoice[]
-  exportLogs    DataExportLog[]
+  roles           ClinicRole[]
+  users           ClinicUser[]
+  clients         Client[]
+  services        Service[]
+  products        ClinicProduct[]
+  stockOuts       InventoryStockOut[]
+  bankAccounts    ClinicBankAccount[]
+  terminals       PaymentTerminal[]
+  creditProviders ClinicCreditProvider[]
+  invoices        Invoice[]
+  exportLogs      DataExportLog[]
 
   smsSetting       ClinicSmsSetting?
   careSmsTemplates CareSmsTemplate[]
@@ -519,7 +521,11 @@ model Invoice {
   discountReason    String? @db.Text
   extraChargeAmount Int     @default(0)
   extraChargeReason String? @db.Text
+  creditFeeAmount   Int     @default(0) // کارمزد سرویس اعتباری دریافتی از مراجع
   totalAmount       Int
+
+  depositAmount       Int     @default(0) // مبلغ بیعانه واریزشده به کیف پول در این فاکتور
+  depositServiceTitle String? // عنوان سرویس آینده بابت بیعانه
 
   status     String   // PAID | PARTIAL | UNPAID | INSTALLMENT
   paidAmount Int      @default(0)
@@ -580,6 +586,7 @@ model ProvidedService {
   referrerClient  Client?          @relation("ServiceClientReferrer", fields: [referrerClientId], references: [id], onDelete: SetNull)
   assistants      ClinicUser[]     @relation("ServiceAssistants")
   usedConsumables UsedConsumable[]
+  attributes      Json     @default("[]") // مشخصه‌های ثبت‌شده هنگام انجام سرویس (مثل تعداد جلسات لیزر)
 }
 
 model UsedConsumable {
@@ -600,42 +607,68 @@ model UsedConsumable {
 // 9. مالی و پرداخت‌ها
 // ==========================================
 model ClinicBankAccount {
-  id            String @id @default(uuid())
+  id            String  @id @default(uuid())
   clinicId      String
   bankName      String
   accountNumber String
+  cardNumber    String?
+  iban          String?
   ownerName     String
+  isActive      Boolean @default(true)
 
   clinic    Clinic            @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   terminals PaymentTerminal[]
 }
 
 model PaymentTerminal {
-  id            String @id @default(uuid())
+  id            String  @id @default(uuid())
   clinicId      String
   bankAccountId String
   name          String
-  type          String
+  type          String  @default("POS") // POS | IPG | MOBILE_POS
+  terminalCode  String?
+  isActive      Boolean @default(true)
 
   clinic      Clinic            @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   bankAccount ClinicBankAccount @relation(fields: [bankAccountId], references: [id])
   payments    Payment[]
 }
 
+model ClinicCreditProvider {
+  id                String   @id @default(uuid())
+  clinicId          String
+  title             String   // مثلاً: اسنپ‌پی، دیجی‌پی، تارا، ازکی‌وام
+  commissionPercent Float    @default(0) // درصد کل کارمزد سرویس اعتباری (مثلاً 7)
+  clientFeePercent  Float    @default(0) // درصد کارمزدی که از مراجع دریافت می‌شود (مثلاً 5)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+
+  clinic   Clinic    @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@index([clinicId, isActive])
+}
+
 model Payment {
   id            String @id @default(uuid())
   invoiceId     String
-  amount        Int
-  paymentMethod String
+  amount        Int    // کل مبلغ پرداختی این ردیف (شامل اصل مبلغ + سهم کارمزد مراجع)
+  paymentMethod String // POS | CASH | CARD_TO_CARD | WALLET | CREDIT
 
-  terminalId     String?
-  creditProvider String?
-  trackingCode   String?
-  status         String
-  createdAt      DateTime @default(now())
+  terminalId       String?
+  creditProviderId String?
+  creditProvider   String? // نام سرویس اعتباری (Snapshot یا دستی)
+  creditPrincipal  Int     @default(0) // اصل مبلغ تسویه‌شده با اعتبار (بدون کارمزد)
+  creditClientFee  Int     @default(0) // کارمزد دریافت‌شده از مراجع (اضافه‌شده به فاکتور)
+  creditClinicCost Int     @default(0) // کل کارمزد کسرشده توسط سرویس اعتباری از کلینیک
+  trackingCode     String?
+  status           String
+  createdAt        DateTime @default(now())
+  paidAt           DateTime @default(now()) // تاریخ و ساعت دقیق انجام تراکنش پرداخت
 
-  invoice  Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  terminal PaymentTerminal? @relation(fields: [terminalId], references: [id])
+  invoice              Invoice               @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  terminal             PaymentTerminal?      @relation(fields: [terminalId], references: [id])
+  creditProviderConfig ClinicCreditProvider? @relation(fields: [creditProviderId], references: [id], onDelete: SetNull)
 }
 
 // ==========================================
