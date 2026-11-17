@@ -1,0 +1,1598 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: app/clinic-dashboard/(dashboard)/inventory/**
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+app/
+  clinic-dashboard/
+    (dashboard)/
+      inventory/
+        low-stock/
+          loading.tsx
+          page.tsx
+        products/
+          loading.tsx
+          page.tsx
+        sales-report/
+          loading.tsx
+          page.tsx
+        service-usage/
+          loading.tsx
+          page.tsx
+        stock-in/
+          loading.tsx
+          page.tsx
+        stock-out/
+          loading.tsx
+          page.tsx
+        suppliers/
+          loading.tsx
+          page.tsx
+        actions.ts
+        page.tsx
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="app/clinic-dashboard/(dashboard)/inventory/low-stock/loading.tsx">
+import { InventoryTablePageSkeleton } from "@/components/clinic-dashboard/inventory-skeletons";
+
+export default function Loading() {
+  return <InventoryTablePageSkeleton />;
+}
+</file>
+
+<file path="app/clinic-dashboard/(dashboard)/inventory/low-stock/page.tsx">
+// app/clinic-dashboard/(dashboard)/inventory/low-stock/page.tsx
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { getCurrentClinicContext } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/permissions";
+import { parsePaginationParams } from "@/lib/inventory/pagination-helper";
+import { InventoryLowStockClient } from "@/components/clinic-dashboard/inventory-low-stock-client";
+
+export const metadata = {
+  title: "کالاهای تمام‌شده و نزدیک به اتمام | انبار",
+};
+
+export default async function InventoryLowStockPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; pageSize?: string }>;
+}) {
+  const ctx = await getCurrentClinicContext();
+  if (!ctx) redirect("/clinic-dashboard/login");
+
+  const canManage = hasPermission(ctx.clinicUser, "finance.inventory");
+  const canView =
+    canManage || hasPermission(ctx.clinicUser, "tools.inventory_view");
+  if (!canView) redirect("/clinic-dashboard");
+
+  const params = await searchParams;
+  const { page, pageSize, skip, take } = parsePaginationParams(params);
+
+  // محاسبه موجودی کل هر کالا و فیلتر موارد کمتر یا مساوی alertThreshold
+  const allProducts = await prisma.clinicProduct.findMany({
+    where: { clinicId: ctx.clinicId },
+    include: {
+      batches: { where: { quantity: { gt: 0 } }, select: { quantity: true } },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  const lowStockItems = allProducts
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      code: p.code,
+      unit: p.unit,
+      alertThreshold: p.alertThreshold,
+      totalStock: p.batches.reduce((s, b) => s + b.quantity, 0),
+    }))
+    .filter((p) => p.totalStock <= p.alertThreshold)
+    .sort((a, b) => a.totalStock - b.totalStock);
+
+  const totalCount = lowStockItems.length;
+  const paginatedItems = lowStockItems.slice(skip, skip + take);
+
+  return (
+    <InventoryLowStockClient
+      items={paginatedItems}
+      totalCount={totalCount}
+      page={page}
+      pageSize={pageSize}
+      canManage={canManage}
+    />
+  );
+}
+</file>
+
+<file path="app/clinic-dashboard/(dashboard)/inventory/products/loading.tsx">
+import { InventoryTablePageSkeleton } from "@/components/clinic-dashboard/inventory-skeletons";
+
+export default function Loading() {
+  return <InventoryTablePageSkeleton />;
+}
+</file>
+
+<file path="app/clinic-dashboard/(dashboard)/inventory/products/page.tsx">
+// app/clinic-dashboard/(dashboard)/inventory/products/page.tsx
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { getCurrentClinicContext } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/permissions";
+import { parsePaginationParams } from "@/lib/inventory/pagination-helper";
+import { checkClinicExportCapability } from "@/lib/export/data-export";
+import { InventoryProductsClient } from "@/components/clinic-dashboard/inventory-products-client";
+
+export const metadata = {
+  title: "تعریف کالا و مصرفی | انبار",
+};
+
+export default async function InventoryProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; pageSize?: string; q?: string }>;
+}) {
+  const ctx = await getCurrentClinicContext();
+  if (!ctx) redirect("/clinic-dashboard/login");
+
+  const canManage = hasPermission(ctx.clinicUser, "finance.inventory");
+  const canView =
+    canManage || hasPermission(ctx.clinicUser, "tools.inventory_view");
+  if (!canView) redirect("/clinic-dashboard");
+
+  const params = await searchParams;
+  const { page, pageSize, skip, take } = parsePaginationParams(params);
+  const query = params.q?.trim() || "";
+
+  const whereClause = {
+    clinicId: ctx.clinicId,
+    ...(query
+      ? {
+          OR: [
+            { name: { contains: query, mode: "insensitive" as const } },
+            { code: { contains: query, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
+  const [totalCount, products, canExport] = await Promise.all([
+    prisma.clinicProduct.count({ where: whereClause }),
+    prisma.clinicProduct.findMany({
+      where: whereClause,
+      include: {
+        batches: {
+          where: { quantity: { gt: 0 } },
+          select: { quantity: true },
+        },
+      },
+      orderBy: { name: "asc" },
+      skip,
+      take,
+    }),
+    checkClinicExportCapability(ctx.clinicId),
+  ]);
+
+  const serializedProducts = products.map((p) => ({
+    id: p.id,
+    name: p.name,
+    code: p.code,
+    unit: p.unit,
+    packageUnit: p.packageUnit,
+    unitsPerPackage: p.unitsPerPackage,
+    alertThreshold: p.alertThreshold,
+    totalStock: p.batches.reduce((sum, b) => sum + b.quantity, 0),
+  }));
+
+  return (
+    <InventoryProductsClient
+      products={serializedProducts}
+      totalCount={totalCount}
+      page={page}
+      pageSize={pageSize}
+      initialQuery={query}
+      canManage={canManage}
+      canExport={canExport}
+    />
+  );
+}
+</file>
+
+<file path="app/clinic-dashboard/(dashboard)/inventory/sales-report/loading.tsx">
+import { InventoryTablePageSkeleton } from "@/components/clinic-dashboard/inventory-skeletons";
+
+export default function Loading() {
+  return <InventoryTablePageSkeleton showStats showFilter />;
+}
+</file>
+
+<file path="app/clinic-dashboard/(dashboard)/inventory/sales-report/page.tsx">
+// app/clinic-dashboard/(dashboard)/inventory/sales-report/page.tsx
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { getCurrentClinicContext } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/permissions";
+import { parsePaginationParams } from "@/lib/inventory/pagination-helper";
+import { checkClinicExportCapability } from "@/lib/export/data-export";
+import { InventorySalesReportClient } from "@/components/clinic-dashboard/inventory-sales-report-client";
+
+export const metadata = {
+  title: "گزارش فروش و هزینه کالاها | انبار",
+};
+
+export default async function InventorySalesReportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    page?: string;
+    pageSize?: string;
+    from?: string;
+    to?: string;
+    serviceId?: string;
+    staffId?: string;
+  }>;
+}) {
+  const ctx = await getCurrentClinicContext();
+  if (!ctx) redirect("/clinic-dashboard/login");
+
+  const canView =
+    hasPermission(ctx.clinicUser, "finance.inventory") ||
+    hasPermission(ctx.clinicUser, "finance.accounting");
+  if (!canView) redirect("/clinic-dashboard");
+
+  const params = await searchParams;
+  const { page, pageSize, skip, take } = parsePaginationParams(params);
+
+  const dateFilter: { gte?: Date; lte?: Date } = {};
+  if (params.from) {
+    const d = new Date(params.from);
+    d.setHours(0, 0, 0, 0);
+    if (!isNaN(d.getTime())) dateFilter.gte = d;
+  }
+  if (params.to) {
+    const d = new Date(params.to);
+    d.setHours(23, 59, 59, 999);
+    if (!isNaN(d.getTime())) dateFilter.lte = d;
+  }
+  const hasDate = Boolean(dateFilter.gte || dateFilter.lte);
+
+  const [usages, stockOuts, services, staffs, canExport] = await Promise.all([
+    prisma.usedConsumable.findMany({
+      where: {
+        clinicProduct: { clinicId: ctx.clinicId },
+        providedService: {
+          ...(hasDate ? { createdAt: dateFilter } : {}),
+          ...(params.serviceId
+            ? { subService: { serviceId: params.serviceId } }
+            : {}),
+          ...(params.staffId ? { therapistId: params.staffId } : {}),
+        },
+      },
+      include: {
+        clinicProduct: { select: { name: true, unit: true } },
+        providedService: {
+          select: {
+            createdAt: true,
+            therapistNameSnapshot: true,
+            subService: {
+              select: { title: true, service: { select: { title: true } } },
+            },
+          },
+        },
+      },
+      orderBy: { providedService: { createdAt: "desc" } },
+    }),
+    // خروج دستی زمانی که فیلتر خدمت خاص انتخاب نشده باشد
+    params.serviceId
+      ? Promise.resolve([])
+      : prisma.inventoryStockOut.findMany({
+          where: {
+            clinicId: ctx.clinicId,
+            ...(hasDate ? { createdAt: dateFilter } : {}),
+            ...(params.staffId ? { createdById: params.staffId } : {}),
+          },
+          include: {
+            clinicProduct: { select: { name: true, unit: true } },
+            createdBy: { select: { user: { select: { fullName: true } } } },
+          },
+          orderBy: { createdAt: "desc" },
+        }),
+    prisma.service.findMany({
+      where: { clinicId: ctx.clinicId },
+      select: { id: true, title: true },
+      orderBy: { title: "asc" },
+    }),
+    prisma.clinicUser.findMany({
+      where: { clinicId: ctx.clinicId, isActive: true, deletedAt: null },
+      select: { id: true, user: { select: { fullName: true } } },
+    }),
+    checkClinicExportCapability(ctx.clinicId),
+  ]);
+
+  // ترکیب اقلام کسرشده با خدمات و اقلام خروجی دستی
+  const combinedItems = [
+    ...usages.map((u) => {
+      const isSale = Boolean(u.sellingPrice && u.sellingPrice > 0);
+      const totalCost = u.unitCost * u.quantity;
+      const totalRevenue = isSale ? (u.sellingPrice || 0) * u.quantity : 0;
+      return {
+        id: `usage-${u.id}`,
+        source: "SERVICE" as const,
+        sourceLabel: `${u.providedService.subService.service.title} - ${u.providedService.subService.title}`,
+        productName: u.clinicProduct.name,
+        unit: u.clinicProduct.unit,
+        quantity: u.quantity,
+        isSale,
+        totalCost,
+        totalRevenue,
+        netProfit: isSale ? totalRevenue - totalCost : 0,
+        staffName: u.providedService.therapistNameSnapshot || "—",
+        createdAt: u.providedService.createdAt.toISOString(),
+      };
+    }),
+    ...stockOuts.map((o) => {
+      const isSale = Boolean(o.sellingPrice && o.sellingPrice > 0);
+      const totalCost = o.unitCost * o.quantity;
+      const totalRevenue = isSale ? (o.sellingPrice || 0) * o.quantity : 0;
+      return {
+        id: `out-${o.id}`,
+        source: "MANUAL" as const,
+        sourceLabel: o.reason || "خروج دستی",
+        productName: o.clinicProduct.name,
+        unit: o.clinicProduct.unit,
+        quantity: o.quantity,
+        isSale,
+        totalCost,
+        totalRevenue,
+        netProfit: isSale ? totalRevenue - totalCost : 0,
+        staffName: o.createdBy?.user.fullName || "—",
+        createdAt: o.createdAt.toISOString(),
+      };
+    }),
+  ].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  // محاسبه آمار کل برای کارت‌های بالای صفحه:
+  // ۱. کالاهایی که قیمت فروش نداشتند -> هزینه کالاهای مصرفی
+  // ۲. کالاهایی که قیمت فروش داشتند -> درآمد و سود فروش کالا
+  const totalConsumableExpense = combinedItems
+    .filter((i) => !i.isSale)
+    .reduce((sum, i) => sum + i.totalCost, 0);
+
+  const totalSalesProfit = combinedItems
+    .filter((i) => i.isSale)
+    .reduce((sum, i) => sum + i.netProfit, 0);
+
+  const totalSalesRevenue = combinedItems
+    .filter((i) => i.isSale)
+    .reduce((sum, i) => sum + i.totalRevenue, 0);
+
+  const totalCount = combinedItems.length;
+  const paginatedRows = combinedItems.slice(skip, skip + take);
+
+  return (
+    <InventorySalesReportClient
+      rows={paginatedRows}
+      totalCount={totalCount}
+      page={page}
+      pageSize={pageSize}
+      summary={{
+        totalConsumableExpense,
+        totalSalesProfit,
+        totalSalesRevenue,
+      }}
+      services={services}
+      staffs={staffs.map((s) => ({
+        id: s.id,
+        fullName: s.user.fullName || "بدون نام",
+      }))}
+      filters={{
+        from: params.from,
+        to: params.to,
+        serviceId: params.serviceId,
+        staffId: params.staffId,
+      }}
+      canExport={canExport}
+    />
+  );
+}
+</file>
+
+<file path="app/clinic-dashboard/(dashboard)/inventory/service-usage/loading.tsx">
+import { InventoryTablePageSkeleton } from "@/components/clinic-dashboard/inventory-skeletons";
+
+export default function Loading() {
+  return <InventoryTablePageSkeleton />;
+}
+</file>
+
+<file path="app/clinic-dashboard/(dashboard)/inventory/service-usage/page.tsx">
+// app/clinic-dashboard/(dashboard)/inventory/service-usage/page.tsx
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { getCurrentClinicContext } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/permissions";
+import { parsePaginationParams } from "@/lib/inventory/pagination-helper";
+import { formatJalaliNumeric } from "@/lib/jalali";
+import { Stethoscope } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+export const metadata = {
+  title: "کالاهای کسر شده با خدمات | انبار",
+};
+
+export default async function InventoryServiceUsagePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; pageSize?: string }>;
+}) {
+  const ctx = await getCurrentClinicContext();
+  if (!ctx) redirect("/clinic-dashboard/login");
+
+  const canView =
+    hasPermission(ctx.clinicUser, "finance.inventory") ||
+    hasPermission(ctx.clinicUser, "tools.inventory_view");
+  if (!canView) redirect("/clinic-dashboard");
+
+  const params = await searchParams;
+  const { skip, take } = parsePaginationParams(params);
+
+  const usages = await prisma.usedConsumable.findMany({
+    where: { clinicProduct: { clinicId: ctx.clinicId } },
+    include: {
+      clinicProduct: { select: { name: true, unit: true } },
+      providedService: {
+        select: {
+          createdAt: true,
+          therapistNameSnapshot: true,
+          subService: {
+            select: { title: true, service: { select: { title: true } } },
+          },
+          client: { select: { user: { select: { fullName: true, phone: true } } } },
+        },
+      },
+    },
+    orderBy: { providedService: { createdAt: "desc" } },
+    skip,
+    take,
+  });
+
+  return (
+    <div className="space-y-5" dir="rtl">
+      <div>
+        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+          کالاهای کسر شده با خدمات
+        </h1>
+        <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+          لیست دقیق اقلام مصرفی که هنگام ثبت خدمات در پرونده مراجعین از انبار کسر شده‌اند
+        </p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Stethoscope className="size-4 text-primary" />
+            گزارش مصرف در خدمات
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-hidden rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40">
+                  <TableHead className="text-right">تاریخ</TableHead>
+                  <TableHead className="text-right">کالای مصرفی</TableHead>
+                  <TableHead className="text-right">مقدار</TableHead>
+                  <TableHead className="text-right">خدمت انجام‌شده</TableHead>
+                  <TableHead className="text-right">مراجع</TableHead>
+                  <TableHead className="text-right">درمانگر</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {usages.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className="py-10 text-center text-sm text-muted-foreground"
+                    >
+                      هنوز مصرفی‌ای در پرونده خدمات ثبت نشده است.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  usages.map((u) => (
+                    <TableRow key={u.id}>
+                      <TableCell className="text-xs">
+                        {formatJalaliNumeric(
+                          new Date(u.providedService.createdAt)
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {u.clinicProduct.name}
+                      </TableCell>
+                      <TableCell className="tabular-nums font-semibold">
+                        {u.quantity.toLocaleString("fa-IR")}{" "}
+                        <span className="text-xs font-normal text-muted-foreground">
+                          {u.clinicProduct.unit}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {u.providedService.subService.service.title} -{" "}
+                        {u.providedService.subService.title}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {u.providedService.client.user.fullName ||
+                          u.providedService.client.user.phone}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {u.providedService.therapistNameSnapshot || "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+</file>
+
+<file path="app/clinic-dashboard/(dashboard)/inventory/stock-in/loading.tsx">
+import { InventoryTablePageSkeleton } from "@/components/clinic-dashboard/inventory-skeletons";
+
+export default function Loading() {
+  return <InventoryTablePageSkeleton showFilter />;
+}
+</file>
+
+<file path="app/clinic-dashboard/(dashboard)/inventory/stock-out/loading.tsx">
+import { InventoryTablePageSkeleton } from "@/components/clinic-dashboard/inventory-skeletons";
+
+export default function Loading() {
+  return <InventoryTablePageSkeleton />;
+}
+</file>
+
+<file path="app/clinic-dashboard/(dashboard)/inventory/stock-out/page.tsx">
+// app/clinic-dashboard/(dashboard)/inventory/stock-out/page.tsx
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { getCurrentClinicContext } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/permissions";
+import { parsePaginationParams } from "@/lib/inventory/pagination-helper";
+import { InventoryStockOutClient } from "@/components/clinic-dashboard/inventory-stock-out-client";
+
+export const metadata = {
+  title: "خروج کالا از انبار | انبار",
+};
+
+export default async function InventoryStockOutPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; pageSize?: string }>;
+}) {
+  const ctx = await getCurrentClinicContext();
+  if (!ctx) redirect("/clinic-dashboard/login");
+
+  if (!hasPermission(ctx.clinicUser, "finance.inventory")) {
+    redirect("/clinic-dashboard");
+  }
+
+  const params = await searchParams;
+  const { page, pageSize, skip, take } = parsePaginationParams(params);
+
+  const [totalCount, stockOuts, products] = await Promise.all([
+    prisma.inventoryStockOut.count({ where: { clinicId: ctx.clinicId } }),
+    prisma.inventoryStockOut.findMany({
+      where: { clinicId: ctx.clinicId },
+      include: {
+        clinicProduct: { select: { name: true, unit: true } },
+        createdBy: { select: { user: { select: { fullName: true } } } },
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+    }),
+    prisma.clinicProduct.findMany({
+      where: { clinicId: ctx.clinicId },
+      include: {
+        batches: { where: { quantity: { gt: 0 } }, select: { quantity: true } },
+      },
+      orderBy: { name: "asc" },
+    }),
+  ]);
+
+  return (
+    <InventoryStockOutClient
+      stockOuts={stockOuts.map((item) => ({
+        ...item,
+        createdAt: item.createdAt.toISOString(),
+      }))}
+      totalCount={totalCount}
+      page={page}
+      pageSize={pageSize}
+      products={products.map((p) => ({
+        id: p.id,
+        name: p.name,
+        unit: p.unit,
+        totalStock: p.batches.reduce((s, b) => s + b.quantity, 0),
+      }))}
+    />
+  );
+}
+</file>
+
+<file path="app/clinic-dashboard/(dashboard)/inventory/suppliers/loading.tsx">
+import { InventoryTablePageSkeleton } from "@/components/clinic-dashboard/inventory-skeletons";
+
+export default function Loading() {
+  return <InventoryTablePageSkeleton />;
+}
+</file>
+
+<file path="app/clinic-dashboard/(dashboard)/inventory/suppliers/page.tsx">
+// app/clinic-dashboard/(dashboard)/inventory/suppliers/page.tsx
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { getCurrentClinicContext } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/permissions";
+import { parsePaginationParams } from "@/lib/inventory/pagination-helper";
+import { formatJalaliNumeric } from "@/lib/jalali";
+import { Truck } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+export const metadata = {
+  title: "کالاهای وارد شده با تامین‌کننده‌ها | انبار",
+};
+
+export default async function InventorySuppliersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; pageSize?: string }>;
+}) {
+  const ctx = await getCurrentClinicContext();
+  if (!ctx) redirect("/clinic-dashboard/login");
+
+  if (!hasPermission(ctx.clinicUser, "finance.inventory")) {
+    redirect("/clinic-dashboard");
+  }
+
+  const params = await searchParams;
+  const { skip, take } = parsePaginationParams(params);
+
+  const orders = await prisma.b2BOrder.findMany({
+    where: { clinicId: ctx.clinicId },
+    include: {
+      items: {
+        include: {
+          platformProduct: { select: { name: true, unit: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    skip,
+    take,
+  });
+
+  return (
+    <div className="space-y-5" dir="rtl">
+      <div>
+        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+          کالاهای وارد شده با تامین‌کننده‌ها
+        </h1>
+        <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+          سوابق سفارشات و خریدهای عمده ثبت‌شده از تامین‌کنندگان پلتفرم
+        </p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Truck className="size-4 text-primary" />
+            لیست سفارشات تامین کالا
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-hidden rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40">
+                  <TableHead className="text-right">تاریخ سفارش</TableHead>
+                  <TableHead className="text-right">اقلام سفارش</TableHead>
+                  <TableHead className="text-right">مبلغ کل (تومان)</TableHead>
+                  <TableHead className="text-right">وضعیت</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {orders.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={4}
+                      className="py-10 text-center text-sm text-muted-foreground"
+                    >
+                      هنوز سفارشی از تامین‌کنندگان ثبت نشده است.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  orders.map((order) => (
+                    <TableRow key={order.id}>
+                      <TableCell className="text-xs">
+                        {formatJalaliNumeric(new Date(order.createdAt))}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {order.items
+                          .map(
+                            (it) =>
+                              `${it.platformProduct.name} (${it.quantity} ${it.platformProduct.unit})`
+                          )
+                          .join("، ")}
+                      </TableCell>
+                      <TableCell className="tabular-nums font-semibold">
+                        {order.totalAmount.toLocaleString("fa-IR")}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{order.status}</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+</file>
+
+<file path="app/clinic-dashboard/(dashboard)/inventory/page.tsx">
+// app/clinic-dashboard/(dashboard)/inventory/page.tsx
+import { redirect } from "next/navigation";
+
+export default function InventoryIndexPage() {
+  redirect("/clinic-dashboard/inventory/products");
+}
+</file>
+
+<file path="app/clinic-dashboard/(dashboard)/inventory/stock-in/page.tsx">
+// app/clinic-dashboard/(dashboard)/inventory/stock-in/page.tsx
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { getCurrentClinicContext } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/permissions";
+import { parsePaginationParams } from "@/lib/inventory/pagination-helper";
+import { checkClinicExportCapability } from "@/lib/export/data-export";
+import { InventoryStockInClient } from "@/components/clinic-dashboard/inventory-stock-in-client";
+
+export const metadata = {
+  title: "ورود کالا به انبار | انبار",
+};
+
+export default async function InventoryStockInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    page?: string;
+    pageSize?: string;
+    from?: string;
+    to?: string;
+    serviceId?: string;
+    staffId?: string;
+  }>;
+}) {
+  const ctx = await getCurrentClinicContext();
+  if (!ctx) redirect("/clinic-dashboard/login");
+
+  if (!hasPermission(ctx.clinicUser, "finance.inventory")) {
+    redirect("/clinic-dashboard");
+  }
+
+  const params = await searchParams;
+  const { page, pageSize, skip, take } = parsePaginationParams(params);
+
+  const dateFilter: { gte?: Date; lte?: Date } = {};
+  if (params.from) {
+    const d = new Date(params.from);
+    d.setHours(0, 0, 0, 0);
+    if (!isNaN(d.getTime())) dateFilter.gte = d;
+  }
+  if (params.to) {
+    const d = new Date(params.to);
+    d.setHours(23, 59, 59, 999);
+    if (!isNaN(d.getTime())) dateFilter.lte = d;
+  }
+
+  const whereClause = {
+    clinicProduct: { clinicId: ctx.clinicId },
+    ...(dateFilter.gte || dateFilter.lte ? { createdAt: dateFilter } : {}),
+    ...(params.serviceId
+      ? { exclusiveSubService: { serviceId: params.serviceId } }
+      : {}),
+    ...(params.staffId ? { exclusiveTherapistId: params.staffId } : {}),
+  };
+
+  const [totalCount, batches, products, services, subServices, staffs, canExport] =
+    await Promise.all([
+      prisma.productBatch.count({ where: whereClause }),
+      prisma.productBatch.findMany({
+        where: whereClause,
+        include: {
+          clinicProduct: {
+            select: {
+              id: true,
+              name: true,
+              unit: true,
+              packageUnit: true,
+              unitsPerPackage: true,
+              _count: {
+                select: { usedInServices: true },
+              },
+            },
+          },
+          exclusiveSubService: {
+            select: { id: true, title: true, service: { select: { title: true } } },
+          },
+          exclusiveTherapist: {
+            select: { id: true, user: { select: { fullName: true } } },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take,
+      }),
+      prisma.clinicProduct.findMany({
+        where: { clinicId: ctx.clinicId },
+        select: {
+          id: true,
+          name: true,
+          unit: true,
+          packageUnit: true,
+          unitsPerPackage: true,
+        },
+        orderBy: { name: "asc" },
+      }),
+      prisma.service.findMany({
+        where: { clinicId: ctx.clinicId },
+        select: { id: true, title: true },
+        orderBy: { title: "asc" },
+      }),
+      prisma.subService.findMany({
+        where: { service: { clinicId: ctx.clinicId } },
+        select: { id: true, title: true, service: { select: { title: true } } },
+        orderBy: { title: "asc" },
+      }),
+      prisma.clinicUser.findMany({
+        where: { clinicId: ctx.clinicId, isActive: true, deletedAt: null },
+        select: {
+          id: true,
+          canBeTherapist: true,
+          user: { select: { fullName: true } },
+        },
+      }),
+      checkClinicExportCapability(ctx.clinicId),
+    ]);
+
+  return (
+    <InventoryStockInClient
+      batches={batches.map((b) => ({
+        ...b,
+        expirationDate: b.expirationDate ? b.expirationDate.toISOString() : null,
+        createdAt: b.createdAt.toISOString(),
+      }))}
+      totalCount={totalCount}
+      page={page}
+      pageSize={pageSize}
+      products={products}
+      services={services}
+      subServices={subServices}
+      staffs={staffs.map((s) => ({
+        id: s.id,
+        fullName: s.user.fullName || "بدون نام",
+        canBeTherapist: s.canBeTherapist,
+      }))}
+      filters={{
+        from: params.from,
+        to: params.to,
+        serviceId: params.serviceId,
+        staffId: params.staffId,
+      }}
+      canExport={canExport}
+    />
+  );
+}
+</file>
+
+<file path="app/clinic-dashboard/(dashboard)/inventory/actions.ts">
+// app/clinic-dashboard/(dashboard)/inventory/actions.ts
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
+import { getCurrentClinicContext } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/permissions";
+
+async function requireInventoryWriteContext() {
+  const ctx = await getCurrentClinicContext();
+  if (!ctx) {
+    throw new Error("نشست کاربری معتبر نیست.");
+  }
+  if (!hasPermission(ctx.clinicUser, "finance.inventory")) {
+    throw new Error("شما مجوز مدیریت و ثبت تغییرات انبار را ندارید.");
+  }
+  return ctx;
+}
+
+/**
+ * ۱. ایجاد یا ویرایش کالای کلینیک (با پشتیبانی از واحد بسته‌بندی و جزء مصرفی)
+ */
+export async function upsertClinicProductAction(input: {
+  id?: string;
+  name: string;
+  code?: string;
+  unit: string;
+  packageUnit?: string;
+  unitsPerPackage?: number;
+  alertThreshold: number;
+}) {
+  try {
+    const ctx = await requireInventoryWriteContext();
+
+    const cleanName = input.name.trim();
+    const cleanUnit = input.unit.trim();
+    if (!cleanName || !cleanUnit) {
+      return {
+        success: false,
+        error: "نام کالا و واحد مصرف (جزء) الزامی است.",
+      };
+    }
+
+    const cleanPackageUnit = input.packageUnit?.trim() || null;
+    const unitsPerPkg =
+      cleanPackageUnit && input.unitsPerPackage && input.unitsPerPackage > 1
+        ? Number(input.unitsPerPackage)
+        : 1;
+
+    const threshold = Math.max(0, Number(input.alertThreshold) || 0);
+
+    if (input.id) {
+      const existing = await prisma.clinicProduct.findFirst({
+        where: { id: input.id, clinicId: ctx.clinicId },
+      });
+      if (!existing) {
+        return { success: false, error: "کالای مورد نظر یافت نشد." };
+      }
+
+      await prisma.clinicProduct.update({
+        where: { id: existing.id },
+        data: {
+          name: cleanName,
+          code: input.code?.trim() || null,
+          unit: cleanUnit,
+          packageUnit: cleanPackageUnit,
+          unitsPerPackage: unitsPerPkg,
+          alertThreshold: threshold,
+        },
+      });
+    } else {
+      await prisma.clinicProduct.create({
+        data: {
+          clinicId: ctx.clinicId,
+          name: cleanName,
+          code: input.code?.trim() || null,
+          unit: cleanUnit,
+          packageUnit: cleanPackageUnit,
+          unitsPerPackage: unitsPerPkg,
+          alertThreshold: threshold,
+        },
+      });
+    }
+
+    revalidatePath("/clinic-dashboard/inventory", "layout");
+    revalidatePath("/clinic-dashboard/services");
+    return { success: true };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error?.message || "خطا در ذخیره اطلاعات کالا",
+    };
+  }
+}
+
+/**
+ * ۲. حذف کالای کلینیک
+ */
+export async function deleteClinicProductAction(productId: string) {
+  try {
+    const ctx = await requireInventoryWriteContext();
+
+    const product = await prisma.clinicProduct.findFirst({
+      where: { id: productId, clinicId: ctx.clinicId },
+      include: {
+        _count: { select: { usedInServices: true, stockOuts: true } },
+      },
+    });
+
+    if (!product) {
+      return { success: false, error: "کالا یافت نشد." };
+    }
+
+    if (product._count.usedInServices > 0 || product._count.stockOuts > 0) {
+      return {
+        success: false,
+        error: "این کالا دارای سابقه مصرف یا خروج از انبار است و قابل حذف نیست.",
+      };
+    }
+
+    await prisma.clinicProduct.delete({
+      where: { id: product.id },
+    });
+
+    revalidatePath("/clinic-dashboard/inventory", "layout");
+    revalidatePath("/clinic-dashboard/services");
+    return { success: true };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error?.message || "خطا در حذف کالا",
+    };
+  }
+}
+
+/**
+ * ۳. ورود کالا به انبار (با تبدیل خودکار بسته/رول به واحد مصرف)
+ */
+export async function stockInBatchAction(input: {
+  clinicProductId: string;
+  entryMode: "UNIT" | "PACKAGE";
+  quantity: number;
+  purchasePrice: number;
+  sellingPrice?: number | null;
+  expirationDate?: string | null;
+  exclusiveSubServiceId?: string | null;
+  exclusiveTherapistId?: string | null;
+}) {
+  try {
+    const ctx = await requireInventoryWriteContext();
+
+    const rawQty = Number(input.quantity);
+    const rawPurchasePrice = Number(input.purchasePrice);
+    const rawSellingPrice =
+      input.sellingPrice && input.sellingPrice > 0
+        ? Number(input.sellingPrice)
+        : null;
+
+    if (!input.clinicProductId || rawQty <= 0) {
+      return { success: false, error: "کالا و تعداد ورودی معتبر را وارد کنید." };
+    }
+    if (rawPurchasePrice < 0) {
+      return { success: false, error: "قیمت خرید نمی‌تواند منفی باشد." };
+    }
+
+    const product = await prisma.clinicProduct.findFirst({
+      where: { id: input.clinicProductId, clinicId: ctx.clinicId },
+    });
+    if (!product) {
+      return { success: false, error: "کالای انتخاب‌شده معتبر نیست." };
+    }
+
+    const multiplier =
+      input.entryMode === "PACKAGE" && product.unitsPerPackage > 1
+        ? product.unitsPerPackage
+        : 1;
+
+    const finalUnitQuantity = rawQty * multiplier;
+    const unitPurchasePrice = Math.round(rawPurchasePrice / multiplier);
+    const unitSellingPrice = rawSellingPrice
+      ? Math.round(rawSellingPrice / multiplier)
+      : null;
+
+    await prisma.productBatch.create({
+      data: {
+        clinicProductId: product.id,
+        quantity: finalUnitQuantity,
+        initialQuantity: finalUnitQuantity,
+        purchasePrice: unitPurchasePrice,
+        sellingPrice: unitSellingPrice,
+        expirationDate: input.expirationDate
+          ? new Date(input.expirationDate)
+          : null,
+        exclusiveSubServiceId: input.exclusiveSubServiceId || null,
+        exclusiveTherapistId: input.exclusiveTherapistId || null,
+      },
+    });
+
+    revalidatePath("/clinic-dashboard/inventory", "layout");
+    return { success: true };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error?.message || "خطا در ثبت ورود کالا به انبار",
+    };
+  }
+}
+
+/**
+ * ۴. خروج دستی کالا از انبار (ثبت در InventoryStockOut + کسر FIFO از بچ‌ها)
+ */
+export async function stockOutProductAction(input: {
+  clinicProductId: string;
+  quantity: number;
+  sellingPrice?: number | null;
+  reason?: string;
+}) {
+  try {
+    const ctx = await requireInventoryWriteContext();
+
+    const deductQty = Number(input.quantity);
+    if (!input.clinicProductId || deductQty <= 0) {
+      return { success: false, error: "مقدار خروج باید بیشتر از صفر باشد." };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const batches = await tx.productBatch.findMany({
+        where: {
+          clinicProductId: input.clinicProductId,
+          clinicProduct: { clinicId: ctx.clinicId },
+          quantity: { gt: 0 },
+        },
+        orderBy: [
+          { expirationDate: { sort: "asc", nulls: "last" } },
+          { createdAt: "asc" },
+        ],
+      });
+
+      const totalAvailable = batches.reduce((sum, b) => sum + b.quantity, 0);
+      if (totalAvailable < deductQty) {
+        throw new Error(
+          `موجودی قابل برداشت کافی نیست (موجودی فعلی: ${totalAvailable.toLocaleString("fa-IR")}).`
+        );
+      }
+
+      let remaining = deductQty;
+      let totalCostAccumulated = 0;
+
+      for (const batch of batches) {
+        if (remaining <= 0) break;
+        const take = Math.min(batch.quantity, remaining);
+        totalCostAccumulated += take * batch.purchasePrice;
+
+        await tx.productBatch.update({
+          where: { id: batch.id },
+          data: { quantity: batch.quantity - take },
+        });
+        remaining -= take;
+      }
+
+      const avgUnitCost = Math.round(totalCostAccumulated / deductQty);
+
+      await tx.inventoryStockOut.create({
+        data: {
+          clinicId: ctx.clinicId,
+          clinicProductId: input.clinicProductId,
+          createdById: ctx.clinicUserId,
+          quantity: deductQty,
+          unitCost: avgUnitCost,
+          sellingPrice:
+            input.sellingPrice && input.sellingPrice > 0
+              ? Number(input.sellingPrice)
+              : null,
+          reason: input.reason?.trim() || "خروج دستی از انبار",
+        },
+      });
+    });
+
+    revalidatePath("/clinic-dashboard/inventory", "layout");
+    return { success: true };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error?.message || "خطا در ثبت خروج کالا",
+    };
+  }
+}
+
+/**
+ * ۵. حذف رکورد ورود کالا (ProductBatch) با بررسی مصرفی‌های ثبت‌شده
+ */
+export async function deleteProductBatchAction(
+  batchId: string,
+  force: boolean = false
+) {
+  try {
+    const ctx = await requireInventoryWriteContext();
+
+    const batch = await prisma.productBatch.findFirst({
+      where: {
+        id: batchId,
+        clinicProduct: { clinicId: ctx.clinicId },
+      },
+      include: {
+        clinicProduct: {
+          include: {
+            _count: {
+              select: { usedInServices: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!batch) {
+      return { success: false, error: "رکورد ورود کالا یافت نشد." };
+    }
+
+    const initialQty =
+      batch.initialQuantity > 0 ? batch.initialQuantity : batch.quantity;
+    const consumedFromBatch = Math.max(0, initialQty - batch.quantity);
+    const hasServiceUsage =
+      consumedFromBatch > 0 || batch.clinicProduct._count.usedInServices > 0;
+
+    // اگر این بچ بخشی‌اش مصرف شده یا کالا در خدمات مصرفی دارد و کاربر هنوز تایید نهایی نداده است:
+    if (hasServiceUsage && !force) {
+      return {
+        success: false,
+        requiresConfirmation: true,
+        consumedFromBatch,
+        unit: batch.clinicProduct.unit,
+        productName: batch.clinicProduct.name,
+      };
+    }
+
+    await prisma.productBatch.delete({
+      where: { id: batch.id },
+    });
+
+    revalidatePath("/clinic-dashboard/inventory", "layout");
+    revalidatePath("/clinic-dashboard/services");
+    return { success: true };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error?.message || "خطا در حذف رکورد ورود کالا",
+    };
+  }
+}
+
+/**
+ * ۶. ویرایش رکورد ورود کالا (ProductBatch) با حفظ مقدار مصرف‌شده قبلی
+ */
+export async function updateProductBatchAction(input: {
+  batchId: string;
+  entryMode: "UNIT" | "PACKAGE";
+  quantity: number;
+  purchasePrice: number;
+  sellingPrice?: number | null;
+  expirationDate?: string | null;
+  exclusiveSubServiceId?: string | null;
+  exclusiveTherapistId?: string | null;
+}) {
+  try {
+    const ctx = await requireInventoryWriteContext();
+
+    const rawQty = Number(input.quantity);
+    const rawPurchasePrice = Number(input.purchasePrice);
+    const rawSellingPrice =
+      input.sellingPrice && input.sellingPrice > 0
+        ? Number(input.sellingPrice)
+        : null;
+
+    if (!input.batchId || rawQty <= 0) {
+      return { success: false, error: "تعداد معتبر وارد کنید." };
+    }
+    if (rawPurchasePrice < 0) {
+      return { success: false, error: "قیمت خرید نمی‌تواند منفی باشد." };
+    }
+
+    const existingBatch = await prisma.productBatch.findFirst({
+      where: {
+        id: input.batchId,
+        clinicProduct: { clinicId: ctx.clinicId },
+      },
+      include: {
+        clinicProduct: true,
+      },
+    });
+
+    if (!existingBatch) {
+      return { success: false, error: "رکورد ورود کالا یافت نشد." };
+    }
+
+    const product = existingBatch.clinicProduct;
+    const multiplier =
+      input.entryMode === "PACKAGE" && product.unitsPerPackage > 1
+        ? product.unitsPerPackage
+        : 1;
+
+    const newInitialUnitQty = rawQty * multiplier;
+    const prevInitialQty =
+      existingBatch.initialQuantity > 0
+        ? existingBatch.initialQuantity
+        : existingBatch.quantity;
+    const alreadyConsumed = Math.max(0, prevInitialQty - existingBatch.quantity);
+
+    if (newInitialUnitQty < alreadyConsumed) {
+      return {
+        success: false,
+        error: `از این بچ تاکنون ${alreadyConsumed.toLocaleString("fa-IR")} ${product.unit} مصرف شده است؛ تعداد کل نمی‌تواند کمتر از مقدار مصرف‌شده باشد.`,
+      };
+    }
+
+    const nextRemainingQty = newInitialUnitQty - alreadyConsumed;
+    const unitPurchasePrice = Math.round(rawPurchasePrice / multiplier);
+    const unitSellingPrice = rawSellingPrice
+      ? Math.round(rawSellingPrice / multiplier)
+      : null;
+
+    await prisma.productBatch.update({
+      where: { id: existingBatch.id },
+      data: {
+        initialQuantity: newInitialUnitQty,
+        quantity: nextRemainingQty,
+        purchasePrice: unitPurchasePrice,
+        sellingPrice: unitSellingPrice,
+        expirationDate: input.expirationDate
+          ? new Date(input.expirationDate)
+          : null,
+        exclusiveSubServiceId: input.exclusiveSubServiceId || null,
+        exclusiveTherapistId: input.exclusiveTherapistId || null,
+      },
+    });
+
+    revalidatePath("/clinic-dashboard/inventory", "layout");
+    return { success: true };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error?.message || "خطا در ویرایش رکورد ورود کالا",
+    };
+  }
+}
+
+/**
+ * ۷. ویرایش رکورد خروج دستی کالا از انبار (تنظیم هوشمند موجودی بچ‌ها)
+ */
+export async function updateStockOutAction(input: {
+  stockOutId: string;
+  quantity: number;
+  sellingPrice?: number | null;
+  reason?: string;
+}) {
+  try {
+    const ctx = await requireInventoryWriteContext();
+
+    const nextQty = Number(input.quantity);
+    if (!input.stockOutId || nextQty <= 0) {
+      return { success: false, error: "مقدار خروجی باید بیشتر از صفر باشد." };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.inventoryStockOut.findFirst({
+        where: { id: input.stockOutId, clinicId: ctx.clinicId },
+        include: { clinicProduct: true },
+      });
+
+      if (!existing) {
+        throw new Error("رکورد خروج کالا یافت نشد.");
+      }
+
+      const diff = nextQty - existing.quantity;
+      let updatedUnitCost = existing.unitCost;
+
+      if (diff > 0) {
+        // نیاز به کسر مقدار بیشتر از بچ‌های موجود
+        const batches = await tx.productBatch.findMany({
+          where: {
+            clinicProductId: existing.clinicProductId,
+            quantity: { gt: 0 },
+          },
+          orderBy: [
+            { expirationDate: { sort: "asc", nulls: "last" } },
+            { createdAt: "asc" },
+          ],
+        });
+
+        const available = batches.reduce((s, b) => s + b.quantity, 0);
+        if (available < diff) {
+          throw new Error(
+            `موجودی انبار برای افزایش مقدار خروج کافی نیست (موجودی قابل برداشت: ${available.toLocaleString("fa-IR")} ${existing.clinicProduct.unit}).`
+          );
+        }
+
+        let remaining = diff;
+        let extraCost = 0;
+
+        for (const b of batches) {
+          if (remaining <= 0) break;
+          const take = Math.min(b.quantity, remaining);
+          extraCost += take * b.purchasePrice;
+          await tx.productBatch.update({
+            where: { id: b.id },
+            data: { quantity: b.quantity - take },
+          });
+          remaining -= take;
+        }
+
+        const prevTotalCost = existing.quantity * existing.unitCost;
+        updatedUnitCost = Math.round((prevTotalCost + extraCost) / nextQty);
+      } else if (diff < 0) {
+        // بازگرداندن مقدار اضافه‌کسرشده به بچ‌های کالا
+        let toRestore = Math.abs(diff);
+        const batches = await tx.productBatch.findMany({
+          where: { clinicProductId: existing.clinicProductId },
+          orderBy: { createdAt: "desc" },
+        });
+
+        if (batches.length > 0) {
+          for (const b of batches) {
+            if (toRestore <= 0) break;
+            const maxCap =
+              b.initialQuantity > 0 ? b.initialQuantity : b.quantity + toRestore;
+            const room = Math.max(0, maxCap - b.quantity);
+            if (room > 0) {
+              const putBack = Math.min(room, toRestore);
+              await tx.productBatch.update({
+                where: { id: b.id },
+                data: { quantity: b.quantity + putBack },
+              });
+              toRestore -= putBack;
+            }
+          }
+          // اگر همچنان مقداری باقی ماند، به آخرین بچ اضافه شود
+          if (toRestore > 0) {
+            await tx.productBatch.update({
+              where: { id: batches[0].id },
+              data: { quantity: batches[0].quantity + toRestore },
+            });
+          }
+        }
+      }
+
+      await tx.inventoryStockOut.update({
+        where: { id: existing.id },
+        data: {
+          quantity: nextQty,
+          unitCost: updatedUnitCost,
+          sellingPrice:
+            input.sellingPrice && input.sellingPrice > 0
+              ? Number(input.sellingPrice)
+              : null,
+          reason: input.reason?.trim() || "خروج دستی از انبار",
+        },
+      });
+    });
+
+    revalidatePath("/clinic-dashboard/inventory", "layout");
+    return { success: true };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error?.message || "خطا در ویرایش رکورد خروج کالا",
+    };
+  }
+}
+
+/**
+ * ۸. حذف رکورد خروج دستی کالا و بازگرداندن موجودی آن به انبار
+ */
+export async function deleteStockOutAction(stockOutId: string) {
+  try {
+    const ctx = await requireInventoryWriteContext();
+
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.inventoryStockOut.findFirst({
+        where: { id: stockOutId, clinicId: ctx.clinicId },
+      });
+
+      if (!existing) {
+        throw new Error("رکورد خروج کالا یافت نشد.");
+      }
+
+      let toRestore = existing.quantity;
+      const batches = await tx.productBatch.findMany({
+        where: { clinicProductId: existing.clinicProductId },
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (batches.length > 0) {
+        for (const b of batches) {
+          if (toRestore <= 0) break;
+          const maxCap =
+            b.initialQuantity > 0 ? b.initialQuantity : b.quantity + toRestore;
+          const room = Math.max(0, maxCap - b.quantity);
+          if (room > 0) {
+            const putBack = Math.min(room, toRestore);
+            await tx.productBatch.update({
+              where: { id: b.id },
+              data: { quantity: b.quantity + putBack },
+            });
+            toRestore -= putBack;
+          }
+        }
+
+        if (toRestore > 0) {
+          await tx.productBatch.update({
+            where: { id: batches[0].id },
+            data: { quantity: batches[0].quantity + toRestore },
+          });
+        }
+      }
+
+      await tx.inventoryStockOut.delete({
+        where: { id: existing.id },
+      });
+    });
+
+    revalidatePath("/clinic-dashboard/inventory", "layout");
+    return { success: true };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error?.message || "خطا در حذف رکورد خروج کالا",
+    };
+  }
+}
+</file>
+
+</files>

@@ -54,66 +54,90 @@ export default async function InventoryStockInPage({
     ...(params.staffId ? { exclusiveTherapistId: params.staffId } : {}),
   };
 
-  const [totalCount, batches, products, services, subServices, staffs, canExport] =
-    await Promise.all([
-      prisma.productBatch.count({ where: whereClause }),
-      prisma.productBatch.findMany({
-        where: whereClause,
-        include: {
-          clinicProduct: {
-            select: {
-              id: true,
-              name: true,
-              unit: true,
-              packageUnit: true,
-              unitsPerPackage: true,
-              _count: {
-                select: { usedInServices: true },
-              },
+  const [
+    totalCount,
+    batches,
+    products,
+    unsettledGrouped,
+    services,
+    subServices,
+    staffs,
+    canExport,
+  ] = await Promise.all([
+    prisma.productBatch.count({ where: whereClause }),
+    prisma.productBatch.findMany({
+      where: whereClause,
+      include: {
+        clinicProduct: {
+          select: {
+            id: true,
+            name: true,
+            unit: true,
+            packageUnit: true,
+            unitsPerPackage: true,
+            _count: {
+              select: { usedInServices: true },
             },
           },
-          exclusiveSubService: {
-            select: { id: true, title: true, service: { select: { title: true } } },
-          },
-          exclusiveTherapist: {
-            select: { id: true, user: { select: { fullName: true } } },
-          },
         },
-        orderBy: { createdAt: "desc" },
-        skip,
-        take,
-      }),
-      prisma.clinicProduct.findMany({
-        where: { clinicId: ctx.clinicId },
-        select: {
-          id: true,
-          name: true,
-          unit: true,
-          packageUnit: true,
-          unitsPerPackage: true,
+        exclusiveSubService: {
+          select: { id: true, title: true, service: { select: { title: true } } },
         },
-        orderBy: { name: "asc" },
-      }),
-      prisma.service.findMany({
-        where: { clinicId: ctx.clinicId },
-        select: { id: true, title: true },
-        orderBy: { title: "asc" },
-      }),
-      prisma.subService.findMany({
-        where: { service: { clinicId: ctx.clinicId } },
-        select: { id: true, title: true, service: { select: { title: true } } },
-        orderBy: { title: "asc" },
-      }),
-      prisma.clinicUser.findMany({
-        where: { clinicId: ctx.clinicId, isActive: true, deletedAt: null },
-        select: {
-          id: true,
-          canBeTherapist: true,
-          user: { select: { fullName: true } },
+        exclusiveTherapist: {
+          select: { id: true, user: { select: { fullName: true } } },
         },
-      }),
-      checkClinicExportCapability(ctx.clinicId),
-    ]);
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+    }),
+    prisma.clinicProduct.findMany({
+      where: { clinicId: ctx.clinicId },
+      select: {
+        id: true,
+        name: true,
+        unit: true,
+        packageUnit: true,
+        unitsPerPackage: true,
+      },
+      orderBy: { name: "asc" },
+    }),
+    // محاسبه مجموع کسری‌های تسویه‌نشده هر کالا از خدمات قبلی
+    prisma.usedConsumable.groupBy({
+      by: ["clinicProductId"],
+      where: {
+        productBatchId: null,
+        quantity: { gt: 0 },
+        clinicProduct: { clinicId: ctx.clinicId },
+      },
+      _sum: {
+        quantity: true,
+      },
+    }),
+    prisma.service.findMany({
+      where: { clinicId: ctx.clinicId },
+      select: { id: true, title: true },
+      orderBy: { title: "asc" },
+    }),
+    prisma.subService.findMany({
+      where: { service: { clinicId: ctx.clinicId } },
+      select: { id: true, title: true, service: { select: { title: true } } },
+      orderBy: { title: "asc" },
+    }),
+    prisma.clinicUser.findMany({
+      where: { clinicId: ctx.clinicId, isActive: true, deletedAt: null },
+      select: {
+        id: true,
+        canBeTherapist: true,
+        user: { select: { fullName: true } },
+      },
+    }),
+    checkClinicExportCapability(ctx.clinicId),
+  ]);
+
+  const deficitMap = new Map<string, number>(
+    unsettledGrouped.map((g) => [g.clinicProductId, g._sum.quantity ?? 0])
+  );
 
   return (
     <InventoryStockInClient
@@ -125,7 +149,10 @@ export default async function InventoryStockInPage({
       totalCount={totalCount}
       page={page}
       pageSize={pageSize}
-      products={products}
+      products={products.map((p) => ({
+        ...p,
+        unsettledDeficit: deficitMap.get(p.id) ?? 0,
+      }))}
       services={services}
       subServices={subServices}
       staffs={staffs.map((s) => ({

@@ -134,7 +134,7 @@ export async function deleteClinicProductAction(productId: string) {
 }
 
 /**
- * ۳. ورود کالا به انبار (با تبدیل خودکار بسته/رول به واحد مصرف)
+ * ۳. ورود کالا به انبار (با تبدیل خودکار بسته/رول به واحد مصرف + تسویه خودکار کسری‌های قبلی خدمات)
  */
 export async function stockInBatchAction(input: {
   clinicProductId: string;
@@ -181,23 +181,145 @@ export async function stockInBatchAction(input: {
       ? Math.round(rawSellingPrice / multiplier)
       : null;
 
-    await prisma.productBatch.create({
-      data: {
-        clinicProductId: product.id,
-        quantity: finalUnitQuantity,
-        initialQuantity: finalUnitQuantity,
-        purchasePrice: unitPurchasePrice,
-        sellingPrice: unitSellingPrice,
-        expirationDate: input.expirationDate
-          ? new Date(input.expirationDate)
-          : null,
-        exclusiveSubServiceId: input.exclusiveSubServiceId || null,
-        exclusiveTherapistId: input.exclusiveTherapistId || null,
-      },
+    const settledResult = await prisma.$transaction(async (tx) => {
+      // ۱. ایجاد بچ جدید در انبار
+      const createdBatch = await tx.productBatch.create({
+        data: {
+          clinicProductId: product.id,
+          quantity: finalUnitQuantity,
+          initialQuantity: finalUnitQuantity,
+          purchasePrice: unitPurchasePrice,
+          sellingPrice: unitSellingPrice,
+          expirationDate: input.expirationDate
+            ? new Date(input.expirationDate)
+            : null,
+          exclusiveSubServiceId: input.exclusiveSubServiceId || null,
+          exclusiveTherapistId: input.exclusiveTherapistId || null,
+        },
+      });
+
+      // ۲. جستجوی رکوردهای مصرفی قبلی که به دلیل کسری انبار بدون بچ (productBatchId: null) ثبت شده بودند
+      const unsettledUsages = await tx.usedConsumable.findMany({
+        where: {
+          clinicProductId: product.id,
+          productBatchId: null,
+          quantity: { gt: 0 },
+          providedService: {
+            client: { clinicId: ctx.clinicId },
+            ...(input.exclusiveSubServiceId
+              ? { subServiceId: input.exclusiveSubServiceId }
+              : {}),
+            ...(input.exclusiveTherapistId
+              ? { therapistId: input.exclusiveTherapistId }
+              : {}),
+          },
+        },
+        include: {
+          providedService: {
+            select: {
+              id: true,
+              finalPrice: true,
+            },
+          },
+        },
+        orderBy: {
+          providedService: { performedAt: "asc" },
+        },
+      });
+
+      let remainingBatchStock = finalUnitQuantity;
+      let totalSettledQuantity = 0;
+      const affectedServiceIds = new Set<string>();
+
+      for (const usage of unsettledUsages) {
+        if (remainingBatchStock <= 0) break;
+
+        if (usage.quantity <= remainingBatchStock) {
+          // پوشش کامل این رکورد کسری توسط بچ جدید
+          await tx.usedConsumable.update({
+            where: { id: usage.id },
+            data: {
+              productBatchId: createdBatch.id,
+              unitCost: unitPurchasePrice,
+            },
+          });
+
+          remainingBatchStock -= usage.quantity;
+          totalSettledQuantity += usage.quantity;
+          affectedServiceIds.add(usage.providedServiceId);
+        } else {
+          // پوشش جزئی: تقسیم رکورد مصرفی به بخش تسویه‌شده با بچ جدید و بخش باقیمانده
+          const settledPart = remainingBatchStock;
+          const stillUnsettledPart = usage.quantity - settledPart;
+
+          await tx.usedConsumable.update({
+            where: { id: usage.id },
+            data: {
+              quantity: stillUnsettledPart,
+            },
+          });
+
+          await tx.usedConsumable.create({
+            data: {
+              providedServiceId: usage.providedServiceId,
+              clinicProductId: usage.clinicProductId,
+              productBatchId: createdBatch.id,
+              quantity: settledPart,
+              sellingPrice: usage.sellingPrice,
+              unitCost: unitPurchasePrice,
+            },
+          });
+
+          totalSettledQuantity += settledPart;
+          remainingBatchStock = 0;
+          affectedServiceIds.add(usage.providedServiceId);
+        }
+      }
+
+      // ۳. به‌روزرسانی موجودی باقیمانده بچ جدید در صورت تسویه کسری‌ها
+      if (totalSettledQuantity > 0) {
+        await tx.productBatch.update({
+          where: { id: createdBatch.id },
+          data: { quantity: remainingBatchStock },
+        });
+
+        // ۴. بازمحاسبه سود خالص کلینیک (clinicNetProfit) برای سرویس‌های اصلاح‌شده
+        for (const srvId of affectedServiceIds) {
+          const srv = await tx.providedService.findUnique({
+            where: { id: srvId },
+            include: { usedConsumables: true },
+          });
+          if (!srv) continue;
+
+          const updatedTotalCost = srv.usedConsumables.reduce(
+            (sum, uc) => sum + Math.round(uc.quantity * uc.unitCost),
+            0
+          );
+
+          await tx.providedService.update({
+            where: { id: srv.id },
+            data: {
+              clinicNetProfit: Math.max(0, srv.finalPrice - updatedTotalCost),
+            },
+          });
+        }
+      }
+
+      return {
+        settledQuantity: totalSettledQuantity,
+        settledServicesCount: affectedServiceIds.size,
+      };
     });
 
     revalidatePath("/clinic-dashboard/inventory", "layout");
-    return { success: true };
+    revalidatePath("/clinic-dashboard/clients");
+
+    return {
+      success: true,
+      settledQuantity: settledResult.settledQuantity,
+      settledServicesCount: settledResult.settledServicesCount,
+      unit: product.unit,
+    };
   } catch (error: any) {
     return {
       success: false,

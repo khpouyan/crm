@@ -516,14 +516,27 @@ export async function saveMultiServiceInvoiceAction(
             rem -= take;
           }
 
+          // در صورت کسری موجودی انبار: محاسبه بهای تمام‌شده بر اساس آخرین قیمت خرید ثبت‌شده کالا
           if (rem > 0) {
+            const latestBatchForCost = await tx.productBatch.findFirst({
+              where: {
+                clinicProductId: cons.clinicProductId,
+                clinicProduct: { clinicId: ctx.clinicId },
+              },
+              orderBy: { createdAt: "desc" },
+              select: { purchasePrice: true },
+            });
+
+            const estimatedUnitCost = latestBatchForCost?.purchasePrice ?? 0;
+            totalConsumableCost += Math.round(rem * estimatedUnitCost);
+
             usedConsumablesData.push({
               clinicProductId: cons.clinicProductId,
               productBatchId: null,
               quantity: rem,
               sellingPrice:
                 cons.sellingPrice > 0 ? Math.round(cons.sellingPrice) : null,
-              unitCost: 0,
+              unitCost: estimatedUnitCost,
             });
           }
         }

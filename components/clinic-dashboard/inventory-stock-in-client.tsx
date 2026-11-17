@@ -16,12 +16,17 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { PriceInput } from "@/components/ui/price-input";
 import { TomanIcon } from "@/components/ui/toman-icon";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import {
   Table,
   TableBody,
@@ -84,6 +89,7 @@ interface InventoryStockInClientProps {
     unit: string;
     packageUnit: string | null;
     unitsPerPackage: number;
+    unsettledDeficit: number;
   }[];
   services: { id: string; title: string }[];
   subServices: { id: string; title: string; service: { title: string } }[];
@@ -149,9 +155,11 @@ export function InventoryStockInClient({
     () =>
       products.map((p) => ({
         value: p.id,
-        label: p.packageUnit
-          ? `${p.name} (${p.packageUnit} / ${p.unit})`
-          : `${p.name} (${p.unit})`,
+        label: `${p.packageUnit ? `${p.name} (${p.packageUnit} / ${p.unit})` : `${p.name} (${p.unit})`}${
+          p.unsettledDeficit > 0
+            ? ` — کسری: ${p.unsettledDeficit.toLocaleString("fa-IR")} ${p.unit}`
+            : ""
+        }`,
       })),
     [products]
   );
@@ -210,12 +218,10 @@ export function InventoryStockInClient({
   // باز کردن فرم ویرایش بچ انتخاب‌شده
   const handleOpenEditForm = (batch: any) => {
     setEditingBatch(batch);
-    const prod = products.find((p) => p.id === batch.clinicProductId);
     const initialUnitQty =
       batch.initialQuantity > 0 ? batch.initialQuantity : batch.quantity;
 
     setProductId(batch.clinicProductId);
-    // در حالت ویرایش بر اساس واحد مصرف (جزء) نمایش می‌دهیم تا دقیق‌ترین کنترل روی تعداد وجود داشته باشد
     setEntryMode("UNIT");
     setQuantity(String(initialUnitQty));
     setPurchasePrice(batch.purchasePrice);
@@ -254,24 +260,37 @@ export function InventoryStockInClient({
         exclusiveTherapistId !== "NONE" ? exclusiveTherapistId : null,
     };
 
-    const res = editingBatch
-      ? await updateProductBatchAction({
-          batchId: editingBatch.id,
-          ...payload,
-        })
-      : await stockInBatchAction({
-          clinicProductId: productId,
-          ...payload,
-        });
+    if (editingBatch) {
+      const res = await updateProductBatchAction({
+        batchId: editingBatch.id,
+        ...payload,
+      });
+      setIsSaving(false);
 
+      if (res.success) {
+        toast.success("تغییرات رکورد ورود کالا با موفقیت ذخیره شد");
+        setDialogOpen(false);
+        router.refresh();
+      } else {
+        toast.error(res.error);
+      }
+      return;
+    }
+
+    const res = await stockInBatchAction({
+      clinicProductId: productId,
+      ...payload,
+    });
     setIsSaving(false);
 
     if (res.success) {
-      toast.success(
-        editingBatch
-          ? "تغییرات رکورد ورود کالا با موفقیت ذخیره شد"
-          : "ورود کالا و بچ جدید با موفقیت ثبت شد"
-      );
+      if (res.settledQuantity && res.settledQuantity > 0) {
+        toast.success(
+          `ورود کالا ثبت شد و ${res.settledQuantity.toLocaleString("fa-IR")} ${res.unit || ""} از کسری خدمات قبلی (${(res.settledServicesCount ?? 0).toLocaleString("fa-IR")} سرویس) به صورت خودکار تسویه گردید.`
+        );
+      } else {
+        toast.success("ورود کالا و بچ جدید با موفقیت ثبت شد");
+      }
       setDialogOpen(false);
       router.refresh();
     } else {
@@ -522,167 +541,189 @@ export function InventoryStockInClient({
                 : "ثبت ورود بچ جدید به انبار"}
             </ResponsiveDialogTitle>
           </ResponsiveDialogHeader>
+
           <form onSubmit={handleSubmit}>
-            <ResponsiveDialogPanel className="space-y-4">
-              <div className="space-y-2">
-                <Label>انتخاب کالا *</Label>
-                <Select
-                  items={productItems}
-                  value={productId}
-                  disabled={Boolean(editingBatch)}
-                  onValueChange={handleProductChange}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="انتخاب کالا..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {productItems.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <ResponsiveDialogPanel>
+              
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel>انتخاب کالا *</FieldLabel>
+                    <Select
+                      items={productItems}
+                      value={productId}
+                      disabled={Boolean(editingBatch)}
+                      onValueChange={handleProductChange}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="انتخاب کالا..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {productItems.map((item) => (
+                          <SelectItem key={item.value} value={item.value}>
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
 
-              {hasPackageOption && selectedProduct && (
-                <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/20 p-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={entryMode === "PACKAGE" ? "default" : "ghost"}
-                    onClick={() => setEntryMode("PACKAGE")}
-                  >
-                    بر اساس {selectedProduct.packageUnit}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={entryMode === "UNIT" ? "default" : "ghost"}
-                    onClick={() => setEntryMode("UNIT")}
-                  >
-                    بر اساس {selectedProduct.unit}
-                  </Button>
-                </div>
-              )}
+                    {!editingBatch &&
+                      selectedProduct &&
+                      selectedProduct.unsettledDeficit > 0 && (
+                        <div className="mt-1.5 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-300">
+                          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                          <span>
+                            این کالا دارای{" "}
+                            <strong>
+                              {selectedProduct.unsettledDeficit.toLocaleString("fa-IR")}{" "}
+                              {selectedProduct.unit}
+                            </strong>{" "}
+                            کسری ثبت‌شده از خدمات قبلی است که بلافاصله پس از ثبت ورود کالا از این بچ کسر و تسویه می‌شود.
+                          </span>
+                        </div>
+                      )}
+                  </Field>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>
-                    {editingBatch ? "تعداد کل اولیه" : "تعداد"} (
-                    {hasPackageOption && entryMode === "PACKAGE"
-                      ? selectedProduct?.packageUnit
-                      : selectedProduct?.unit || "واحد"}
-                    ) *
-                  </Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    min="0.1"
-                    placeholder="مثلاً: 5"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    required
-                  />
-                  {hasPackageOption &&
-                    entryMode === "PACKAGE" &&
-                    previewTotalUnits > 0 && (
-                      <p className="text-[11px] text-primary">
-                        معادل {previewTotalUnits.toLocaleString("fa-IR")}{" "}
-                        {selectedProduct?.unit} ثبت می‌شود.
-                      </p>
-                    )}
-                </div>
+                  {hasPackageOption && selectedProduct && (
+                    <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/20 p-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={entryMode === "PACKAGE" ? "default" : "ghost"}
+                        onClick={() => setEntryMode("PACKAGE")}
+                      >
+                        بر اساس {selectedProduct.packageUnit}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={entryMode === "UNIT" ? "default" : "ghost"}
+                        onClick={() => setEntryMode("UNIT")}
+                      >
+                        بر اساس {selectedProduct.unit}
+                      </Button>
+                    </div>
+                  )}
 
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1">
-                    <Calendar className="size-3.5 text-muted-foreground" />
-                    تاریخ انقضا (شمسی)
-                  </Label>
-                  <DatePicker
-                    calendarType="shamsi"
-                    value={expirationDate}
-                    onValueChange={setExpirationDate}
-                    placeholder="انتخاب تاریخ انقضا"
-                    className="w-full"
-                    calendarProps={{
-                      captionLayout: "dropdown",
-                      startMonth: EXPIRATION_START_MONTH,
-                      endMonth: EXPIRATION_END_MONTH,
-                    }}
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel>
+                        {editingBatch ? "تعداد کل اولیه" : "تعداد"} (
+                        {hasPackageOption && entryMode === "PACKAGE"
+                          ? selectedProduct?.packageUnit
+                          : selectedProduct?.unit || "واحد"}
+                        ) *
+                      </FieldLabel>
+                      <Input
+                        type="number"
+                        step="any"
+                        min="0.1"
+                        placeholder="مثلاً: 5"
+                        value={quantity}
+                        onChange={(e) => setQuantity(e.target.value)}
+                        required
+                      />
+                      {hasPackageOption &&
+                        entryMode === "PACKAGE" &&
+                        previewTotalUnits > 0 && (
+                          <FieldDescription className="text-[11px] text-primary">
+                            معادل {previewTotalUnits.toLocaleString("fa-IR")}{" "}
+                            {selectedProduct?.unit} ثبت می‌شود.
+                          </FieldDescription>
+                        )}
+                    </Field>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1">
-                    قیمت خرید هر{" "}
-                    {hasPackageOption && entryMode === "PACKAGE"
-                      ? selectedProduct?.packageUnit
-                      : selectedProduct?.unit || "واحد"}{" "}
-                    *
-                    <TomanIcon className="size-3.5 text-muted-foreground" />
-                  </Label>
-                  <PriceInput
-                    value={purchasePrice}
-                    defaultValue={0}
-                    onValueChange={(v) => setPurchasePrice(Number(v) || 0)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1">
-                    قیمت فروش (اختیاری)
-                    <TomanIcon className="size-3.5 text-muted-foreground" />
-                  </Label>
-                  <PriceInput
-                    value={sellingPrice}
-                    defaultValue={0}
-                    onValueChange={(v) => setSellingPrice(Number(v) || 0)}
-                  />
-                </div>
-              </div>
+                    <Field>
+                      <FieldLabel className="flex items-center gap-1">
+                        <Calendar className="size-3.5 text-muted-foreground" />
+                        تاریخ انقضا (شمسی)
+                      </FieldLabel>
+                      <DatePicker
+                        calendarType="shamsi"
+                        value={expirationDate}
+                        onValueChange={setExpirationDate}
+                        placeholder="انتخاب تاریخ انقضا"
+                        className="w-full"
+                        calendarProps={{
+                          captionLayout: "dropdown",
+                          startMonth: EXPIRATION_START_MONTH,
+                          endMonth: EXPIRATION_END_MONTH,
+                        }}
+                      />
+                    </Field>
+                  </div>
 
-              <div className="space-y-2">
-                <Label>اختصاص به زیرسرویس خاص (اختیاری)</Label>
-                <Select
-                  items={subServiceItems}
-                  value={exclusiveSubId}
-                  onValueChange={(v) => v && setExclusiveSubId(v)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {subServiceItems.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel className="flex items-center gap-1">
+                        قیمت خرید هر{" "}
+                        {hasPackageOption && entryMode === "PACKAGE"
+                          ? selectedProduct?.packageUnit
+                          : selectedProduct?.unit || "واحد"}{" "}
+                        *
+                        <TomanIcon className="size-3.5 text-muted-foreground" />
+                      </FieldLabel>
+                      <PriceInput
+                        value={purchasePrice}
+                        defaultValue={0}
+                        onValueChange={(v) => setPurchasePrice(Number(v) || 0)}
+                        required
+                      />
+                    </Field>
 
-              <div className="space-y-2">
-                <Label>اختصاص به درمانگر خاص (اختیاری)</Label>
-                <Select
-                  items={therapistItems}
-                  value={exclusiveTherapistId}
-                  onValueChange={(v) => v && setExclusiveTherapistId(v)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {therapistItems.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                    <Field>
+                      <FieldLabel className="flex items-center gap-1">
+                        قیمت فروش (اختیاری)
+                        <TomanIcon className="size-3.5 text-muted-foreground" />
+                      </FieldLabel>
+                      <PriceInput
+                        value={sellingPrice}
+                        defaultValue={0}
+                        onValueChange={(v) => setSellingPrice(Number(v) || 0)}
+                      />
+                    </Field>
+                  </div>
+
+                  <Field>
+                    <FieldLabel>اختصاص به زیرسرویس خاص (اختیاری)</FieldLabel>
+                    <Select
+                      items={subServiceItems}
+                      value={exclusiveSubId}
+                      onValueChange={(v) => v && setExclusiveSubId(v)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {subServiceItems.map((item) => (
+                          <SelectItem key={item.value} value={item.value}>
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+
+                  <Field>
+                    <FieldLabel>اختصاص به درمانگر خاص (اختیاری)</FieldLabel>
+                    <Select
+                      items={therapistItems}
+                      value={exclusiveTherapistId}
+                      onValueChange={(v) => v && setExclusiveTherapistId(v)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {therapistItems.map((item) => (
+                          <SelectItem key={item.value} value={item.value}>
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </FieldGroup>
+              
             </ResponsiveDialogPanel>
 
             <ResponsiveDialogFooter>
