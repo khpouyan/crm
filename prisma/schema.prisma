@@ -170,6 +170,7 @@ model ClinicUser {
   providedServices ProvidedService[]   @relation("ServiceTherapist")
   assistedServices ProvidedService[]   @relation("ServiceAssistants")
   referredServices ProvidedService[]   @relation("ServiceReferrer")
+  referredClients  Client[]            @relation("StaffClientReferrer")
   exclusiveBatches ProductBatch[]
   stockOuts        InventoryStockOut[]
   exportLogs       DataExportLog[]
@@ -180,19 +181,75 @@ model ClinicUser {
 }
 
 model Client {
-  id            String @id @default(uuid())
+  id            String   @id @default(uuid())
   userId        String
   clinicId      String
-  walletBalance Int    @default(0)
+  fileNumber    Int?     // شماره پرونده اختصاصی کلینیک (افزایشی)
+  walletBalance Int      @default(0)
 
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  gender         String?   // FEMALE | MALE
+  birthDate      DateTime?
+  referralSource String?   // نحوه آشنایی با کلینیک
+  tag            String?   // برچسب پرونده
+  notes          String?   @db.Text
 
-  providedServices ProvidedService[]
-  invoices         Invoice[]
-  smsLogs          SmsLog[]
+  // معرف پرونده (یا یکی از مراجعین قبلی است یا یکی از پرسنل کلینیک)
+  referrerClientId String?
+  referrerStaffId  String?
+
+  // اطلاعات تکمیلی (نام پدر، شماره دوم، تاهل، تاریخ ازدواج، تحصیلات، شغل، بیمه، کدپستی، آدرس)
+  additionalInfo Json @default("{}")
+  // پرونده پزشکی (بیماری‌های زمینه‌ای، حساسیت‌ها، قد، وزن، سابقه جراحی و زیبایی، توضیحات)
+  medicalRecord  Json @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clinic          Clinic      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  referrerClient  Client?     @relation("ClientToClientReferral", fields: [referrerClientId], references: [id], onDelete: SetNull)
+  referredClients Client[]    @relation("ClientToClientReferral")
+  referrerStaff   ClinicUser? @relation("StaffClientReferrer", fields: [referrerStaffId], references: [id], onDelete: SetNull)
+
+  providedServices   ProvidedService[]
+  referredServices   ProvidedService[]   @relation("ServiceClientReferrer")
+  invoices           Invoice[]
+  smsLogs            SmsLog[]
+  attachments        ClientAttachment[]
+  walletTransactions WalletTransaction[]
 
   @@unique([userId, clinicId])
+  @@index([clinicId, fileNumber])
+}
+
+model ClientAttachment {
+  id           String   @id @default(uuid())
+  clientId     String
+  title        String
+  fileUrl      String
+  fileType     String?  // IMAGE | PDF | VIDEO | OTHER
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
+}
+
+model WalletTransaction {
+  id            String   @id @default(uuid())
+  clientId      String
+  type          String   // DEPOSIT | WITHDRAW | REFUND
+  amount        Int
+  paymentMethod String?  // POS | CASH | CARD_TO_CARD | INVOICE_PAYMENT
+  terminalId    String?
+  description   String?  @db.Text
+  createdById   String?
+  createdAt     DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
 }
 
 // ==========================================
@@ -449,12 +506,13 @@ model ServiceDefaultProduct {
 }
 
 // ==========================================
-// 8. فاکتور، خدمات ارائه‌شده و مصرفیات بیمار
+// 8. فاکتور، اقساط، خدمات ارائه‌شده و مصرفیات بیمار
 // ==========================================
 model Invoice {
-  id       String @id @default(uuid())
-  clinicId String
-  clientId String
+  id            String @id @default(uuid())
+  clinicId      String
+  clientId      String
+  invoiceNumber Int?   // شماره تراکنش/فاکتور افزایشی در هر کلینیک
 
   subTotalAmount    Int     @default(0)
   discountAmount    Int     @default(0)
@@ -463,15 +521,34 @@ model Invoice {
   extraChargeReason String? @db.Text
   totalAmount       Int
 
-  status     String
+  status     String   // PAID | PARTIAL | UNPAID | INSTALLMENT
   paidAmount Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  clinic           Clinic            @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  client           Client            @relation(fields: [clientId], references: [id])
+  clinic           Clinic               @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  client           Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
   providedServices ProvidedService[]
   payments         Payment[]
+  installments     InvoiceInstallment[]
+
+  @@index([clinicId, createdAt])
+}
+
+model InvoiceInstallment {
+  id                String    @id @default(uuid())
+  invoiceId         String
+  installmentNumber Int
+  amount            Int
+  dueDate           DateTime
+  isCheck           Boolean   @default(false)
+  checkNumber       String?
+  status            String    @default("PENDING") // PENDING | PAID
+  paidAt            DateTime?
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
 }
 
 model ProvidedService {
@@ -481,8 +558,12 @@ model ProvidedService {
   subServiceId          String
   therapistId           String?
   therapistNameSnapshot String?
-  referrerId            String?
+  referrerId            String? // معرف همکار (پرسنل)
+  referrerClientId      String? // معرف مراجعه‌کننده (مشتری دیگر)
+  createdById           String?
+  tag                   String?
 
+  performedAt     DateTime @default(now()) // تاریخ و ساعت انجام سرویس
   finalPrice      Int
   description     String?  @db.Text
   therapistAmount Int      @default(0)
@@ -496,14 +577,16 @@ model ProvidedService {
   subService      SubService       @relation(fields: [subServiceId], references: [id])
   therapist       ClinicUser?      @relation("ServiceTherapist", fields: [therapistId], references: [id], onDelete: SetNull)
   referrer        ClinicUser?      @relation("ServiceReferrer", fields: [referrerId], references: [id], onDelete: SetNull)
+  referrerClient  Client?          @relation("ServiceClientReferrer", fields: [referrerClientId], references: [id], onDelete: SetNull)
   assistants      ClinicUser[]     @relation("ServiceAssistants")
   usedConsumables UsedConsumable[]
 }
 
 model UsedConsumable {
-  id                String @id @default(uuid())
+  id                String  @id @default(uuid())
   providedServiceId String
   clinicProductId   String
+  productBatchId    String? // بچ کسرشده برای ردیابی دقیق قیمت خرید و انقضا
 
   quantity     Float
   sellingPrice Int?
