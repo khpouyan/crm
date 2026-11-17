@@ -67,6 +67,9 @@ export default async function InventoryStockInPage({
               unit: true,
               packageUnit: true,
               unitsPerPackage: true,
+              _count: {
+                select: { usedInServices: true },
+              },
             },
           },
           exclusiveSubService: {

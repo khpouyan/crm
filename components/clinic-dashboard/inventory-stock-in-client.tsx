@@ -3,7 +3,15 @@
 
 import React, { useState, useMemo, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Plus, ArrowDownLeft, Calendar, Loader2 } from "lucide-react";
+import {
+  Plus,
+  ArrowDownLeft,
+  Calendar,
+  Loader2,
+  Trash2,
+  Pencil,
+  AlertTriangle,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -40,9 +48,23 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogTrigger,
 } from "@/components/ui/responsive-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { formatJalaliNumeric } from "@/lib/jalali";
 import { normalizePersianDigits } from "@/lib/normalize-persian-digits";
-import { stockInBatchAction } from "@/app/clinic-dashboard/(dashboard)/inventory/actions";
+import {
+  stockInBatchAction,
+  updateProductBatchAction,
+  deleteProductBatchAction,
+} from "@/app/clinic-dashboard/(dashboard)/inventory/actions";
 import {
   InventoryFilterBar,
   InventoryFilterValues,
@@ -91,8 +113,9 @@ export function InventoryStockInClient({
   const [isPending, startTransition] = useTransition();
   const [isSaving, setIsSaving] = useState(false);
 
-  // مودال ثبت ورود کالا
+  // مودال ثبت / ویرایش ورود کالا
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingBatch, setEditingBatch] = useState<any | null>(null);
   const [productId, setProductId] = useState(products[0]?.id ?? "");
   const [entryMode, setEntryMode] = useState<"UNIT" | "PACKAGE">("UNIT");
   const [quantity, setQuantity] = useState("");
@@ -102,6 +125,16 @@ export function InventoryStockInClient({
   const [exclusiveSubId, setExclusiveSubId] = useState<string>("NONE");
   const [exclusiveTherapistId, setExclusiveTherapistId] =
     useState<string>("NONE");
+
+  // دیالوگ تایید حذف رکورد ورود کالا
+  const [deleteDialogState, setDeleteDialogState] = useState<{
+    open: boolean;
+    batchId: string;
+    productName: string;
+    hasUsageWarning: boolean;
+    consumedFromBatch: number;
+    unit: string;
+  } | null>(null);
 
   const selectedProduct = useMemo(
     () => products.find((p) => p.id === productId),
@@ -155,7 +188,9 @@ export function InventoryStockInClient({
     });
   };
 
-  const handleOpenForm = () => {
+  // باز کردن فرم ثبت جدید
+  const handleOpenNewForm = () => {
+    setEditingBatch(null);
     const firstProd = products[0];
     setProductId(firstProd?.id ?? "");
     setEntryMode(
@@ -172,8 +207,29 @@ export function InventoryStockInClient({
     setDialogOpen(true);
   };
 
+  // باز کردن فرم ویرایش بچ انتخاب‌شده
+  const handleOpenEditForm = (batch: any) => {
+    setEditingBatch(batch);
+    const prod = products.find((p) => p.id === batch.clinicProductId);
+    const initialUnitQty =
+      batch.initialQuantity > 0 ? batch.initialQuantity : batch.quantity;
+
+    setProductId(batch.clinicProductId);
+    // در حالت ویرایش بر اساس واحد مصرف (جزء) نمایش می‌دهیم تا دقیق‌ترین کنترل روی تعداد وجود داشته باشد
+    setEntryMode("UNIT");
+    setQuantity(String(initialUnitQty));
+    setPurchasePrice(batch.purchasePrice);
+    setSellingPrice(batch.sellingPrice ?? 0);
+    setExpirationDate(
+      batch.expirationDate ? new Date(batch.expirationDate) : null
+    );
+    setExclusiveSubId(batch.exclusiveSubServiceId || "NONE");
+    setExclusiveTherapistId(batch.exclusiveTherapistId || "NONE");
+    setDialogOpen(true);
+  };
+
   const handleProductChange = (val: string | null) => {
-    if (!val) return;
+    if (!val || editingBatch) return;
     setProductId(val);
     const prod = products.find((p) => p.id === val);
     setEntryMode(
@@ -184,10 +240,11 @@ export function InventoryStockInClient({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    const res = await stockInBatchAction({
-      clinicProductId: productId,
-      entryMode: hasPackageOption ? entryMode : "UNIT",
-      quantity: parseFloat(normalizePersianDigits(quantity)) || 0,
+
+    const parsedQty = parseFloat(normalizePersianDigits(quantity)) || 0;
+    const payload = {
+      entryMode: hasPackageOption ? entryMode : ("UNIT" as const),
+      quantity: parsedQty,
       purchasePrice,
       sellingPrice: sellingPrice > 0 ? sellingPrice : null,
       expirationDate: expirationDate ? expirationDate.toISOString() : null,
@@ -195,11 +252,26 @@ export function InventoryStockInClient({
         exclusiveSubId !== "NONE" ? exclusiveSubId : null,
       exclusiveTherapistId:
         exclusiveTherapistId !== "NONE" ? exclusiveTherapistId : null,
-    });
+    };
+
+    const res = editingBatch
+      ? await updateProductBatchAction({
+          batchId: editingBatch.id,
+          ...payload,
+        })
+      : await stockInBatchAction({
+          clinicProductId: productId,
+          ...payload,
+        });
+
     setIsSaving(false);
 
     if (res.success) {
-      toast.success("ورود کالا و بچ جدید با موفقیت ثبت شد");
+      toast.success(
+        editingBatch
+          ? "تغییرات رکورد ورود کالا با موفقیت ذخیره شد"
+          : "ورود کالا و بچ جدید با موفقیت ثبت شد"
+      );
       setDialogOpen(false);
       router.refresh();
     } else {
@@ -207,7 +279,41 @@ export function InventoryStockInClient({
     }
   };
 
-  // پیش‌نمایش محاسبه خودکار بسته به جزء
+  // کلیک روی دکمه حذف هر ردیف
+  const handleRequestDeleteBatch = (batch: any) => {
+    const initialQty =
+      batch.initialQuantity > 0 ? batch.initialQuantity : batch.quantity;
+    const consumedFromBatch = Math.max(0, initialQty - batch.quantity);
+    const usedInServicesCount = batch.clinicProduct?._count?.usedInServices ?? 0;
+    const hasUsageWarning = consumedFromBatch > 0 || usedInServicesCount > 0;
+
+    setDeleteDialogState({
+      open: true,
+      batchId: batch.id,
+      productName: batch.clinicProduct.name,
+      hasUsageWarning,
+      consumedFromBatch,
+      unit: batch.clinicProduct.unit,
+    });
+  };
+
+  const handleConfirmDeleteBatch = async () => {
+    if (!deleteDialogState) return;
+    const target = deleteDialogState;
+    setDeleteDialogState(null);
+
+    setIsSaving(true);
+    const res = await deleteProductBatchAction(target.batchId, true);
+    setIsSaving(false);
+
+    if (res.success) {
+      toast.success("رکورد ورود کالا با موفقیت حذف شد");
+      router.refresh();
+    } else {
+      toast.error(res.error || "خطا در حذف رکورد");
+    }
+  };
+
   const previewTotalUnits = useMemo(() => {
     const q = parseFloat(normalizePersianDigits(quantity)) || 0;
     if (
@@ -240,7 +346,7 @@ export function InventoryStockInClient({
         />
       </div>
 
-      {/* نوار فیلتر (از تاریخ، تا تاریخ، خدمت، پرسنل) */}
+      {/* نوار فیلتر */}
       <InventoryFilterBar
         services={services}
         staffs={staffs}
@@ -268,7 +374,7 @@ export function InventoryStockInClient({
         <CardContent className="space-y-4">
           <div className="overflow-hidden rounded-lg border">
             {isPending ? (
-              <TableRowsSkeleton rows={pageSize > 10 ? 8 : pageSize} cols={6} />
+              <TableRowsSkeleton rows={pageSize > 10 ? 8 : pageSize} cols={7} />
             ) : (
               <Table>
                 <TableHeader>
@@ -279,13 +385,14 @@ export function InventoryStockInClient({
                     <TableHead className="text-right">تاریخ ثبت</TableHead>
                     <TableHead className="text-right">انقضا</TableHead>
                     <TableHead className="text-right">تخصیص</TableHead>
+                    <TableHead className="w-24 text-left">عملیات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {batches.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={7}
                         className="py-10 text-center text-sm text-muted-foreground"
                       >
                         رکوردی مطابق فیلترهای انتخابی یافت نشد.
@@ -304,6 +411,13 @@ export function InventoryStockInClient({
                           <span className="text-xs text-muted-foreground">
                             {b.clinicProduct.unit}
                           </span>
+                          {b.initialQuantity > 0 &&
+                            b.initialQuantity !== b.quantity && (
+                              <span className="block text-[11px] text-muted-foreground">
+                                از {b.initialQuantity.toLocaleString("fa-IR")}{" "}
+                                {b.clinicProduct.unit} اولیه
+                              </span>
+                            )}
                         </TableCell>
                         <TableCell className="tabular-nums">
                           {b.purchasePrice.toLocaleString("fa-IR")}{" "}
@@ -328,6 +442,32 @@ export function InventoryStockInClient({
                           ) : (
                             <span className="text-muted-foreground">عمومی</span>
                           )}
+                        </TableCell>
+                        <TableCell className="text-left">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              disabled={isSaving}
+                              onClick={() => handleOpenEditForm(b)}
+                              title="ویرایش رکورد ورود"
+                              className="size-8"
+                            >
+                              <Pencil className="size-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              disabled={isSaving}
+                              onClick={() => handleRequestDeleteBatch(b)}
+                              title="حذف رکورد ورود"
+                              className="size-8 text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -356,14 +496,14 @@ export function InventoryStockInClient({
       <Button
         type="button"
         size="icon"
-        onClick={handleOpenForm}
+        onClick={handleOpenNewForm}
         title="ثبت ورود کالا به انبار"
         className="fixed bottom-6 left-6 z-40 size-13 rounded-full shadow-lg"
       >
         <Plus className="size-6" />
       </Button>
 
-      {/* مودال فرم ثبت ورود کالا */}
+      {/* مودال فرم ثبت / ویرایش ورود کالا */}
       <ResponsiveDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
@@ -377,7 +517,9 @@ export function InventoryStockInClient({
         <ResponsiveDialogPopup className="sm:max-w-lg">
           <ResponsiveDialogHeader>
             <ResponsiveDialogTitle>
-              ثبت ورود بچ جدید به انبار
+              {editingBatch
+                ? `ویرایش ورود کالا: ${editingBatch.clinicProduct.name}`
+                : "ثبت ورود بچ جدید به انبار"}
             </ResponsiveDialogTitle>
           </ResponsiveDialogHeader>
           <form onSubmit={handleSubmit}>
@@ -387,6 +529,7 @@ export function InventoryStockInClient({
                 <Select
                   items={productItems}
                   value={productId}
+                  disabled={Boolean(editingBatch)}
                   onValueChange={handleProductChange}
                 >
                   <SelectTrigger className="w-full">
@@ -402,7 +545,6 @@ export function InventoryStockInClient({
                 </Select>
               </div>
 
-              {/* انتخاب نحوه ورود (بر اساس بسته یا واحد مصرف) */}
               {hasPackageOption && selectedProduct && (
                 <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/20 p-2">
                   <Button
@@ -411,7 +553,7 @@ export function InventoryStockInClient({
                     variant={entryMode === "PACKAGE" ? "default" : "ghost"}
                     onClick={() => setEntryMode("PACKAGE")}
                   >
-                    ورود بر اساس {selectedProduct.packageUnit}
+                    بر اساس {selectedProduct.packageUnit}
                   </Button>
                   <Button
                     type="button"
@@ -419,7 +561,7 @@ export function InventoryStockInClient({
                     variant={entryMode === "UNIT" ? "default" : "ghost"}
                     onClick={() => setEntryMode("UNIT")}
                   >
-                    ورود بر اساس {selectedProduct.unit}
+                    بر اساس {selectedProduct.unit}
                   </Button>
                 </div>
               )}
@@ -427,7 +569,7 @@ export function InventoryStockInClient({
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>
-                    تعداد (
+                    {editingBatch ? "تعداد کل اولیه" : "تعداد"} (
                     {hasPackageOption && entryMode === "PACKAGE"
                       ? selectedProduct?.packageUnit
                       : selectedProduct?.unit || "واحد"}
@@ -447,7 +589,7 @@ export function InventoryStockInClient({
                     previewTotalUnits > 0 && (
                       <p className="text-[11px] text-primary">
                         معادل {previewTotalUnits.toLocaleString("fa-IR")}{" "}
-                        {selectedProduct?.unit} در انبار ثبت می‌شود.
+                        {selectedProduct?.unit} ثبت می‌شود.
                       </p>
                     )}
                 </div>
@@ -484,7 +626,9 @@ export function InventoryStockInClient({
                   </Label>
                   <PriceInput
                     value={purchasePrice}
+                    defaultValue={0}
                     onValueChange={(v) => setPurchasePrice(Number(v) || 0)}
+                    required
                   />
                 </div>
                 <div className="space-y-2">
@@ -494,6 +638,7 @@ export function InventoryStockInClient({
                   </Label>
                   <PriceInput
                     value={sellingPrice}
+                    defaultValue={0}
                     onValueChange={(v) => setSellingPrice(Number(v) || 0)}
                   />
                 </div>
@@ -543,7 +688,7 @@ export function InventoryStockInClient({
             <ResponsiveDialogFooter>
               <Button type="submit" disabled={isSaving}>
                 {isSaving && <Loader2 className="ml-2 size-4 animate-spin" />}
-                ثبت ورود به انبار
+                {editingBatch ? "ذخیره تغییرات" : "ثبت ورود به انبار"}
               </Button>
               <ResponsiveDialogDesktopOnly>
                 <ResponsiveDialogClose
@@ -558,6 +703,60 @@ export function InventoryStockInClient({
           </form>
         </ResponsiveDialogPopup>
       </ResponsiveDialog>
+
+      {/* AlertDialog تایید حذف رکورد ورود کالا (با هشدار مصرفی در خدمات) */}
+      <AlertDialog
+        open={Boolean(deleteDialogState?.open)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteDialogState(null);
+        }}
+      >
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              {deleteDialogState?.hasUsageWarning && (
+                <AlertTriangle className="size-5 text-destructive" />
+              )}
+              حذف رکورد ورود کالا به انبار
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 leading-relaxed">
+              {deleteDialogState?.hasUsageWarning ? (
+                <>
+                  <span className="block font-semibold text-destructive">
+                    هشدار: کالای «{deleteDialogState.productName}» دارای مصرفی
+                    استفاده‌شده در خدمات یا انبار است
+                    {deleteDialogState.consumedFromBatch > 0 &&
+                      ` (${deleteDialogState.consumedFromBatch.toLocaleString("fa-IR")} ${deleteDialogState.unit} از این بچ مصرف شده است)`}
+                    .
+                  </span>
+                  <span className="block">
+                    در صورت حذف این رکورد، اطلاعات و موجودی این بچ به‌طور کامل
+                    از بین می‌رود و ممکن است در محاسبه موجودی انبار مغایرت ایجاد
+                    شود. آیا از حذف آن مطمئن هستید؟
+                  </span>
+                </>
+              ) : (
+                <span>
+                  آیا از حذف رکورد ورود کالای{" "}
+                  <strong>«{deleteDialogState?.productName}»</strong> مطمئن
+                  هستید؟ این عملیات قابل بازگشت نیست.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:justify-start">
+            <AlertDialogAction
+              onClick={handleConfirmDeleteBatch}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteDialogState?.hasUsageWarning
+                ? "بله، با وجود مصرفی حذف شود"
+                : "تایید و حذف"}
+            </AlertDialogAction>
+            <AlertDialogCancel>انصراف</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
