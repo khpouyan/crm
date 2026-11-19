@@ -61,6 +61,7 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogDescription,
   ResponsiveDialogFooter,
+  ResponsiveDialogPanel,
 } from "@/components/ui/responsive-dialog"
 import {
   Field,
@@ -75,7 +76,7 @@ import {
   FieldTitle,
 } from "@/components/ui/field"
 import { isValidNationalId } from "@/lib/national-id"
-import {normalizeIranPhone , isValidIranPhone } from "@/lib/iranian-mobile";
+import { normalizeIranPhone, isValidIranPhone } from "@/lib/iranian-mobile"
 
 import { DatePicker } from "@/components/ui/date-picker"
 import { TablePaginationBar } from "@/components/clinic-dashboard/table-pagination-bar"
@@ -816,13 +817,17 @@ export function ClientsListClient({
       {/* ========================================== */}
       {/* مودال ایجاد پرونده جدید */}
       {/* ========================================== */}
-      <ResponsiveDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} drawerPosition="bottom">
+      <ResponsiveDialog
+        open={isCreateOpen}
+        onOpenChange={setIsCreateOpen}
+        drawerPosition="bottom"
+      >
         <ResponsiveDialogTrigger
           className="sr-only"
           tabIndex={-1}
           aria-hidden="true"
         />
-        <ResponsiveDialogContent className="flex max-h-[85dvh] flex-col overflow-hidden sm:max-w-lg" >
+        <ResponsiveDialogContent className="sm:max-w-lg">
           <ResponsiveDialogHeader>
             <ResponsiveDialogTitle>پرونده جدید</ResponsiveDialogTitle>
             <ResponsiveDialogDescription>
@@ -830,238 +835,241 @@ export function ClientsListClient({
             </ResponsiveDialogDescription>
           </ResponsiveDialogHeader>
 
-          <form onSubmit={onFormSubmit} className="pt-2">
-            <FieldGroup className="no-scrollbar flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
-              {/* نام و نام خانوادگی */}
-              <Field>
-                <FieldLabel htmlFor="fullName">نام و نام خانوادگی</FieldLabel>
-                <Input
-                  id="fullName"
-                  required
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder=""
-                />
-              </Field>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {/* شماره تماس + بدون شماره */}
-                <Field data-invalid={isPhoneInvalid || undefined}>
-                  <FieldLabel htmlFor="phone">
-                    شماره تماس {!noPhone && "*"}
-                  </FieldLabel>
+          <form onSubmit={onFormSubmit} className="contents">
+            <ResponsiveDialogPanel className="no-scrollbar max-h-[65dvh] overflow-y-auto pt-2">
+              <FieldGroup>
+                {/* نام و نام خانوادگی */}
+                <Field>
+                  <FieldLabel htmlFor="fullName">نام و نام خانوادگی</FieldLabel>
                   <Input
-                    id="phone"
-                    dir="ltr"
-                    type="tel"
-                    disabled={noPhone}
-                    required={!noPhone}
-                    aria-invalid={isPhoneInvalid}
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    onBlur={() => {
-                      if (!noPhone && phone.trim()) {
-                        setPhone(normalizeIranPhone(phone))
+                    id="fullName"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder=""
+                  />
+                </Field>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {/* شماره تماس + بدون شماره */}
+                  <Field data-invalid={isPhoneInvalid || undefined}>
+                    <FieldLabel htmlFor="phone">
+                      شماره تماس {!noPhone && "*"}
+                    </FieldLabel>
+                    <Input
+                      id="phone"
+                      dir="ltr"
+                      type="tel"
+                      disabled={noPhone}
+                      required={!noPhone}
+                      aria-invalid={isPhoneInvalid}
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      onBlur={() => {
+                        if (!noPhone && phone.trim()) {
+                          setPhone(normalizeIranPhone(phone))
+                        }
+                      }}
+                      placeholder="09123456789"
+                    />
+                    {isPhoneInvalid && (
+                      <FieldError>شماره موبایل وارد شده معتبر نیست.</FieldError>
+                    )}
+                    <Field orientation="horizontal" className="pt-1">
+                      <Checkbox
+                        id="noPhone"
+                        checked={noPhone}
+                        onCheckedChange={(checked) => {
+                          setNoPhone(Boolean(checked))
+                          if (checked) setPhone("")
+                        }}
+                      />
+                      <FieldLabel
+                        htmlFor="noPhone"
+                        className="cursor-pointer text-xs font-normal"
+                      >
+                        بدون شماره
+                      </FieldLabel>
+                    </Field>
+                  </Field>
+
+                  {/* کد ملی + فاقد کد ملی */}
+                  <Field data-invalid={isNationalIdInvalid || undefined}>
+                    <FieldLabel htmlFor="nationalId">
+                      کد ملی {!noNationalId && "*"}
+                    </FieldLabel>
+                    <Input
+                      id="nationalId"
+                      dir="ltr"
+                      maxLength={10}
+                      disabled={noNationalId}
+                      required={!noNationalId}
+                      aria-invalid={isNationalIdInvalid}
+                      value={nationalId}
+                      onChange={(e) => setNationalId(e.target.value)}
+                      placeholder="۱۰ رقم کد ملی"
+                    />
+                    {isNationalIdInvalid && (
+                      <FieldError>کد ملی وارد شده معتبر نیست.</FieldError>
+                    )}
+                    <Field orientation="horizontal" className="pt-1">
+                      <Checkbox
+                        id="noNationalId"
+                        checked={noNationalId}
+                        onCheckedChange={(checked) => {
+                          setNoNationalId(Boolean(checked))
+                          if (checked) setNationalId("")
+                        }}
+                      />
+                      <FieldLabel
+                        htmlFor="noNationalId"
+                        className="cursor-pointer text-xs font-normal"
+                      >
+                        فاقد کد ملی
+                      </FieldLabel>
+                    </Field>
+                  </Field>
+                </div>
+
+                {/* شماره پرونده و جنسیت */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel htmlFor="fileNumber">شماره پرونده</FieldLabel>
+                    <Input
+                      id="fileNumber"
+                      type="number"
+                      value={fileNumber}
+                      onChange={(e) => setFileNumber(e.target.value)}
+                    />
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="gender">جنسیت *</FieldLabel>
+                    <Select
+                      value={gender}
+                      items={GENDER_OPTIONS}
+                      onValueChange={(val) =>
+                        setGender((val as "FEMALE" | "MALE") || "FEMALE")
                       }
+                    >
+                      <SelectTrigger id="gender">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GENDER_OPTIONS.map((g) => (
+                          <SelectItem key={g.value} value={g.value}>
+                            {g.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+
+                {/* تاریخ تولد */}
+                <Field>
+                  <FieldLabel>تاریخ تولد</FieldLabel>
+                  <DatePicker
+                    calendarType="shamsi"
+                    value={birthDate}
+                    onValueChange={setBirthDate}
+                    calendarProps={{
+                      captionLayout: "dropdown",
+                      startMonth: new Date(1940, 0),
+                      endMonth: new Date(),
                     }}
-                    placeholder="09123456789"
                   />
-                  {isPhoneInvalid && (
-                    <FieldError>شماره موبایل وارد شده معتبر نیست.</FieldError>
-                  )}
-                  <Field orientation="horizontal" className="pt-1">
-                    <Checkbox
-                      id="noPhone"
-                      checked={noPhone}
-                      onCheckedChange={(checked) => {
-                        setNoPhone(Boolean(checked))
-                        if (checked) setPhone("")
-                      }}
-                    />
-                    <FieldLabel
-                      htmlFor="noPhone"
-                      className="cursor-pointer text-xs font-normal"
-                    >
-                      بدون شماره
-                    </FieldLabel>
-                  </Field>
                 </Field>
 
-                {/* کد ملی + فاقد کد ملی */}
-                <Field data-invalid={isNationalIdInvalid || undefined}>
-                  <FieldLabel htmlFor="nationalId">
-                    کد ملی {!noNationalId && "*"}
+                {/* نحوه آشنایی با کلینیک */}
+                <Field>
+                  <FieldLabel htmlFor="referralSource">
+                    نحوه آشنایی با کلینیک
                   </FieldLabel>
-                  <Input
-                    id="nationalId"
-                    dir="ltr"
-                    maxLength={10}
-                    disabled={noNationalId}
-                    required={!noNationalId}
-                    aria-invalid={isNationalIdInvalid}
-                    value={nationalId}
-                    onChange={(e) => setNationalId(e.target.value)}
-                    placeholder="۱۰ رقم کد ملی"
-                  />
-                  {isNationalIdInvalid && (
-                    <FieldError>کد ملی وارد شده معتبر نیست.</FieldError>
-                  )}
-                  <Field orientation="horizontal" className="pt-1">
-                    <Checkbox
-                      id="noNationalId"
-                      checked={noNationalId}
-                      onCheckedChange={(checked) => {
-                        setNoNationalId(Boolean(checked))
-                        if (checked) setNationalId("")
-                      }}
-                    />
-                    <FieldLabel
-                      htmlFor="noNationalId"
-                      className="cursor-pointer text-xs font-normal"
-                    >
-                      فاقد کد ملی
-                    </FieldLabel>
-                  </Field>
-                </Field>
-              </div>
-
-              {/* شماره پرونده و جنسیت */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field>
-                  <FieldLabel htmlFor="fileNumber">شماره پرونده</FieldLabel>
-                  <Input
-                    id="fileNumber"
-                    type="number"
-                    value={fileNumber}
-                    onChange={(e) => setFileNumber(e.target.value)}
-                  />
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="gender">جنسیت *</FieldLabel>
                   <Select
-                    value={gender}
-                    items={GENDER_OPTIONS}
-                    onValueChange={(val) =>
-                      setGender((val as "FEMALE" | "MALE") || "FEMALE")
-                    }
+                    value={referralSource}
+                    items={REFERRAL_SOURCES}
+                    onValueChange={(val) => setReferralSource(val || "NONE")}
                   >
-                    <SelectTrigger id="gender">
+                    <SelectTrigger id="referralSource">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {GENDER_OPTIONS.map((g) => (
-                        <SelectItem key={g.value} value={g.value}>
-                          {g.label}
+                      {REFERRAL_SOURCES.map((src) => (
+                        <SelectItem key={src.value} value={src.value}>
+                          {src.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </Field>
-              </div>
 
-              {/* تاریخ تولد */}
-              <Field>
-                <FieldLabel>تاریخ تولد</FieldLabel>
-                <DatePicker
-                  calendarType="shamsi"
-                  value={birthDate}
-                  onValueChange={setBirthDate}
-                  calendarProps={{
-                    captionLayout: "dropdown",
-                    startMonth: new Date(1940, 0),
-                    endMonth: new Date(),
-                  }}
-                />
-              </Field>
+                {/* نوع معرف (مراجعین / همکاران) */}
+                <Field>
+                  <FieldLabel>نوع معرف</FieldLabel>
+                  <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted p-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReferrerType("CLIENT")
+                        setReferrerId("NONE")
+                      }}
+                      className={`rounded-md py-1.5 text-xs font-medium transition-colors ${
+                        referrerType === "CLIENT"
+                          ? "bg-primary text-primary-foreground shadow-xs"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      مراجعین
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReferrerType("STAFF")
+                        setReferrerId("NONE")
+                      }}
+                      className={`rounded-md py-1.5 text-xs font-medium transition-colors ${
+                        referrerType === "STAFF"
+                          ? "bg-primary text-primary-foreground shadow-xs"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      همکاران
+                    </button>
+                  </div>
 
-              {/* نحوه آشنایی با کلینیک */}
-              <Field>
-                <FieldLabel htmlFor="referralSource">
-                  نحوه آشنایی با کلینیک
-                </FieldLabel>
-                <Select
-                  value={referralSource}
-                  items={REFERRAL_SOURCES}
-                  onValueChange={(val) => setReferralSource(val || "NONE")}
-                >
-                  <SelectTrigger id="referralSource">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {REFERRAL_SOURCES.map((src) => (
-                      <SelectItem key={src.value} value={src.value}>
-                        {src.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-
-              {/* نوع معرف (مراجعین / همکاران) */}
-              <Field>
-                <FieldLabel>نوع معرف</FieldLabel>
-                <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted p-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setReferrerType("CLIENT")
-                      setReferrerId("NONE")
-                    }}
-                    className={`rounded-md py-1.5 text-xs font-medium transition-colors ${
-                      referrerType === "CLIENT"
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "text-muted-foreground"
-                    }`}
+                  <Select
+                    value={referrerId}
+                    items={referrerItems}
+                    onValueChange={(val) => setReferrerId(val || "NONE")}
                   >
-                    مراجعین
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setReferrerType("STAFF")
-                      setReferrerId("NONE")
-                    }}
-                    className={`rounded-md py-1.5 text-xs font-medium transition-colors ${
-                      referrerType === "STAFF"
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "text-muted-foreground"
-                    }`}
-                  >
-                    همکاران
-                  </button>
-                </div>
+                    <SelectTrigger>
+                      <SelectValue placeholder="انتخاب معرف" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {referrerItems.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
 
-                <Select
-                  value={referrerId}
-                  items={referrerItems}
-                  onValueChange={(val) => setReferrerId(val || "NONE")}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="انتخاب معرف" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {referrerItems.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
+                {/* توضیحات */}
+                <Field className="pb-2">
+                  <FieldLabel htmlFor="notes">توضیحات</FieldLabel>
+                  <Textarea
+                    id="notes"
+                    rows={3}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="توضیحات اختیاری درباره مراجع..."
+                  />
+                </Field>
+              </FieldGroup>
+            </ResponsiveDialogPanel>
 
-              {/* توضیحات */}
-              <Field className="pb-2">
-                <FieldLabel htmlFor="notes">توضیحات</FieldLabel>
-                <Textarea
-                  id="notes"
-                  rows={3}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="توضیحات اختیاری درباره مراجع..."
-                />
-              </Field>
-            </FieldGroup>
             <ResponsiveDialogFooter>
               <Button
                 type="submit"
