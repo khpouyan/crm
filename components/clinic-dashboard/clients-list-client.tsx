@@ -822,7 +822,7 @@ export function ClientsListClient({
           tabIndex={-1}
           aria-hidden="true"
         />
-        <ResponsiveDialogContent className="no-scrollbar overflow-y-auto sm:max-w-lg " >
+        <ResponsiveDialogContent className=" h-[90vh] overflow-y-auto sm:max-w-lg " >
           <ResponsiveDialogHeader>
             <ResponsiveDialogTitle>پرونده جدید</ResponsiveDialogTitle>
             <ResponsiveDialogDescription>
