@@ -8,7 +8,7 @@ import {
   hasPermission,
   canAccessServiceCategory,
 } from "@/lib/permissions";
-import { normalizeIranianPhone, isValidIranianMobile } from "@/lib/kavenegar/kavenegar";
+import {normalizeIranPhone , isValidIranPhone } from "@/lib/iranian-mobile";
 import { normalizePersianDigits } from "@/lib/normalize-persian-digits";
 import { calculateInvoiceFinancials } from "@/lib/finance/invoice-calculator";
 
@@ -48,10 +48,10 @@ export async function createClientAction(input: CreateClientInput) {
     normalizedPhone = `NO_PHONE_${ctx.clinicId.slice(0, 6)}_${Date.now()}`;
   } else {
     const rawPhone = normalizePersianDigits(input.phone || "").trim();
-    if (!rawPhone || !isValidIranianMobile(rawPhone)) {
+    if (!rawPhone || !isValidIranPhone(rawPhone)) {
       return { success: false, error: "شماره موبایل واردشده معتبر نیست." };
     }
-    normalizedPhone = normalizeIranianPhone(rawPhone);
+    normalizedPhone = normalizeIranPhone(rawPhone);
   }
 
   const cleanNationalId = input.noNationalId
@@ -1015,10 +1015,10 @@ export async function updateClientAdditionalInfoAction(
 
     let updatedPhone = client.user.phone;
     if (rawPhone) {
-      if (!isValidIranianMobile(rawPhone)) {
+      if (!isValidIranPhone(rawPhone)) {
         return { success: false, error: "شماره موبایل واردشده معتبر نیست." };
       }
-      updatedPhone = normalizeIranianPhone(rawPhone);
+      updatedPhone = normalizeIranPhone(rawPhone);
     }
 
     if (rawNationalId && rawNationalId.length !== 10) {
@@ -1286,10 +1286,10 @@ export async function quickUpdateClientAction(input: QuickUpdateClientInput) {
       }
     } else if (input.phone?.trim()) {
       const rawPhone = normalizePersianDigits(input.phone).trim();
-      if (!isValidIranianMobile(rawPhone)) {
+      if (!isValidIranPhone(rawPhone)) {
         return { success: false, error: "شماره موبایل واردشده معتبر نیست." };
       }
-      const normalized = normalizeIranianPhone(rawPhone);
+      const normalized = normalizeIranPhone(rawPhone);
       if (normalized !== client.user.phone) {
         const phoneInUse = await prisma.user.findUnique({
           where: { phone: normalized },

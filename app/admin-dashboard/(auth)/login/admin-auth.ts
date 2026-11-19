@@ -4,7 +4,7 @@
 import crypto from "crypto";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import {normalizeIranPhone} from "@/lib/iranian-mobile"
+import {normalizeIranPhone } from "@/lib/iranian-mobile";
 
 export async function loginSuperAdminAction(rawPhone: string, passwordPlain: string) {
   const phone = normalizeIranPhone(rawPhone);

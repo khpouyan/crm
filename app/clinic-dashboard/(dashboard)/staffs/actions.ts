@@ -5,10 +5,7 @@ import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { getCurrentClinicContext } from "@/lib/auth/session"
 import { ALL_PERMISSION_KEYS, PermissionKey } from "@/lib/permissions"
-import {
-  normalizeIranianPhone,
-  isValidIranianMobile,
-} from "@/lib/kavenegar/kavenegar"
+import {normalizeIranPhone , isValidIranPhone } from "@/lib/iranian-mobile";
 // تابع کمکی برای بررسی مجوز مدیریت پرسنل و دریافت سقف پلن
 async function requireStaffManagementContext() {
   const ctx = await getCurrentClinicContext()
@@ -114,7 +111,7 @@ export async function upsertStaff(input: UpsertStaffInput) {
   try {
     const { clinicId, maxStaff } = await requireStaffManagementContext()
 
-    const cleanPhone = normalizeIranianPhone(input.phone)
+    const cleanPhone = normalizeIranPhone(input.phone)
     const cleanName = input.fullName.trim()
     const cleanJobTitle = input.jobTitle.trim()
 
@@ -125,7 +122,7 @@ export async function upsertStaff(input: UpsertStaffInput) {
       }
     }
 
-    if (!isValidIranianMobile(cleanPhone)) {
+    if (!isValidIranPhone(cleanPhone)) {
       return {
         success: false,
         error: "شماره موبایل وارد شده معتبر نیست (مثال صحیح: 09123456789).",

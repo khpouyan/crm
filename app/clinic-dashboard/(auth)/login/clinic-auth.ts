@@ -5,11 +5,8 @@ import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import {
-  normalizeIranianPhone,
-  isValidIranianMobile,
-  sendOTPWithKavenegar,
-} from "@/lib/kavenegar/kavenegar";
+import {sendOTPWithKavenegar} from "@/lib/kavenegar/kavenegar";
+import {normalizeIranPhone , isValidIranPhone } from "@/lib/iranian-mobile";
 import {
   createSession,
   destroySession,
@@ -68,9 +65,9 @@ export async function loginWithPasswordAction(
   password: string
 ) {
   try {
-    const phone = normalizeIranianPhone(rawPhone);
+    const phone = normalizeIranPhone(rawPhone);
 
-    if (!isValidIranianMobile(phone)) {
+    if (!isValidIranPhone(phone)) {
       return { success: false, error: "شماره موبایل وارد شده معتبر نیست." };
     }
 
@@ -111,9 +108,9 @@ export async function loginWithPasswordAction(
  */
 export async function sendOtpAction(rawPhone: string) {
   try {
-    const phone = normalizeIranianPhone(rawPhone);
+    const phone = normalizeIranPhone(rawPhone);
 
-    if (!isValidIranianMobile(phone)) {
+    if (!isValidIranPhone(phone)) {
       return {
         success: false,
         error: "لطفاً یک شماره موبایل معتبر وارد کنید (مثال: 09123456789).",
@@ -182,10 +179,10 @@ export async function sendOtpAction(rawPhone: string) {
  */
 export async function verifyOtpAction(rawPhone: string, code: string) {
   try {
-    const phone = normalizeIranianPhone(rawPhone);
-    const normalizedCode = normalizeIranianPhone(code);
+    const phone = normalizeIranPhone(rawPhone);
+    const normalizedCode = normalizeIranPhone(code);
 
-    if (!isValidIranianMobile(phone) || normalizedCode.length !== 6) {
+    if (!isValidIranPhone(phone) || normalizedCode.length !== 6) {
       return { success: false, error: "اطلاعات وارد شده معتبر نیست." };
     }
 

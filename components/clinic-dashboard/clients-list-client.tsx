@@ -75,10 +75,7 @@ import {
   FieldTitle,
 } from "@/components/ui/field"
 import { isValidNationalId } from "@/lib/national-id"
-import {
-  normalizeIranianPhone,
-  isValidIranianMobile,
-} from "@/lib/kavenegar/kavenegar"
+import {normalizeIranPhone , isValidIranPhone } from "@/lib/iranian-mobile";
 
 import { DatePicker } from "@/components/ui/date-picker"
 import { TablePaginationBar } from "@/components/clinic-dashboard/table-pagination-bar"
@@ -375,7 +372,7 @@ export function ClientsListClient({
   )
 
   const isPhoneInvalid =
-    !noPhone && phone.trim() !== "" && !isValidIranianMobile(phone)
+    !noPhone && phone.trim() !== "" && !isValidIranPhone(phone)
 
   const isNationalIdInvalid =
     !noNationalId && nationalId.trim() !== "" && !isValidNationalId(nationalId)
@@ -383,11 +380,11 @@ export function ClientsListClient({
   const onFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
-    if (!noPhone && !isValidIranianMobile(phone)) return
+    if (!noPhone && !isValidIranPhone(phone)) return
     if (!noNationalId && !isValidNationalId(nationalId)) return
 
     // قبل از ارسال، شماره موبایل را نرمال‌سازی کنید (در صورت نیاز)
-    const normalizedPhone = noPhone ? "" : normalizeIranianPhone(phone)
+    const normalizedPhone = noPhone ? "" : normalizeIranPhone(phone)
 
     // ادامه منطق handleCreateClient(e)
     handleCreateClient(e)
@@ -864,7 +861,7 @@ export function ClientsListClient({
                     onChange={(e) => setPhone(e.target.value)}
                     onBlur={() => {
                       if (!noPhone && phone.trim()) {
-                        setPhone(normalizeIranianPhone(phone))
+                        setPhone(normalizeIranPhone(phone))
                       }
                     }}
                     placeholder="09123456789"

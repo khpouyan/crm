@@ -1,4 +1,5 @@
 // lib/kavenegar/kavenegar.ts
+import { normalizeIranPhone } from "@/lib/iranian-mobile";
 
 export interface SendOTPParams {
   receptor: string;
@@ -43,29 +44,6 @@ export function toEnglishDigits(input: string): string {
   return normalized;
 }
 
-/**
- * تبدیل فرمت‌های مختلف شماره موبایل به فرمت استاندارد (09123456789)
- */
-export function normalizeIranianPhone(phone: string): string {
-  const normalized = toEnglishDigits(phone);
-  const cleaned = normalized.replace(/\D/g, "");
-
-  if (cleaned.startsWith("0098") && cleaned.length === 14) {
-    return `0${cleaned.slice(4)}`;
-  }
-  if (cleaned.startsWith("98") && cleaned.length === 12) {
-    return `0${cleaned.slice(2)}`;
-  }
-  if (cleaned.startsWith("9") && cleaned.length === 10) {
-    return `0${cleaned}`;
-  }
-  return cleaned;
-}
-
-export function isValidIranianMobile(phone: string): boolean {
-  return /^09\d{9}$/.test(phone);
-}
-
 export async function sendOTPWithKavenegar(
   params: SendOTPParams
 ): Promise<KavenegarResponse> {
@@ -79,7 +57,7 @@ export async function sendOTPWithKavenegar(
 
   const baseUrl = `https://api.kavenegar.com/v1/${apiKey}/verify/lookup.json`;
   const searchParams = new URLSearchParams({
-    receptor: normalizeIranianPhone(params.receptor),
+    receptor: normalizeIranPhone(params.receptor),
     token: toEnglishDigits(params.token),
     template: defaultTemplate,
   });
