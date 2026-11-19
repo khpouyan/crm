@@ -816,7 +816,7 @@ export function ClientsListClient({
       {/* ========================================== */}
       {/* مودال ایجاد پرونده جدید */}
       {/* ========================================== */}
-      <ResponsiveDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} drawerPosition="start">
+      <ResponsiveDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} drawerPosition="bottom">
         <ResponsiveDialogTrigger
           className="sr-only"
           tabIndex={-1}
