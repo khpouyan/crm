@@ -4,10 +4,10 @@
 import crypto from "crypto";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { toKavenegarReceptor } from "@/lib/kavenegar/kavenegar";
+import {normalizeIranPhone} from "@/lib/iranian-mobile"
 
 export async function loginSuperAdminAction(rawPhone: string, passwordPlain: string) {
-  const phone = toKavenegarReceptor(rawPhone);
+  const phone = normalizeIranPhone(rawPhone);
 
   if (!phone || !passwordPlain) {
     return { success: false, error: "شماره موبایل و رمز عبور الزامی است." };
@@ -72,4 +72,5 @@ export async function loginSuperAdminAction(rawPhone: string, passwordPlain: str
   });
 
   return { success: true };
+
 }
