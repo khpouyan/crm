@@ -822,7 +822,7 @@ export function ClientsListClient({
           tabIndex={-1}
           aria-hidden="true"
         />
-        <ResponsiveDialogContent className=" h-[90vh] overflow-y-auto sm:max-w-lg " >
+        <ResponsiveDialogContent className="flex max-h-[85dvh] flex-col overflow-hidden sm:max-w-lg" >
           <ResponsiveDialogHeader>
             <ResponsiveDialogTitle>پرونده جدید</ResponsiveDialogTitle>
             <ResponsiveDialogDescription>
@@ -831,7 +831,7 @@ export function ClientsListClient({
           </ResponsiveDialogHeader>
 
           <form onSubmit={onFormSubmit} className="pt-2">
-            <FieldGroup className="px-5">
+            <FieldGroup className="no-scrollbar flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
               {/* نام و نام خانوادگی */}
               <Field>
                 <FieldLabel htmlFor="fullName">نام و نام خانوادگی</FieldLabel>
