@@ -190,7 +190,7 @@ function DrawerBackdrop({
     <DrawerPrimitive.Backdrop
       data-slot="drawer-backdrop"
       className={cn(
-        "fixed inset-0 z-50 bg-black/45 opacity-[calc(1-var(--drawer-swipe-progress))] backdrop-blur-md transition-opacity duration-450 ease-[cubic-bezier(0.32,0.72,0,1)] data-swiping:duration-0 data-[ending-style]:opacity-0 data-[ending-style]:duration-[calc(var(--drawer-swipe-strength)*400ms)] data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute",
+        "fixed inset-0 z-50 h-lvh w-full bg-black/50 opacity-[calc(1-var(--drawer-swipe-progress))] backdrop-blur-md transition-opacity duration-450 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-[opacity] data-swiping:duration-0 data-[ending-style]:opacity-0 data-[ending-style]:duration-[calc(var(--drawer-swipe-strength)*400ms)] data-[starting-style]:opacity-0",
         className
       )}
       {...props}
@@ -220,7 +220,7 @@ function DrawerViewport({
         // length unit: Tailwind ≥4.3.1 compiles `--spacing(0)` to a unitless
         // `0`, which makes that calc invalid (`length + 0`) so the transform
         // resolves to `none` and the drawer stops animating. Use `0px`.
-        "fixed inset-0 z-50 [--bleed:--spacing(12)] [--inset:0px]",
+        "fixed inset-0 z-50 min-h-dvh [--bleed:--spacing(12)] [--inset:0px]",
         "touch-none",
         // flex + align to an edge, not CSS grid: with snapPoints, the popup's
         // own max-height (see DrawerPopup) clamps its border-box, and
@@ -284,10 +284,10 @@ function DrawerPopup({
           <DrawerPrimitive.Popup
             data-slot="drawer-popup"
             className={cn(
-              "relative flex max-h-full min-h-0 w-full min-w-0 flex-col bg-popover text-popover-foreground shadow-lg/5 transition-[transform,box-shadow,height,background-color] duration-450 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform outline-none [--peek:calc(--spacing(6)-1px)] [--scale-base:calc(max(0,1-(var(--nested-drawers)*var(--stack-step))))] [--scale:clamp(0,calc(var(--scale-base)+(var(--stack-step)*var(--stack-progress))),1)] [--shrink:calc(1-var(--scale))] [--stack-peek-offset:max(0px,calc((var(--nested-drawers)-var(--stack-progress))*var(--peek)))] [--stack-progress:clamp(0,var(--drawer-swipe-progress),1)] [--stack-step:0.05] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:shadow-[0_1px_--theme(--color-black/4%)] after:pointer-events-none after:absolute after:bg-popover data-nested-drawer-open:overflow-hidden data-nested-drawer-open:bg-[color-mix(in_srgb,var(--popover),var(--color-black)_calc(2%*(var(--nested-drawers)-var(--stack-progress))))] data-swiping:select-none data-[ending-style]:shadow-transparent data-[ending-style]:duration-[calc(var(--drawer-swipe-strength)*400ms)] data-[starting-style]:shadow-transparent dark:before:shadow-[0_-1px_--theme(--color-white/6%)] dark:data-nested-drawer-open:bg-[color-mix(in_srgb,var(--popover),var(--color-black)_calc(6%*(var(--nested-drawers)-var(--stack-progress))))]",
+              "relative flex max-h-full min-h-0 w-full min-w-0 flex-col bg-popover text-popover-foreground shadow-lg/5 transition-[transform,box-shadow,height,background-color] duration-450 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform outline-none [--peek:calc(--spacing(6)-1px)] [--scale-base:calc(max(0,1-(var(--nested-drawers)*var(--stack-step))))] [--scale:clamp(0,calc(var(--scale-base)+(var(--stack-step)*var(--stack-progress))),1)] [--shrink:calc(1-var(--scale))] [--stack-peek-offset:max(0px,calc((var(--nested-drawers)-var(--stack-progress))*var(--peek)))] [--stack-progress:clamp(0,var(--drawer-swipe-progress),1)] [--stack-step:0.05] before:pointer-events-none before:absolute before:inset-0 before:shadow-[0_1px_--theme(--color-black/4%)] after:pointer-events-none after:absolute after:bg-popover data-nested-drawer-open:overflow-hidden data-nested-drawer-open:bg-[color-mix(in_srgb,var(--popover),var(--color-black)_calc(2%*(var(--nested-drawers)-var(--stack-progress))))] data-swiping:select-none data-[ending-style]:shadow-transparent data-[ending-style]:duration-[calc(var(--drawer-swipe-strength)*400ms)] data-[starting-style]:shadow-transparent dark:before:shadow-[0_-1px_--theme(--color-white/6%)] dark:data-nested-drawer-open:bg-[color-mix(in_srgb,var(--popover),var(--color-black)_calc(6%*(var(--nested-drawers)-var(--stack-progress))))]",
               "touch-none",
               position === "bottom" &&
-                "max-w-[400px] transform-[translateY(calc(var(--drawer-snap-point-offset)+var(--drawer-swipe-movement-y)))] border-t border-border pb-[max(0px,calc(env(safe-area-inset-bottom,0px)+var(--drawer-snap-point-offset,0px)+clamp(0,1,var(--drawer-snap-point-offset,0px)/1px)*var(--drawer-swipe-movement-y,0px)))] not-data-[starting-style]:not-data-[ending-style]:transition-[transform,box-shadow,height,background-color,padding] after:inset-x-0 after:top-full after:h-(--bleed) has-data-[slot=drawer-bar]:pt-2 data-[ending-style]:transform-[translateY(calc(100%+env(safe-area-inset-bottom,0px)+var(--inset)))] data-[ending-style]:pb-0 data-[starting-style]:transform-[translateY(calc(100%+env(safe-area-inset-bottom,0px)+var(--inset)))] data-[starting-style]:pb-0",
+                "max-w-[400px] transform-[translateY(calc(var(--drawer-snap-point-offset)+var(--drawer-swipe-movement-y)))] border-t border-border pb-[max(0px,calc(env(safe-area-inset-bottom,0px)+var(--drawer-snap-point-offset,0px)+clamp(0,1,var(--drawer-snap-point-offset,0px)/1px)*var(--drawer-swipe-movement-y,0px)))] not-data-[starting-style]:not-data-[ending-style]:transition-[transform,box-shadow,height,background-color,padding] after:inset-x-0 after:top-full after:h-[120px] has-data-[slot=drawer-bar]:pt-2 data-[ending-style]:transform-[translateY(calc(100%+env(safe-area-inset-bottom,0px)+var(--inset)))] data-[ending-style]:pb-0 data-[starting-style]:transform-[translateY(calc(100%+env(safe-area-inset-bottom,0px)+var(--inset)))] data-[starting-style]:pb-0",
               position === "top" &&
                 "transform-[translateY(var(--drawer-swipe-movement-y))] border-b border-border after:inset-x-0 after:bottom-full after:h-(--bleed) has-data-[slot=drawer-bar]:pb-2 data-[ending-style]:transform-[translateY(calc(-100%-var(--inset)))] data-[starting-style]:transform-[translateY(calc(-100%-var(--inset)))]",
               position === "left" &&
@@ -421,24 +421,10 @@ function DrawerFooter({
         // dragging/overscrolling exposes the area past its bottom edge.
         // That area is otherwise filled by DrawerPopup's own bleed
         // (bg-popover), which doesn't match the footer's muted background —
-        // paint a matching bleed here so the footer's color and border
-        // appear to continue instead of cutting to a different shade.
-        //
-        // after:z-10 is load-bearing: DrawerPopup has its own after: bleed
-        // (bg-popover) covering the same region, and since that bleed is
-        // *generated content of the popup itself* — which has a transform
-        // and so establishes its own stacking context — it paints as if it
-        // were the popup's last child, i.e. after and on top of this
-        // footer (an earlier child) and this pseudo-element, even though
-        // this is declared later in the DOM. Without an explicit z-index
-        // this fix is invisible: the popup's own solid bleed just paints
-        // over it.
-        //
-        // On a TOP drawer this bleed hangs below the popup into the page,
-        // where a bottom drawer's is off-screen — so only there it fades
-        // with the drag via the popup's inherited --drawer-swipe-progress
-        // (0 at rest). Every other position keeps it always painted.
-        "relative border-t border-border bg-muted/72 pt-4 pb-[calc(env(safe-area-inset-bottom,0px)+--spacing(4))] after:pointer-events-none after:absolute after:z-10 after:bg-muted/72",
+        // paint a matching opaque bleed here so the footer's color and border
+        // appear to continue instead of cutting to a different shade or
+        // letting page content show through during Safari tab switches.
+        "relative border-t border-border bg-popover bg-[linear-gradient(to_bottom,color-mix(in_srgb,var(--muted)_72%,var(--popover)),color-mix(in_srgb,var(--muted)_72%,var(--popover)))] pt-4 pb-[calc(env(safe-area-inset-bottom,0px)+--spacing(4))] after:pointer-events-none after:absolute after:z-10 after:bg-popover",
       // Bottom and top drawers leave space below the footer, so their bleed
       // continues downward.
       variant === "default" &&
