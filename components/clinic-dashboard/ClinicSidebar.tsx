@@ -224,6 +224,9 @@ const SINGLE_BOTTOM_ITEMS: NavSingleItem[] = [
   },
 ]
 
+const ACTIVE_ITEM_CLASS =
+  "data-[active=true]:bg-primary/15 data-[active=true]:font-semibold data-[active=true]:text-primary"
+
 function canSee(
   user: SidebarUserProp,
   requiredAnyPermissions?: PermissionKey[]
@@ -244,7 +247,13 @@ export interface ClinicSidebarProps extends React.ComponentProps<
 
 export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
   const pathname = usePathname()
-  const { isMobile } = useSidebar()
+  const { isMobile, setOpenMobile } = useSidebar()
+
+  const closeMobileSidebar = React.useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false)
+    }
+  }, [isMobile, setOpenMobile])
 
   const visibleTopItems = SINGLE_TOP_ITEMS.filter((item) =>
     canSee(user, item.requiredAnyPermissions)
@@ -265,7 +274,6 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
     canSee(user, item.requiredAnyPermissions)
   )
 
-  // مدیریت کنترل‌شده وضعیت باز/بسته بودن منوهای کشویی برای جلوگیری از خطای Base UI
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>(
     () => {
       const initial: Record<string, boolean> = {}
@@ -277,6 +285,7 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
       return initial
     }
   )
+
   React.useEffect(() => {
     setOpenGroups((prev) => {
       const next = { ...prev }
@@ -289,7 +298,16 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
       }
       return next
     })
+    closeMobileSidebar()
   }, [pathname])
+
+  const isRouteActive = (href: string) => {
+    const cleanHref = href.split("?")[0]
+    if (cleanHref === "/clinic-dashboard") {
+      return pathname === "/clinic-dashboard"
+    }
+    return pathname === cleanHref || pathname.startsWith(`${cleanHref}/`)
+  }
 
   return (
     <Sidebar side="right" dir="rtl" collapsible="icon" {...props}>
@@ -315,8 +333,11 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
             <SidebarMenuItem className="px-3" key={item.name}>
               <SidebarMenuButton
                 tooltip={item.name}
-                isActive={pathname === item.href}
-                render={<Link href={item.href} />}
+                isActive={isRouteActive(item.href)}
+                className={ACTIVE_ITEM_CLASS}
+                render={
+                  <Link href={item.href} onClick={closeMobileSidebar} />
+                }
               >
                 <item.icon className="size-4" />
                 <span className="font-medium">{item.name}</span>
@@ -354,8 +375,14 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
                           <SidebarMenuSubItem key={subItem.title}>
                             <SidebarMenuSubButton
                               isActive={pathname === subItem.href.split("?")[0]}
+                              className={ACTIVE_ITEM_CLASS}
                               render={
-                                <Link href={subItem.href}>{subItem.title}</Link>
+                                <Link
+                                  href={subItem.href}
+                                  onClick={closeMobileSidebar}
+                                >
+                                  {subItem.title}
+                                </Link>
                               }
                             />
                           </SidebarMenuSubItem>
@@ -374,8 +401,11 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
             <SidebarMenuItem className="px-3" key={item.name}>
               <SidebarMenuButton
                 tooltip={item.name}
-                isActive={pathname === item.href}
-                render={<Link href={item.href} />}
+                isActive={isRouteActive(item.href)}
+                className={ACTIVE_ITEM_CLASS}
+                render={
+                  <Link href={item.href} onClick={closeMobileSidebar} />
+                }
               >
                 <item.icon className="size-4" />
                 <span className="font-medium">{item.name}</span>
@@ -434,7 +464,12 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
                       )}
                       {canSee(user, ["management.settings"]) && (
                         <DropdownMenuItem
-                          render={<Link href="/clinic-dashboard/staffs" />}
+                          render={
+                            <Link
+                              href="/clinic-dashboard/staffs"
+                              onClick={closeMobileSidebar}
+                            />
+                          }
                         >
                           <Settings2 className="size-4" />
                           تنظیمات و پرسنل

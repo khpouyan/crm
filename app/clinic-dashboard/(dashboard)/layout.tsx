@@ -36,15 +36,15 @@ export default async function ClinicLayout({
     <SidebarProvider>
       {/* سایدبار سراسری کلینیک با اعمال سطح دسترسی */}
       <ClinicSidebar clinic={sidebarClinic} user={sidebarUser} />
-      {/* ناحیه محتوای متغیر صفحات */}
-      <SidebarInset>
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+      {/* ناحیه محتوای متغیر صفحات (تمام‌عرض در موبایل) */}
+      <SidebarInset className="min-w-0 overflow-x-hidden">
+        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3 md:px-4">
           <SidebarTrigger />
           <div className="ms-auto flex items-center gap-2">
             <ModeToggle />
           </div>
         </header>
-        <div className="flex flex-1 flex-col p-4 md:p-6" dir="rtl">
+        <div className="flex flex-1 flex-col p-0 md:p-6" dir="rtl">
           {children}
         </div>
       </SidebarInset>
