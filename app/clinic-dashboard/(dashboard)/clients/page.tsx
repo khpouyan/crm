@@ -77,13 +77,18 @@ export default async function ClientsPage({
 
   const orderBy =
     sortParam === "fileNumber_asc"
-      ? [{ fileNumber: "asc" as const }, { createdAt: "asc" as const }]
+      ? [
+          { fileNumber: { sort: "asc" as const, nulls: "last" as const } },
+          { createdAt: "asc" as const },
+        ]
       : sortParam === "newest"
       ? [{ createdAt: "desc" as const }]
       : sortParam === "oldest"
       ? [{ createdAt: "asc" as const }]
-      : [{ fileNumber: "desc" as const }, { createdAt: "desc" as const }];
-
+      : [
+          { fileNumber: { sort: "desc" as const, nulls: "last" as const } },
+          { createdAt: "desc" as const },
+        ];
   const [
     totalCount,
     clients,

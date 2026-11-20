@@ -207,7 +207,7 @@ export function ClientsListClient({
   ) {
     const params = new URLSearchParams(searchParams.toString())
     Object.entries(updates).forEach(([key, val]) => {
-      if (!val || val === "ALL") {
+      if (val === null || val === "" || (key === "status" && val === "ALL")) {
         params.delete(key)
       } else {
         params.set(key, val)
@@ -216,8 +216,11 @@ export function ClientsListClient({
     if (resetPage) {
       params.set("page", "1")
     }
+    const queryString = params.toString()
+    const targetUrl = queryString ? `${pathname}?${queryString}` : pathname
     startTransition(() => {
-      router.push(`${pathname}?${params.toString()}`)
+      router.push(targetUrl)
+      router.refresh()
     })
   }
 
@@ -437,9 +440,11 @@ export function ClientsListClient({
               <Select
                 value={initialSort}
                 items={SORT_OPTIONS}
-                onValueChange={(val) =>
-                  updateQueryParams({ sort: val || "fileNumber_desc" })
-                }
+                onValueChange={(val) => {
+                  if (val && val !== initialSort) {
+                    updateQueryParams({ sort: val })
+                  }
+                }}
               >
                 <SelectTrigger className="h-9 w-full">
                   <SelectValue placeholder="مرتب‌سازی" />
@@ -1202,13 +1207,14 @@ export function ClientsListClient({
       <ResponsiveDialog
         open={Boolean(deletingClient)}
         onOpenChange={(open) => !open && setDeletingClient(null)}
+        drawerPosition="bottom"
       >
         <ResponsiveDialogTrigger
           className="sr-only"
           tabIndex={-1}
           aria-hidden="true"
         />
-        <ResponsiveDialogContent className="py-5 sm:max-w-md">
+        <ResponsiveDialogContent className="sm:max-w-md">
           <ResponsiveDialogHeader>
             <ResponsiveDialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="size-5" />
@@ -1221,49 +1227,66 @@ export function ClientsListClient({
           </ResponsiveDialogHeader>
 
           {deletingClient && (
-            <div className="space-y-4 pt-2">
-              {deletingHasRecords ? (
-                <div className="space-y-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3.5 text-xs text-destructive">
-                  <p className="font-bold">
-                    هشدار مهم: این پرونده دارای سوابق ثبت‌شده در سیستم است!
-                  </p>
-                  <p>
-                    با حذف این پرونده، تمام داده‌های زیر برای همیشه پاک می‌شوند:
-                  </p>
-                  <ul className="list-inside list-disc space-y-1 font-medium">
-                    {deletingClient.servicesCount > 0 && (
-                      <li>
-                        {deletingClient.servicesCount.toLocaleString("fa-IR")}{" "}
-                        سرویس انجام‌شده
-                      </li>
-                    )}
-                    {deletingClient.invoicesCount > 0 && (
-                      <li>
-                        {deletingClient.invoicesCount.toLocaleString("fa-IR")}{" "}
-                        فاکتور و رکورد پرداختی/اقساط
-                      </li>
-                    )}
-                    {deletingClient.walletBalance > 0 && (
-                      <li>
-                        موجودی کیف پول به مبلغ{" "}
-                        {deletingClient.walletBalance.toLocaleString("fa-IR")}{" "}
-                        تومان
-                      </li>
-                    )}
-                    <li>
-                      تمامی اقلام مصرفی این سرویس‌ها به صورت خودکار به موجودی
-                      بچ‌های انبار بازگردانده و اصلاح خواهند شد.
-                    </li>
-                  </ul>
+            <>
+              <ResponsiveDialogPanel className="no-scrollbar max-h-[70vh] overflow-y-auto pt-2">
+                <div className="px-5">
+                  <FieldGroup>
+                    <Field>
+                      {deletingHasRecords ? (
+                        <div className="space-y-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3.5 text-xs text-destructive">
+                          <p className="font-bold">
+                            هشدار مهم: این پرونده دارای سوابق ثبت‌شده در سیستم
+                            است!
+                          </p>
+                          <p>
+                            با حذف این پرونده، تمام داده‌های زیر برای همیشه پاک
+                            می‌شوند:
+                          </p>
+                          <ul className="list-inside list-disc space-y-1 font-medium">
+                            {deletingClient.servicesCount > 0 && (
+                              <li>
+                                {deletingClient.servicesCount.toLocaleString(
+                                  "fa-IR"
+                                )}{" "}
+                                سرویس انجام‌شده
+                              </li>
+                            )}
+                            {deletingClient.invoicesCount > 0 && (
+                              <li>
+                                {deletingClient.invoicesCount.toLocaleString(
+                                  "fa-IR"
+                                )}{" "}
+                                فاکتور و رکورد پرداختی/اقساط
+                              </li>
+                            )}
+                            {deletingClient.walletBalance > 0 && (
+                              <li>
+                                موجودی کیف پول به مبلغ{" "}
+                                {deletingClient.walletBalance.toLocaleString(
+                                  "fa-IR"
+                                )}{" "}
+                                تومان
+                              </li>
+                            )}
+                            <li>
+                              تمامی اقلام مصرفی این سرویس‌ها به صورت خودکار به
+                              موجودی بچ‌های انبار بازگردانده و اصلاح خواهند شد.
+                            </li>
+                          </ul>
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border bg-muted/40 p-3 text-xs text-muted-foreground">
+                          این پرونده فاقد هرگونه سابقه سرویس، فاکتور یا تراکنش
+                          مالی است و حذف آن هیچ تغییری در انبار و حسابداری ایجاد
+                          نمی‌کند.
+                        </div>
+                      )}
+                    </Field>
+                  </FieldGroup>
                 </div>
-              ) : (
-                <div className="rounded-xl border bg-muted/40 p-3 text-xs text-muted-foreground">
-                  این پرونده فاقد هرگونه سابقه سرویس، فاکتور یا تراکنش مالی است
-                  و حذف آن هیچ تغییری در انبار و حسابداری ایجاد نمی‌کند.
-                </div>
-              )}
+              </ResponsiveDialogPanel>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <ResponsiveDialogFooter className="gap-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -1282,8 +1305,8 @@ export function ClientsListClient({
                     ? "در حال حذف و اصلاح انبار..."
                     : "تایید و حذف کامل پرونده"}
                 </Button>
-              </div>
-            </div>
+              </ResponsiveDialogFooter>
+            </>
           )}
         </ResponsiveDialogContent>
       </ResponsiveDialog>
