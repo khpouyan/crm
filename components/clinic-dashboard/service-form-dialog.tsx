@@ -1,25 +1,19 @@
 // components/clinic-dashboard/service-form-dialog.tsx
-"use client";
+"use client"
 
-import { useState, useEffect, useMemo } from "react";
-import { Check, Loader2, Package, Plus, Trash2, Users } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+import { useState, useEffect, useMemo } from "react"
+import { Check, Loader2, Package, Plus, Trash2, Users } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Field,
   FieldDescription,
   FieldGroup,
   FieldLabel,
-} from "@/components/ui/field";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+} from "@/components/ui/field"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import {
   ResponsiveDialog,
   ResponsiveDialogClose,
@@ -31,36 +25,36 @@ import {
   ResponsiveDialogPopup,
   ResponsiveDialogTitle,
   ResponsiveDialogTrigger,
-} from "@/components/ui/responsive-dialog";
-import { upsertServiceAction } from "@/app/clinic-dashboard/(dashboard)/services/actions";
-import { toast } from "sonner";
+} from "@/components/ui/responsive-dialog"
+import { upsertServiceAction } from "@/app/clinic-dashboard/(dashboard)/services/actions"
+import { toast } from "sonner"
 
 interface ServiceFormDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  open: boolean
+  onOpenChange: (open: boolean) => void
   editingService?: {
-    id: string;
-    title: string;
-    assignedStaff: { id: string }[];
+    id: string
+    title: string
+    assignedStaff: { id: string }[]
     defaultServiceProducts?: {
-      id: string;
-      quantity: number;
-      clinicProduct: { id: string; name: string; unit: string };
-    }[];
-  } | null;
+      id: string
+      quantity: number
+      clinicProduct: { id: string; name: string; unit: string }
+    }[]
+  } | null
   activeStaff: {
-    id: string;
-    hasAllServicesAccess?: boolean;
-    user: { fullName: string | null; phone: string };
-    role: { name: string };
-  }[];
-  clinicProducts: { id: string; name: string; unit: string }[];
+    id: string
+    hasAllServicesAccess?: boolean
+    user: { fullName: string | null; phone: string }
+    role: { name: string }
+  }[]
+  clinicProducts: { id: string; name: string; unit: string }[]
 }
 
 interface DraftServiceProduct {
-  uid: string;
-  clinicProductId: string;
-  quantity: string;
+  uid: string
+  clinicProductId: string
+  quantity: string
 }
 
 export function ServiceFormDialog({
@@ -70,28 +64,26 @@ export function ServiceFormDialog({
   activeStaff,
   clinicProducts,
 }: ServiceFormDialogProps) {
-  const [title, setTitle] = useState("");
-  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
+  const [title, setTitle] = useState("")
+  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([])
   const [defaultProducts, setDefaultProducts] = useState<DraftServiceProduct[]>(
     []
-  );
-  const [isPending, setIsPending] = useState(false);
+  )
+  const [isPending, setIsPending] = useState(false)
 
   useEffect(() => {
     if (open) {
-      setTitle(editingService?.title ?? "");
-      setSelectedStaffIds(
-        editingService?.assignedStaff.map((s) => s.id) ?? []
-      );
+      setTitle(editingService?.title ?? "")
+      setSelectedStaffIds(editingService?.assignedStaff.map((s) => s.id) ?? [])
       setDefaultProducts(
         editingService?.defaultServiceProducts?.map((dp) => ({
           uid: dp.id,
           clinicProductId: dp.clinicProduct.id,
           quantity: String(dp.quantity),
         })) ?? []
-      );
+      )
     }
-  }, [open, editingService]);
+  }, [open, editingService])
 
   const productSelectItems = useMemo(
     () => [
@@ -102,15 +94,15 @@ export function ServiceFormDialog({
       })),
     ],
     [clinicProducts]
-  );
+  )
 
   const toggleStaff = (staffId: string) => {
     setSelectedStaffIds((prev) =>
       prev.includes(staffId)
         ? prev.filter((id) => id !== staffId)
         : [...prev, staffId]
-    );
-  };
+    )
+  }
 
   const handleAddProductRow = () => {
     setDefaultProducts((prev) => [
@@ -120,14 +112,14 @@ export function ServiceFormDialog({
         clinicProductId: "NONE",
         quantity: "1",
       },
-    ]);
-  };
+    ])
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault()
     if (!title.trim()) {
-      toast.error("لطفاً عنوان خدمت را وارد کنید");
-      return;
+      toast.error("لطفاً عنوان خدمت را وارد کنید")
+      return
     }
 
     const mappedProducts = defaultProducts
@@ -135,26 +127,26 @@ export function ServiceFormDialog({
       .map((p) => ({
         clinicProductId: p.clinicProductId,
         quantity: parseFloat(p.quantity),
-      }));
+      }))
 
-    setIsPending(true);
+    setIsPending(true)
     const res = await upsertServiceAction({
       id: editingService?.id,
       title,
       assignedStaffIds: selectedStaffIds,
       defaultProducts: mappedProducts,
-    });
-    setIsPending(false);
+    })
+    setIsPending(false)
 
     if (res.success) {
       toast.success(
         editingService ? "خدمت با موفقیت ویرایش شد" : "خدمت جدید ایجاد شد"
-      );
-      onOpenChange(false);
+      )
+      onOpenChange(false)
     } else {
-      toast.error(res.error || "خطایی رخ داد");
+      toast.error(res.error || "خطایی رخ داد")
     }
-  };
+  }
 
   return (
     <ResponsiveDialog
@@ -179,7 +171,7 @@ export function ServiceFormDialog({
         </ResponsiveDialogHeader>
 
         <form onSubmit={handleSubmit}>
-          <ResponsiveDialogPanel className="max-h-[70vh] overflow-y-auto no-scrollbar">
+          <ResponsiveDialogPanel className="no-scrollbar max-h-[70vh] overflow-y-auto">
             <div className="px-5">
               <FieldGroup>
                 <Field>
@@ -222,16 +214,19 @@ export function ServiceFormDialog({
                       {defaultProducts.map((row) => {
                         const selectedProd = clinicProducts.find(
                           (cp) => cp.id === row.clinicProductId
-                        );
+                        )
                         return (
                           <div
                             key={row.uid}
                             className="flex items-center gap-2 rounded-lg border bg-muted/25 p-2"
                           >
                             <div className="flex-1">
-                              <Select
-                                items={productSelectItems}
+                              <SearchableSelect
+                                options={productSelectItems}
                                 value={row.clinicProductId}
+                                placeholder="جستجو و انتخاب کالا از انبار..."
+                                emptyText="کالایی با این نام یافت نشد."
+                                className="h-8 bg-background text-xs"
                                 onValueChange={(val) =>
                                   setDefaultProducts((prev) =>
                                     prev.map((item) =>
@@ -244,21 +239,7 @@ export function ServiceFormDialog({
                                     )
                                   )
                                 }
-                              >
-                                <SelectTrigger className="h-8 bg-background text-xs">
-                                  <SelectValue placeholder="انتخاب کالا..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {productSelectItems.map((opt) => (
-                                    <SelectItem
-                                      key={opt.value}
-                                      value={opt.value}
-                                    >
-                                      {opt.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              />
                             </div>
 
                             <Input
@@ -298,7 +279,7 @@ export function ServiceFormDialog({
                               <Trash2 className="size-3.5" />
                             </Button>
                           </div>
-                        );
+                        )
                       })}
                     </div>
                   )}
@@ -322,7 +303,7 @@ export function ServiceFormDialog({
                       </p>
                     ) : (
                       activeStaff.map((staff) => {
-                        const checked = selectedStaffIds.includes(staff.id);
+                        const checked = selectedStaffIds.includes(staff.id)
                         return (
                           <label
                             key={staff.id}
@@ -356,7 +337,7 @@ export function ServiceFormDialog({
                               <Check className="size-4 shrink-0 text-primary" />
                             )}
                           </label>
-                        );
+                        )
                       })
                     )}
                   </div>
@@ -383,5 +364,5 @@ export function ServiceFormDialog({
         </form>
       </ResponsiveDialogPopup>
     </ResponsiveDialog>
-  );
+  )
 }

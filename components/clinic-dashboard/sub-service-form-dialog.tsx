@@ -1,20 +1,13 @@
 // components/clinic-dashboard/sub-service-form-dialog.tsx
-"use client";
+"use client"
 
-import { useState, useEffect, useMemo } from "react";
-import { Plus, Trash2, Loader2, Package, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { PriceInput } from "@/components/ui/price-input";
-import { TomanIcon } from "@/components/ui/toman-icon";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { useState, useEffect, useMemo } from "react"
+import { Plus, Trash2, Loader2, Package, Sparkles } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { PriceInput } from "@/components/ui/price-input"
+import { TomanIcon } from "@/components/ui/toman-icon"
 import {
   ResponsiveDialog,
   ResponsiveDialogClose,
@@ -26,30 +19,31 @@ import {
   ResponsiveDialogPopup,
   ResponsiveDialogTitle,
   ResponsiveDialogTrigger,
-} from "@/components/ui/responsive-dialog";
+} from "@/components/ui/responsive-dialog"
 import {
   upsertSubServiceAction,
   ServiceAttributeItem,
   DefaultProductInput,
-} from "@/app/clinic-dashboard/(dashboard)/services/actions";
-import { toast } from "sonner";
+} from "@/app/clinic-dashboard/(dashboard)/services/actions"
+import { toast } from "sonner"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 
 interface SubServiceFormDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  serviceId: string;
-  serviceTitle: string;
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  serviceId: string
+  serviceTitle: string
   editingSubService?: {
-    id: string;
-    title: string;
-    price: number;
-    attributes: unknown;
+    id: string
+    title: string
+    price: number
+    attributes: unknown
     defaultProducts: {
-      clinicProduct: { id: string };
-      quantity: number;
-    }[];
-  } | null;
-  clinicProducts: { id: string; name: string; unit: string }[];
+      clinicProduct: { id: string }
+      quantity: number
+    }[]
+  } | null
+  clinicProducts: { id: string; name: string; unit: string }[]
 }
 
 export function SubServiceFormDialog({
@@ -60,13 +54,13 @@ export function SubServiceFormDialog({
   editingSubService,
   clinicProducts,
 }: SubServiceFormDialogProps) {
-  const [title, setTitle] = useState("");
-  const [price, setPrice] = useState<number>(0);
-  const [attributes, setAttributes] = useState<ServiceAttributeItem[]>([]);
+  const [title, setTitle] = useState("")
+  const [price, setPrice] = useState<number>(0)
+  const [attributes, setAttributes] = useState<ServiceAttributeItem[]>([])
   const [defaultProducts, setDefaultProducts] = useState<DefaultProductInput[]>(
     []
-  );
-  const [isPending, setIsPending] = useState(false);
+  )
+  const [isPending, setIsPending] = useState(false)
 
   // نگاشت کالاها برای Base UI Select جهت نمایش نام فارسی به جای UUID
   const productSelectItems = useMemo(
@@ -76,30 +70,30 @@ export function SubServiceFormDialog({
         label: `${prod.name} (${prod.unit})`,
       })),
     [clinicProducts]
-  );
+  )
 
   useEffect(() => {
     if (open) {
-      setTitle(editingSubService?.title ?? "");
-      setPrice(editingSubService?.price ?? 0);
+      setTitle(editingSubService?.title ?? "")
+      setPrice(editingSubService?.price ?? 0)
 
       const parsedAttrs = Array.isArray(editingSubService?.attributes)
         ? (editingSubService?.attributes as ServiceAttributeItem[])
-        : [];
-      setAttributes(parsedAttrs);
+        : []
+      setAttributes(parsedAttrs)
 
       const mappedProducts =
         editingSubService?.defaultProducts.map((dp) => ({
           clinicProductId: dp.clinicProduct.id,
           quantity: dp.quantity,
-        })) ?? [];
-      setDefaultProducts(mappedProducts);
+        })) ?? []
+      setDefaultProducts(mappedProducts)
     }
-  }, [open, editingSubService]);
+  }, [open, editingSubService])
 
   const addAttribute = () => {
-    setAttributes((prev) => [...prev, { key: "", value: "" }]);
-  };
+    setAttributes((prev) => [...prev, { key: "", value: "" }])
+  }
 
   const updateAttribute = (
     index: number,
@@ -107,24 +101,26 @@ export function SubServiceFormDialog({
     val: string
   ) => {
     setAttributes((prev) =>
-      prev.map((item, idx) => (idx === index ? { ...item, [field]: val } : item))
-    );
-  };
+      prev.map((item, idx) =>
+        idx === index ? { ...item, [field]: val } : item
+      )
+    )
+  }
 
   const removeAttribute = (index: number) => {
-    setAttributes((prev) => prev.filter((_, idx) => idx !== index));
-  };
+    setAttributes((prev) => prev.filter((_, idx) => idx !== index))
+  }
 
   const addDefaultProduct = () => {
     if (clinicProducts.length === 0) {
-      toast.error("ابتدا در بخش انبار کالا، اقلام مصرفی را تعریف کنید.");
-      return;
+      toast.error("ابتدا در بخش انبار کالا، اقلام مصرفی را تعریف کنید.")
+      return
     }
     setDefaultProducts((prev) => [
       ...prev,
       { clinicProductId: clinicProducts[0].id, quantity: 1 },
-    ]);
-  };
+    ])
+  }
 
   const updateDefaultProduct = (
     index: number,
@@ -132,26 +128,28 @@ export function SubServiceFormDialog({
     val: string | number
   ) => {
     setDefaultProducts((prev) =>
-      prev.map((item, idx) => (idx === index ? { ...item, [field]: val } : item))
-    );
-  };
+      prev.map((item, idx) =>
+        idx === index ? { ...item, [field]: val } : item
+      )
+    )
+  }
 
   const removeDefaultProduct = (index: number) => {
-    setDefaultProducts((prev) => prev.filter((_, idx) => idx !== index));
-  };
+    setDefaultProducts((prev) => prev.filter((_, idx) => idx !== index))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault()
     if (!title.trim()) {
-      toast.error("عنوان زیرسرویس الزامی است");
-      return;
+      toast.error("عنوان زیرسرویس الزامی است")
+      return
     }
     if (!price || price <= 0) {
-      toast.error("وارد کردن قیمت اجباری است");
-      return;
+      toast.error("وارد کردن قیمت اجباری است")
+      return
     }
 
-    setIsPending(true);
+    setIsPending(true)
     const res = await upsertSubServiceAction({
       id: editingSubService?.id,
       serviceId,
@@ -159,18 +157,18 @@ export function SubServiceFormDialog({
       price,
       attributes,
       defaultProducts,
-    });
-    setIsPending(false);
+    })
+    setIsPending(false)
 
     if (res.success) {
       toast.success(
         editingSubService ? "زیرسرویس ویرایش شد" : "زیرسرویس جدید اضافه شد"
-      );
-      onOpenChange(false);
+      )
+      onOpenChange(false)
     } else {
-      toast.error(res.error || "خطایی رخ داد");
+      toast.error(res.error || "خطایی رخ داد")
     }
-  };
+  }
 
   return (
     <ResponsiveDialog
@@ -310,31 +308,25 @@ export function SubServiceFormDialog({
                   {defaultProducts.map((item, idx) => {
                     const selectedProd = clinicProducts.find(
                       (p) => p.id === item.clinicProductId
-                    );
+                    )
                     return (
                       <div key={idx} className="flex items-center gap-2">
-                        <Select
-                          items={productSelectItems}
-                          value={item.clinicProductId}
-                          onValueChange={(val) => {
-                            if (val)
-                              updateDefaultProduct(idx, "clinicProductId", val);
-                          }}
-                        >
-                          <SelectTrigger className="h-9 flex-1 text-sm">
-                            <SelectValue placeholder="انتخاب کالا از انبار" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {productSelectItems.map((prodItem) => (
-                              <SelectItem
-                                key={prodItem.value}
-                                value={prodItem.value}
-                              >
-                                {prodItem.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="flex-1">
+                          <SearchableSelect
+                            options={productSelectItems}
+                            value={item.clinicProductId}
+                            placeholder="انتخاب کالا از انبار..."
+                            onValueChange={(val) => {
+                              if (val && val !== "NONE") {
+                                updateDefaultProduct(
+                                  idx,
+                                  "clinicProductId",
+                                  val
+                                )
+                              }
+                            }}
+                          />
+                        </div>
 
                         <div className="flex w-32 items-center gap-1.5">
                           <Input
@@ -366,7 +358,7 @@ export function SubServiceFormDialog({
                           <Trash2 className="size-4" />
                         </Button>
                       </div>
-                    );
+                    )
                   })}
                 </div>
               )}
@@ -391,5 +383,5 @@ export function SubServiceFormDialog({
         </form>
       </ResponsiveDialogPopup>
     </ResponsiveDialog>
-  );
+  )
 }

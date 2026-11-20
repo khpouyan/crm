@@ -1,8 +1,8 @@
 // components/clinic-dashboard/invoice-wizard/step2-payments.tsx
-"use client";
+"use client"
 
-import { useMemo } from "react";
-import Link from "next/link";
+import { useState, useMemo , useEffect} from "react"
+import Link from "next/link"
 import {
   Plus,
   Trash2,
@@ -15,75 +15,90 @@ import {
   Settings,
   BookmarkCheck,
   DollarSign,
-} from "lucide-react";
-import { toast } from "sonner";
+  Clock,
+} from "lucide-react"
+import { toast } from "sonner"
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { DatePicker } from "@/components/ui/date-picker";
-import { PriceInput } from "@/components/ui/price-input";
-import type { InvoiceCalculationResult } from "@/lib/finance/invoice-calculator";
+} from "@/components/ui/select"
+import { DatePicker } from "@/components/ui/date-picker"
+import { PriceInput } from "@/components/ui/price-input"
+import type { InvoiceCalculationResult } from "@/lib/finance/invoice-calculator"
+import {
+  ResponsiveTimePicker,
+  ResponsiveTimePickerContent,
+  ResponsiveTimePickerTrigger,
+  formatTimePickerValue,
+} from "@/components/ui/time-picker"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import { normalizePersianDigits } from "@/lib/normalize-persian-digits";
+import { toPersianDigits } from "@/lib/persian-date";
 import type {
   DraftInstallmentRow,
   DraftPaymentRow,
   SelectOption,
   WizardCatalogService,
   WizardCreditProvider,
-} from "./types";
+} from "./types"
 
 interface Step2PaymentsProps {
-  clientWalletBalance: number;
-  canApplyDiscount: boolean;
-  isSubmitting: boolean;
-  isEditMode: boolean;
+  clientWalletBalance: number
+  canApplyDiscount: boolean
+  isSubmitting: boolean
+  isEditMode: boolean
 
-  paymentDate: Date | null;
-  onPaymentDateChange: (d: Date | null) => void;
-  paymentTime: string;
-  onPaymentTimeChange: (t: string) => void;
+  paymentDate: Date | null
+  onPaymentDateChange: (d: Date | null) => void
+  paymentTime: string
+  onPaymentTimeChange: (t: string) => void
 
-  discountAmount: number;
-  onDiscountAmountChange: (v: number) => void;
-  discountReason: string;
-  onDiscountReasonChange: (v: string) => void;
+  discountAmount: number
+  onDiscountAmountChange: (v: number) => void
+  discountReason: string
+  onDiscountReasonChange: (v: string) => void
 
-  extraChargeAmount: number;
-  onExtraChargeAmountChange: (v: number) => void;
-  extraChargeReason: string;
-  onExtraChargeReasonChange: (v: string) => void;
+  extraChargeAmount: number
+  onExtraChargeAmountChange: (v: number) => void
+  extraChargeReason: string
+  onExtraChargeReasonChange: (v: string) => void
 
-  depositServiceId: string;
-  onDepositServiceIdChange: (id: string) => void;
-  depositAmount: number;
-  onDepositAmountChange: (v: number) => void;
-  catalogServices: WizardCatalogService[];
+  depositServiceId: string
+  onDepositServiceIdChange: (id: string) => void
+  depositAmount: number
+  onDepositAmountChange: (v: number) => void
+  catalogServices: WizardCatalogService[]
 
-  payments: DraftPaymentRow[];
-  onPaymentsChange: React.Dispatch<React.SetStateAction<DraftPaymentRow[]>>;
-  terminals: SelectOption[];
-  creditProviders: WizardCreditProvider[];
+  payments: DraftPaymentRow[]
+  onPaymentsChange: React.Dispatch<React.SetStateAction<DraftPaymentRow[]>>
+  terminals: SelectOption[]
+  creditProviders: WizardCreditProvider[]
 
-  remainingMode: "DEBT" | "INSTALLMENT";
-  onRemainingModeChange: (m: "DEBT" | "INSTALLMENT") => void;
-  installments: DraftInstallmentRow[];
+  remainingMode: "DEBT" | "INSTALLMENT"
+  onRemainingModeChange: (m: "DEBT" | "INSTALLMENT") => void
+  installments: DraftInstallmentRow[]
   onInstallmentsChange: React.Dispatch<
     React.SetStateAction<DraftInstallmentRow[]>
-  >;
+  >
 
-  calculation: InvoiceCalculationResult;
-  onBackStep: () => void;
-  onSubmitInvoice: () => void;
+  calculation: InvoiceCalculationResult
+  onBackStep: () => void
+  onSubmitInvoice: () => void
 }
 
 const PAYMENT_METHOD_OPTIONS: SelectOption[] = [
@@ -92,7 +107,7 @@ const PAYMENT_METHOD_OPTIONS: SelectOption[] = [
   { value: "CASH", label: "نقدی" },
   { value: "CARD_TO_CARD", label: "کارت به کارت" },
   { value: "WALLET", label: "کسر از کیف پول" },
-];
+]
 
 export function Step2Payments({
   clientWalletBalance,
@@ -131,17 +146,60 @@ export function Step2Payments({
   const allSubServiceOptions: SelectOption[] = useMemo(() => {
     const opts: SelectOption[] = [
       { value: "NONE", label: "بدون بیعانه / انتخاب سرویس..." },
-    ];
+    ]
     for (const srv of catalogServices) {
       for (const sub of srv.subServices) {
         opts.push({
           value: sub.id,
           label: `${srv.title} — ${sub.title}`,
-        });
+        })
       }
     }
-    return opts;
-  }, [catalogServices]);
+    return opts
+  }, [catalogServices])
+
+  const [timePickerOpen, setTimePickerOpen] = useState(false);
+  const [paymentTimeText, setPaymentTimeText] = useState(() =>
+    toPersianDigits(paymentTime || "12:00")
+  );
+
+  useEffect(() => {
+    setPaymentTimeText(toPersianDigits(paymentTime || "12:00"));
+  }, [paymentTime]);
+
+  const parsedPaymentTime = useMemo(() => {
+    const [hh, mm] = (paymentTime || "00:00").split(":").map(Number);
+    return {
+      hour: Number.isFinite(hh) ? hh : 0,
+      minute: Number.isFinite(mm) ? mm : 0,
+    };
+  }, [paymentTime]);
+
+  function commitTypedPaymentTime(rawInput: string) {
+    const clean = normalizePersianDigits(rawInput).replace(/[^\d:]/g, "");
+    let hh = 0;
+    let mm = 0;
+
+    if (clean.includes(":")) {
+      const [hStr, mStr] = clean.split(":");
+      hh = parseInt(hStr || "0", 10);
+      mm = parseInt(mStr || "0", 10);
+    } else if (clean.length <= 2) {
+      hh = parseInt(clean || "0", 10);
+      mm = 0;
+    } else {
+      const padded = clean.padStart(4, "0").slice(0, 4);
+      hh = parseInt(padded.slice(0, 2), 10);
+      mm = parseInt(padded.slice(2, 4), 10);
+    }
+
+    hh = Number.isFinite(hh) ? Math.min(23, Math.max(0, hh)) : 0;
+    mm = Number.isFinite(mm) ? Math.min(59, Math.max(0, mm)) : 0;
+
+    const formatted = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+    onPaymentTimeChange(formatted);
+    setPaymentTimeText(toPersianDigits(formatted));
+  }
 
   const creditProviderOptions: SelectOption[] = useMemo(
     () => [
@@ -156,37 +214,37 @@ export function Step2Payments({
       { value: "CUSTOM", label: "سایر سرویس‌ها (بدون کارمزد خودکار)" },
     ],
     [creditProviders]
-  );
+  )
 
   function handleSplitInstallmentsEqually(count: number) {
-    const safeCount = Math.max(1, Math.min(24, count));
-    const rem = calculation.remaining;
+    const safeCount = Math.max(1, Math.min(24, count))
+    const rem = calculation.remaining
     if (rem <= 0) {
-      onInstallmentsChange([]);
-      return;
+      onInstallmentsChange([])
+      return
     }
-    const baseAmount = Math.floor(rem / safeCount);
-    const remainder = rem - baseAmount * safeCount;
+    const baseAmount = Math.floor(rem / safeCount)
+    const remainder = rem - baseAmount * safeCount
 
     const rows: DraftInstallmentRow[] = Array.from({ length: safeCount }).map(
       (_, idx) => {
-        const due = new Date();
-        due.setMonth(due.getMonth() + idx + 1);
+        const due = new Date()
+        due.setMonth(due.getMonth() + idx + 1)
         return {
           uid: crypto.randomUUID(),
           amount: idx === 0 ? baseAmount + remainder : baseAmount,
           dueDate: due,
           isCheck: false,
           checkNumber: "",
-        };
+        }
       }
-    );
-    onInstallmentsChange(rows);
+    )
+    onInstallmentsChange(rows)
   }
 
   function handlePayFullWithCredit(rowUid: string) {
     onPaymentsChange((prev) => {
-      const target = prev.find((r) => r.uid === rowUid);
+      const target = prev.find((r) => r.uid === rowUid)
       return [
         {
           uid: rowUid,
@@ -198,20 +256,22 @@ export function Step2Payments({
           customCreditProvider: target?.customCreditProvider || "",
           trackingCode: target?.trackingCode || "",
         },
-      ];
-    });
-    toast.success("کل مبلغ فاکتور روی سرویس اعتباری قرار گرفت و کارمزد محاسبه شد.");
+      ]
+    })
+    toast.success(
+      "کل مبلغ فاکتور روی سرویس اعتباری قرار گرفت و کارمزد محاسبه شد."
+    )
   }
 
   function handleSettleRemainingWithCredit(rowUid: string) {
     const otherPaymentsPrincipal = payments
       .filter((r) => r.uid !== rowUid)
-      .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+      .reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
 
     const remainingBase = Math.max(
       0,
       calculation.baseTotalBeforeCreditFee - otherPaymentsPrincipal
-    );
+    )
 
     onPaymentsChange((prev) =>
       prev.map((row) =>
@@ -223,8 +283,8 @@ export function Step2Payments({
             }
           : row
       )
-    );
-    toast.success("باقیمانده مبلغ فاکتور روی سرویس اعتباری تنظیم شد.");
+    )
+    toast.success("باقیمانده مبلغ فاکتور روی سرویس اعتباری تنظیم شد.")
   }
 
   return (
@@ -293,12 +353,56 @@ export function Step2Payments({
 
             <Field>
               <FieldLabel>ساعت ثبت پرداخت *</FieldLabel>
-              <Input
-                type="time"
-                dir="ltr"
-                value={paymentTime}
-                onChange={(e) => onPaymentTimeChange(e.target.value)}
-              />
+              <ResponsiveTimePicker
+                open={timePickerOpen}
+                onOpenChange={setTimePickerOpen}
+              >
+                <InputGroup>
+                  <InputGroupInput
+                    dir="ltr"
+                    inputMode="numeric"
+                    placeholder="۱۴:۳۰"
+                    value={paymentTimeText}
+                    onChange={(e) => setPaymentTimeText(e.target.value)}
+                    onBlur={(e) => commitTypedPaymentTime(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitTypedPaymentTime(paymentTimeText);
+                      }
+                    }}
+                    className="text-right tabular-nums"
+                  />
+                  <InputGroupAddon align="inline-end">
+                    <ResponsiveTimePickerTrigger
+                      render={
+                        <InputGroupButton
+                          type="button"
+                          size="icon-xs"
+                          variant="ghost"
+                          aria-label="انتخاب ساعت از لیست"
+                        >
+                          <Clock className="size-4" />
+                        </InputGroupButton>
+                      }
+                    />
+                  </InputGroupAddon>
+                </InputGroup>
+
+                <ResponsiveTimePickerContent
+                  value={parsedPaymentTime}
+                  onValueChange={(next) => {
+                    const formatted = `${String(next.hour).padStart(2, "0")}:${String(next.minute).padStart(2, "0")}`;
+                    onPaymentTimeChange(formatted);
+                    setPaymentTimeText(toPersianDigits(formatted));
+                  }}
+                  hourFormat="24"
+                  digits="fa"
+                  drawerTitle="انتخاب ساعت پرداخت"
+                  drawerConfirmLabel="تایید ساعت"
+                  onDrawerConfirm={() => setTimePickerOpen(false)}
+                />
+              </ResponsiveTimePicker>
             </Field>
           </div>
 
@@ -306,6 +410,7 @@ export function Step2Payments({
             <Field>
               <FieldLabel>مبلغ تخفیف (تومان)</FieldLabel>
               <PriceInput
+                locale="fa-IR"
                 disabled={!canApplyDiscount}
                 value={discountAmount}
                 onValueChange={(v) => onDiscountAmountChange(v || 0)}
@@ -322,6 +427,7 @@ export function Step2Payments({
             <Field>
               <FieldLabel>اضافه پرداخت / هزینه جانبی (تومان)</FieldLabel>
               <PriceInput
+                locale="fa-IR"
                 value={extraChargeAmount}
                 onValueChange={(v) => onExtraChargeAmountChange(v || 0)}
               />
@@ -346,8 +452,8 @@ export function Step2Payments({
           </div>
           {calculation.depositAmount > 0 && (
             <Badge className="bg-emerald-600 text-white">
-              +{calculation.depositAmount.toLocaleString("fa-IR")} تومان واریز به
-              کیف پول
+              +{calculation.depositAmount.toLocaleString("fa-IR")} تومان واریز
+              به کیف پول
             </Badge>
           )}
         </div>
@@ -362,10 +468,10 @@ export function Step2Payments({
                 value={depositServiceId}
                 items={allSubServiceOptions}
                 onValueChange={(val) => {
-                  onDepositServiceIdChange(val || "NONE");
+                  onDepositServiceIdChange(val || "NONE")
                   if (!val || val === "NONE") {
-                    const prevDep = Number(depositAmount) || 0;
-                    onDepositAmountChange(0);
+                    const prevDep = Number(depositAmount) || 0
+                    onDepositAmountChange(0)
                     if (prevDep > 0) {
                       onPaymentsChange((prev) => {
                         if (
@@ -380,10 +486,10 @@ export function Step2Payments({
                                 (Number(prev[0].amount) || 0) - prevDep
                               ),
                             },
-                          ];
+                          ]
                         }
-                        return prev;
-                      });
+                        return prev
+                      })
                     }
                   }
                 }}
@@ -404,11 +510,12 @@ export function Step2Payments({
             <Field>
               <FieldLabel className="text-xs">مبلغ بیعانه (تومان)</FieldLabel>
               <PriceInput
+                locale="fa-IR"
                 value={depositAmount}
                 onValueChange={(v) => {
-                  const nextDep = v || 0;
-                  const diff = nextDep - (Number(depositAmount) || 0);
-                  onDepositAmountChange(nextDep);
+                  const nextDep = v || 0
+                  const diff = nextDep - (Number(depositAmount) || 0)
+                  onDepositAmountChange(nextDep)
                   onPaymentsChange((prev) => {
                     if (
                       prev.length === 1 &&
@@ -422,10 +529,10 @@ export function Step2Payments({
                             (Number(prev[0].amount) || 0) + diff
                           ),
                         },
-                      ];
+                      ]
                     }
-                    return prev;
-                  });
+                    return prev
+                  })
                 }}
               />
             </Field>
@@ -443,7 +550,8 @@ export function Step2Payments({
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="gap-1.5 text-xs">
               <Wallet className="size-3.5 text-emerald-600" />
-              موجودی کیف پول: {clientWalletBalance.toLocaleString("fa-IR")} تومان
+              موجودی کیف پول: {clientWalletBalance.toLocaleString("fa-IR")}{" "}
+              تومان
             </Badge>
             <Button
               type="button"
@@ -461,11 +569,11 @@ export function Step2Payments({
 
         <div className="space-y-3">
           {payments.map((pay, idx) => {
-            const creditInfo = calculation.creditBreakdown[idx];
+            const creditInfo = calculation.creditBreakdown[idx]
             const selectedCreditConfig =
               pay.paymentMethod === "CREDIT"
                 ? creditProviders.find((cp) => cp.id === pay.creditProviderId)
-                : undefined;
+                : undefined
 
             return (
               <div
@@ -535,6 +643,7 @@ export function Step2Payments({
                           : "مبلغ (تومان)"}
                       </FieldLabel>
                       <PriceInput
+                        locale="fa-IR"
                         value={pay.amount}
                         onValueChange={(v) =>
                           onPaymentsChange((prev) =>
@@ -742,7 +851,7 @@ export function Step2Payments({
                   )}
                 </FieldGroup>
               </div>
-            );
+            )
           })}
         </div>
 
@@ -801,9 +910,9 @@ export function Step2Payments({
             <button
               type="button"
               onClick={() => {
-                onRemainingModeChange("INSTALLMENT");
+                onRemainingModeChange("INSTALLMENT")
                 if (installments.length === 0) {
-                  handleSplitInstallmentsEqually(1);
+                  handleSplitInstallmentsEqually(1)
                 }
               }}
               className={`rounded-xl border p-3.5 text-right transition-all ${
@@ -879,6 +988,7 @@ export function Step2Payments({
                       <Field>
                         <FieldLabel className="text-xs">مبلغ قسط</FieldLabel>
                         <PriceInput
+                          locale="fa-IR"
                           value={ins.amount}
                           onValueChange={(v) =>
                             onInstallmentsChange((prev) =>
@@ -891,7 +1001,9 @@ export function Step2Payments({
                       </Field>
 
                       <Field>
-                        <FieldLabel className="text-xs">تاریخ پرداخت</FieldLabel>
+                        <FieldLabel className="text-xs">
+                          تاریخ پرداخت
+                        </FieldLabel>
                         <DatePicker
                           calendarType="shamsi"
                           value={ins.dueDate}
@@ -1013,8 +1125,8 @@ export function Step2Payments({
           {isSubmitting
             ? "در حال پردازش..."
             : isEditMode
-            ? "ذخیره و به‌روزرسانی نهایی فاکتور"
-            : "ثبت فاکتور"}
+              ? "ذخیره و به‌روزرسانی نهایی فاکتور"
+              : "ثبت فاکتور"}
         </Button>
 
         <Button
@@ -1029,5 +1141,5 @@ export function Step2Payments({
         </Button>
       </div>
     </div>
-  );
+  )
 }

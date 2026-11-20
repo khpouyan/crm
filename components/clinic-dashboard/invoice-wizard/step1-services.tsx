@@ -1,7 +1,7 @@
 // components/clinic-dashboard/invoice-wizard/step1-services.tsx
 "use client"
 
-import { useMemo } from "react"
+import { useState, useMemo , useEffect } from "react"
 import {
   Plus,
   Trash2,
@@ -15,6 +15,7 @@ import {
   Square,
   AlertTriangle,
   ShieldAlert,
+  Clock,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -36,9 +37,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DatePicker } from "@/components/ui/date-picker"
 import { PriceInput } from "@/components/ui/price-input"
 import { formatJalali } from "@/lib/jalali"
+import {
+  ResponsiveTimePicker,
+  ResponsiveTimePickerContent,
+  ResponsiveTimePickerTrigger,
+  formatTimePickerValue,
+} from "@/components/ui/time-picker"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group"
+import { normalizePersianDigits } from "@/lib/normalize-persian-digits"
+import { toPersianDigits } from "@/lib/persian-date"
 import type {
   DraftServiceAccordionBlock,
   DraftSubServiceSelection,
@@ -78,6 +94,8 @@ interface Step1ServicesProps {
 
   onNextStep: () => void
 }
+
+
 
 export function createEmptyServiceBlock(): DraftServiceAccordionBlock {
   return {
@@ -135,6 +153,50 @@ export function Step1Services({
     ],
     [allowedServices]
   )
+
+  const [timePickerOpen, setTimePickerOpen] = useState(false)
+  const [timeText, setTimeText] = useState(() =>
+    toPersianDigits(performedTime || "12:00")
+  )
+
+  // همگام‌سازی متن با تغییر بیرونی یا انتخاب از چرخنده
+  useEffect(() => {
+    setTimeText(toPersianDigits(performedTime || "12:00"))
+  }, [performedTime])
+
+  const parsedPerformedTime = useMemo(() => {
+    const [hh, mm] = (performedTime || "00:00").split(":").map(Number)
+    return {
+      hour: Number.isFinite(hh) ? hh : 0,
+      minute: Number.isFinite(mm) ? mm : 0,
+    }
+  }, [performedTime])
+
+  function commitTypedTime(rawInput: string) {
+    const clean = normalizePersianDigits(rawInput).replace(/[^\d:]/g, "")
+    let hh = 0
+    let mm = 0
+
+    if (clean.includes(":")) {
+      const [hStr, mStr] = clean.split(":")
+      hh = parseInt(hStr || "0", 10)
+      mm = parseInt(mStr || "0", 10)
+    } else if (clean.length <= 2) {
+      hh = parseInt(clean || "0", 10)
+      mm = 0
+    } else {
+      const padded = clean.padStart(4, "0").slice(0, 4)
+      hh = parseInt(padded.slice(0, 2), 10)
+      mm = parseInt(padded.slice(2, 4), 10)
+    }
+
+    hh = Number.isFinite(hh) ? Math.min(23, Math.max(0, hh)) : 0
+    mm = Number.isFinite(mm) ? Math.min(59, Math.max(0, mm)) : 0
+
+    const formatted = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`
+    onPerformedTimeChange(formatted)
+    setTimeText(toPersianDigits(formatted))
+  }
 
   const therapistOptions: SelectOption[] = useMemo(
     () => [
@@ -222,7 +284,7 @@ export function Step1Services({
       (s) => s.subServiceId === sub.id
     )
 
-    // ساخت مصرفی‌های دیفالت زیرسرویس
+    // ساخت مصرفی‌های دیفالت زیرسرویس و خدمت اصلی
     const buildDefaultConsumables = (subIds: string[]) => {
       const map = new Map<
         string,
@@ -390,12 +452,56 @@ export function Step1Services({
 
             <Field>
               <FieldLabel>ساعت مراجعه *</FieldLabel>
-              <Input
-                type="time"
-                dir="ltr"
-                value={performedTime}
-                onChange={(e) => onPerformedTimeChange(e.target.value)}
-              />
+              <ResponsiveTimePicker
+                open={timePickerOpen}
+                onOpenChange={setTimePickerOpen}
+              >
+                <InputGroup>
+                  <InputGroupInput
+                    dir="ltr"
+                    inputMode="numeric"
+                    placeholder="۱۴:۳۰"
+                    value={timeText}
+                    onChange={(e) => setTimeText(e.target.value)}
+                    onBlur={(e) => commitTypedTime(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        commitTypedTime(timeText)
+                      }
+                    }}
+                    className="text-right tabular-nums"
+                  />
+                  <InputGroupAddon align="inline-end">
+                    <ResponsiveTimePickerTrigger
+                      render={
+                        <InputGroupButton
+                          type="button"
+                          size="icon-xs"
+                          variant="ghost"
+                          aria-label="انتخاب ساعت از لیست"
+                        >
+                          <Clock className="size-4" />
+                        </InputGroupButton>
+                      }
+                    />
+                  </InputGroupAddon>
+                </InputGroup>
+
+                <ResponsiveTimePickerContent
+                  value={parsedPerformedTime}
+                  onValueChange={(next) => {
+                    const formatted = `${String(next.hour).padStart(2, "0")}:${String(next.minute).padStart(2, "0")}`
+                    onPerformedTimeChange(formatted)
+                    setTimeText(toPersianDigits(formatted))
+                  }}
+                  hourFormat="24"
+                  digits="fa"
+                  drawerTitle="انتخاب ساعت مراجعه"
+                  drawerConfirmLabel="تایید ساعت"
+                  onDrawerConfirm={() => setTimePickerOpen(false)}
+                />
+              </ResponsiveTimePicker>
             </Field>
           </div>
 
@@ -449,7 +555,7 @@ export function Step1Services({
             </Field>
           </div>
 
-          {/* معرف مراجعه */}
+          {/* معرف مراجعه (با جستجوی سریع مراجعین / همکاران) */}
           <div className="grid grid-cols-1 gap-4 rounded-xl bg-muted/40 p-3.5 sm:grid-cols-2">
             <Field>
               <FieldLabel className="text-xs">نوع معرف</FieldLabel>
@@ -482,23 +588,20 @@ export function Step1Services({
 
             <Field>
               <FieldLabel className="text-xs">انتخاب معرف</FieldLabel>
-              <Select
+              <SearchableSelect
+                options={referrerOptions}
                 value={referrerId}
-                items={referrerOptions}
                 disabled={referrerType === "NONE"}
+                placeholder={
+                  referrerType === "CLIENT"
+                    ? "جستجوی نام یا شماره پرونده مراجع..."
+                    : referrerType === "STAFF"
+                      ? "جستجوی نام همکار..."
+                      : "ابتدا نوع معرف را انتخاب کنید"
+                }
+                emptyText="معرفی با این مشخصات یافت نشد."
                 onValueChange={(val) => onReferrerIdChange(val || "NONE")}
-              >
-                <SelectTrigger className="bg-background">
-                  <SelectValue placeholder="انتخاب معرف..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {referrerOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </Field>
           </div>
         </FieldGroup>
@@ -607,9 +710,11 @@ export function Step1Services({
                     {/* انتخاب خدمت اصلی */}
                     <Field>
                       <FieldLabel>خدمات *</FieldLabel>
-                      <Select
+                      <SearchableSelect
+                        options={serviceOptions}
                         value={block.serviceId}
-                        items={serviceOptions}
+                        placeholder="جستجو و انتخاب خدمت..."
+                        emptyText="خدمتی با این نام یافت نشد."
                         onValueChange={(val) =>
                           updateBlock(block.uid, (b) => ({
                             ...b,
@@ -621,18 +726,7 @@ export function Step1Services({
                             ),
                           }))
                         }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="انتخاب خدمت..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {serviceOptions.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      />
                     </Field>
 
                     {/* لیست ریز خدمات با آکاردیون و رادیو باتن / تیک چندتایی */}
@@ -756,6 +850,7 @@ export function Step1Services({
                                             قیمت (تومان) *
                                           </FieldLabel>
                                           <PriceInput
+                                            locale="fa-IR"
                                             value={selectedItem.finalPrice}
                                             onValueChange={(val) =>
                                               updateBlock(block.uid, (b) => ({
@@ -836,7 +931,7 @@ export function Step1Services({
                       </div>
                     )}
 
-                    {/* کارت کالاهای مصرفی */}
+                    {/* کارت کالاهای مصرفی (با جستجوی سریع کالا) */}
                     <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
                       <div className="flex items-center gap-2 text-xs font-bold text-foreground">
                         <PackagePlus className="size-4 text-primary" />
@@ -845,9 +940,11 @@ export function Step1Services({
 
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
                         <div className="sm:col-span-8">
-                          <Select
+                          <SearchableSelect
+                            options={productOptions}
                             value={block.selectedNewProductId}
-                            items={productOptions}
+                            placeholder="جستجو و انتخاب کالا از انبار..."
+                            emptyText="کالایی با این نام یافت نشد."
                             onValueChange={(val) =>
                               updateBlock(block.uid, (b) => ({
                                 ...b,
@@ -855,18 +952,7 @@ export function Step1Services({
                                 selectedBatchForNewProduct: "AUTO",
                               }))
                             }
-                          >
-                            <SelectTrigger className="bg-background">
-                              <SelectValue placeholder="انتخاب کالا..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {productOptions.map((opt) => (
-                                <SelectItem key={opt.value} value={opt.value}>
-                                  {opt.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          />
                         </div>
 
                         <div className="sm:col-span-4">
