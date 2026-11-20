@@ -106,7 +106,7 @@ export function ClientDetailPrintClient({
       </div>
 
       {/* برگه پیش‌نمایش پرینت */}
-      <div className="space-y-6 rounded-xl border bg-card p-6 shadow-2xs print:border-none print:p-0 print:shadow-none">
+      <div className="space-y-6 rounded-xl border bg-card p-6 shadow-2xs print:border-none print:p-6 print:shadow-none">
         <div className="border-b pb-4 text-center">
           <h2 className="text-xl font-bold">جزئیات پرونده مراجعه‌کننده</h2>
           <p className="mt-1 text-sm font-semibold text-primary">

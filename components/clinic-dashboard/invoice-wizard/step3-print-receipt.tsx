@@ -114,12 +114,12 @@ export function Step3PrintReceipt({
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 pb-16 sm:p-6">
-      {/* استایل اختصاصی چاپ برای حذف کامل سایدبار، هدر داشبورد و دکمه‌ها هنگام پرینت */}
+      {/* استایل اختصاصی چاپ برای حذف کامل سایدبار، هدر داشبورد و دکمه‌ها و اعمال حاشیه استاندارد هنگام پرینت */}
       <style jsx global>{`
         @media print {
           @page {
             size: ${printMode === "THERMAL" ? "80mm auto" : "A4 portrait"};
-            margin: ${printMode === "THERMAL" ? "3mm" : "10mm"};
+            margin: ${printMode === "THERMAL" ? "4mm" : "12mm"};
           }
 
           body * {
@@ -137,10 +137,11 @@ export function Step3PrintReceipt({
             top: 0 !important;
             right: 0 !important;
             left: 0 !important;
-            width: ${printMode === "THERMAL" ? "74mm" : "100%"} !important;
+            width: ${printMode === "THERMAL" ? "72mm" : "100%"} !important;
             max-width: 100% !important;
             margin: 0 auto !important;
-            padding: 0 !important;
+            padding: ${printMode === "THERMAL" ? "3mm 2mm" : "6mm"} !important;
+            box-sizing: border-box !important;
             background: #ffffff !important;
             color: #0f172a !important;
             box-shadow: none !important;
