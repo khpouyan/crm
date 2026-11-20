@@ -63,8 +63,15 @@ export default async function InventorySalesReportPage({
         clinicProduct: { select: { name: true, unit: true } },
         providedService: {
           select: {
+            clientId: true,
+            invoiceId: true,
             createdAt: true,
             therapistNameSnapshot: true,
+            client: {
+              select: {
+                user: { select: { fullName: true } },
+              },
+            },
             subService: {
               select: { title: true, service: { select: { title: true } } },
             },
@@ -106,10 +113,15 @@ export default async function InventorySalesReportPage({
       const isSale = Boolean(u.sellingPrice && u.sellingPrice > 0);
       const totalCost = u.unitCost * u.quantity;
       const totalRevenue = isSale ? (u.sellingPrice || 0) * u.quantity : 0;
+      const clientName = u.providedService.client?.user?.fullName;
       return {
         id: `usage-${u.id}`,
         source: "SERVICE" as const,
         sourceLabel: `${u.providedService.subService.service.title} - ${u.providedService.subService.title}`,
+        clientName: clientName || null,
+        clientId: u.providedService.clientId,
+        invoiceId: u.providedService.invoiceId,
+        stockOutId: null,
         productName: u.clinicProduct.name,
         unit: u.clinicProduct.unit,
         quantity: u.quantity,
@@ -129,6 +141,10 @@ export default async function InventorySalesReportPage({
         id: `out-${o.id}`,
         source: "MANUAL" as const,
         sourceLabel: o.reason || "خروج دستی",
+        clientName: null,
+        clientId: null,
+        invoiceId: null,
+        stockOutId: o.id,
         productName: o.clinicProduct.name,
         unit: o.clinicProduct.unit,
         quantity: o.quantity,

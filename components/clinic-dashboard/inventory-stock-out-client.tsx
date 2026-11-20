@@ -1,7 +1,7 @@
 // components/clinic-dashboard/inventory-stock-out-client.tsx
 "use client";
 
-import React, { useState, useMemo, useTransition } from "react";
+import React, { useState, useMemo, useTransition, useEffect } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Plus, ArrowUpRight, Loader2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -135,6 +135,21 @@ export function InventoryStockOutClient({
     setReason(row.reason ?? "");
     setDialogOpen(true);
   };
+
+  useEffect(() => {
+    const editId = searchParams.get("edit");
+    if (!editId || stockOuts.length === 0) return;
+
+    const targetRow = stockOuts.find((item) => item.id === editId);
+    if (targetRow) {
+      handleOpenEditDialog(targetRow);
+      // پاک کردن پارامتر edit از URL پس از باز شدن مودال
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("edit");
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }
+  }, [searchParams, stockOuts, pathname, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

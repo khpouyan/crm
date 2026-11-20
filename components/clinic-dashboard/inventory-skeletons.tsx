@@ -1,14 +1,14 @@
 // components/clinic-dashboard/inventory-skeletons.tsx
-import React from "react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import React from "react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 
 export function TableRowsSkeleton({
   rows = 6,
   cols = 5,
 }: {
-  rows?: number;
-  cols?: number;
+  rows?: number
+  cols?: number
 }) {
   return (
     <div className="space-y-2.5 p-4">
@@ -20,15 +20,15 @@ export function TableRowsSkeleton({
         </div>
       ))}
     </div>
-  );
+  )
 }
 
 export function InventoryTablePageSkeleton({
   showFilter = false,
   showStats = false,
 }: {
-  showFilter?: boolean;
-  showStats?: boolean;
+  showFilter?: boolean
+  showStats?: boolean
 }) {
   return (
     <div className="space-y-5" dir="rtl">
@@ -40,7 +40,14 @@ export function InventoryTablePageSkeleton({
         </div>
         <Skeleton className="h-9 w-28" />
       </div>
-
+      {/* نوار فیلتر */}
+      {showFilter && (
+        <div className="grid grid-cols-1 gap-3 rounded-xl border bg-card p-3.5 sm:grid-cols-2 lg:grid-cols-5">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-10 w-full rounded-lg" />
+          ))}
+        </div>
+      )}
       {/* کارت‌های آماری فشرده (برای صفحه گزارش فروش) */}
       {showStats && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -54,15 +61,6 @@ export function InventoryTablePageSkeleton({
                 <Skeleton className="size-9 rounded-lg" />
               </CardContent>
             </Card>
-          ))}
-        </div>
-      )}
-
-      {/* نوار فیلتر */}
-      {showFilter && (
-        <div className="grid grid-cols-1 gap-3 rounded-xl border bg-card p-3.5 sm:grid-cols-2 lg:grid-cols-5">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-10 w-full rounded-lg" />
           ))}
         </div>
       )}
@@ -83,5 +81,5 @@ export function InventoryTablePageSkeleton({
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }

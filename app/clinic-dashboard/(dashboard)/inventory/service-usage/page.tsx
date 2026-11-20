@@ -1,11 +1,13 @@
 // app/clinic-dashboard/(dashboard)/inventory/service-usage/page.tsx
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Stethoscope, Eye, Pencil } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentClinicContext } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/permissions";
 import { parsePaginationParams } from "@/lib/inventory/pagination-helper";
 import { formatJalaliNumeric } from "@/lib/jalali";
-import { Stethoscope } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -42,12 +44,16 @@ export default async function InventoryServiceUsagePage({
       clinicProduct: { select: { name: true, unit: true } },
       providedService: {
         select: {
+          clientId: true,
+          invoiceId: true,
           createdAt: true,
           therapistNameSnapshot: true,
           subService: {
             select: { title: true, service: { select: { title: true } } },
           },
-          client: { select: { user: { select: { fullName: true, phone: true } } } },
+          client: {
+            select: { user: { select: { fullName: true, phone: true } } },
+          },
         },
       },
     },
@@ -85,48 +91,94 @@ export default async function InventoryServiceUsagePage({
                   <TableHead className="text-right">خدمت انجام‌شده</TableHead>
                   <TableHead className="text-right">مراجع</TableHead>
                   <TableHead className="text-right">درمانگر</TableHead>
+                  <TableHead className="w-24 text-left">عملیات</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {usages.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={7}
                       className="py-10 text-center text-sm text-muted-foreground"
                     >
                       هنوز مصرفی‌ای در پرونده خدمات ثبت نشده است.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  usages.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell className="text-xs">
-                        {formatJalaliNumeric(
-                          new Date(u.providedService.createdAt)
-                        )}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {u.clinicProduct.name}
-                      </TableCell>
-                      <TableCell className="tabular-nums font-semibold">
-                        {u.quantity.toLocaleString("fa-IR")}{" "}
-                        <span className="text-xs font-normal text-muted-foreground">
-                          {u.clinicProduct.unit}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {u.providedService.subService.service.title} -{" "}
-                        {u.providedService.subService.title}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {u.providedService.client.user.fullName ||
-                          u.providedService.client.user.phone}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {u.providedService.therapistNameSnapshot || "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  usages.map((u) => {
+                    const { clientId, invoiceId } = u.providedService;
+                    const hasInvoice = Boolean(clientId && invoiceId);
+
+                    const viewReportHref = hasInvoice
+                      ? `/clinic-dashboard/clients/${clientId}/invoices/${invoiceId}/edit?step=3`
+                      : null;
+
+                    const editHref = hasInvoice
+                      ? `/clinic-dashboard/clients/${clientId}/invoices/${invoiceId}/edit`
+                      : `/clinic-dashboard/clients/${clientId}`;
+
+                    return (
+                      <TableRow key={u.id}>
+                        <TableCell className="text-xs">
+                          {formatJalaliNumeric(
+                            new Date(u.providedService.createdAt)
+                          )}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {u.clinicProduct.name}
+                        </TableCell>
+                        <TableCell className="tabular-nums font-semibold">
+                          {u.quantity.toLocaleString("fa-IR")}{" "}
+                          <span className="text-xs font-normal text-muted-foreground">
+                            {u.clinicProduct.unit}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {u.providedService.subService.service.title} -{" "}
+                          {u.providedService.subService.title}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <Link
+                            href={`/clinic-dashboard/clients/${clientId}`}
+                            className="font-medium text-primary hover:underline"
+                          >
+                            {u.providedService.client.user.fullName ||
+                              u.providedService.client.user.phone}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {u.providedService.therapistNameSnapshot || "—"}
+                        </TableCell>
+                        <TableCell className="text-left">
+                          <div className="flex items-center justify-end gap-1">
+                            {viewReportHref && (
+                              <Button
+                                nativeButton={false}
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 text-primary hover:text-primary"
+                                title="مشاهده رسید و گزارش سرویس (مرحله سوم)"
+                                render={<Link href={viewReportHref} />}
+                              >
+                                <Eye className="size-3.5" />
+                              </Button>
+                            )}
+
+                            <Button
+                              nativeButton={false}
+                              variant="ghost"
+                              size="icon"
+                              className="size-8"
+                              title="ویرایش سرویس و فاکتور مراجع"
+                              render={<Link href={editHref} />}
+                            >
+                              <Pencil className="size-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

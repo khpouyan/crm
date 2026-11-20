@@ -2,10 +2,12 @@
 "use client";
 
 import React, { useTransition } from "react";
+import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { TrendingUp, Wallet, Coins } from "lucide-react";
+import { TrendingUp, Wallet, Coins, Pencil, Eye } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { TomanIcon } from "@/components/ui/toman-icon";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -29,6 +31,10 @@ interface ReportRow {
   id: string;
   source: "SERVICE" | "MANUAL";
   sourceLabel: string;
+  clientName: string | null;
+  clientId: string | null;
+  invoiceId: string | null;
+  stockOutId: string | null;
   productName: string;
   unit: string;
   quantity: number;
@@ -184,7 +190,7 @@ export function InventorySalesReportClient({
         <CardContent className="space-y-4">
           <div className="overflow-hidden rounded-lg border">
             {isPending ? (
-              <TableRowsSkeleton rows={pageSize > 10 ? 8 : pageSize} cols={7} />
+              <TableRowsSkeleton rows={pageSize > 10 ? 8 : pageSize} cols={8} />
             ) : (
               <Table>
                 <TableHeader>
@@ -196,66 +202,122 @@ export function InventorySalesReportClient({
                     <TableHead className="text-right">فروش / سود</TableHead>
                     <TableHead className="text-right">منبع / خدمت</TableHead>
                     <TableHead className="text-right">تاریخ</TableHead>
+                    <TableHead className="w-24 text-left">عملیات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={7}
+                        colSpan={8}
                         className="py-10 text-center text-sm text-muted-foreground"
                       >
                         تراکنشی مطابق فیلترهای انتخابی یافت نشد.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    rows.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell className="font-medium">
-                          {row.productName}
-                        </TableCell>
-                        <TableCell className="tabular-nums">
-                          {row.quantity.toLocaleString("fa-IR")} {row.unit}
-                        </TableCell>
-                        <TableCell>
-                          {row.isSale ? (
-                            <Badge
-                              variant="outline"
-                              className="border-emerald-500 text-emerald-600"
-                            >
-                              فروش کالا
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary">هزینه مصرفی</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="tabular-nums text-xs">
-                          {row.totalCost.toLocaleString("fa-IR")} تومان
-                        </TableCell>
-                        <TableCell className="tabular-nums text-xs">
-                          {row.isSale ? (
-                            <span className="font-semibold text-emerald-600">
-                              +{row.netProfit.toLocaleString("fa-IR")} سود
-                            </span>
-                          ) : (
-                            <span className="text-rose-600">
-                              -{row.totalCost.toLocaleString("fa-IR")} هزینه
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <div>{row.sourceLabel}</div>
-                          {row.staffName !== "—" && (
-                            <div className="text-[11px] text-muted-foreground">
-                              پرسنل: {row.staffName}
+                    rows.map((row) => {
+                      const hasServiceInvoice =
+                        row.source === "SERVICE" &&
+                        Boolean(row.clientId) &&
+                        Boolean(row.invoiceId);
+
+                      const editHref = hasServiceInvoice
+                        ? `/clinic-dashboard/clients/${row.clientId}/invoices/${row.invoiceId}/edit`
+                        : row.source === "SERVICE" && row.clientId
+                        ? `/clinic-dashboard/clients/${row.clientId}`
+                        : row.stockOutId
+                        ? `/clinic-dashboard/inventory/stock-out?edit=${row.stockOutId}`
+                        : `/clinic-dashboard/inventory/stock-out`;
+
+                      const viewReportHref = hasServiceInvoice
+                        ? `/clinic-dashboard/clients/${row.clientId}/invoices/${row.invoiceId}/edit?step=3`
+                        : null;
+
+                      return (
+                        <TableRow key={row.id}>
+                          <TableCell className="font-medium">
+                            {row.productName}
+                          </TableCell>
+                          <TableCell className="tabular-nums">
+                            {row.quantity.toLocaleString("fa-IR")} {row.unit}
+                          </TableCell>
+                          <TableCell>
+                            {row.isSale ? (
+                              <Badge
+                                variant="outline"
+                                className="border-emerald-500 text-emerald-600"
+                              >
+                                فروش کالا
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary">هزینه مصرفی</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="tabular-nums text-xs">
+                            {row.totalCost.toLocaleString("fa-IR")} تومان
+                          </TableCell>
+                          <TableCell className="tabular-nums text-xs">
+                            {row.isSale ? (
+                              <span className="font-semibold text-emerald-600">
+                                +{row.netProfit.toLocaleString("fa-IR")} سود
+                              </span>
+                            ) : (
+                              <span className="text-rose-600">
+                                -{row.totalCost.toLocaleString("fa-IR")} هزینه
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <div>{row.sourceLabel}</div>
+                            {row.clientName && (
+                              <div className="text-[11px] font-medium text-primary">
+                                مراجع: {row.clientName}
+                              </div>
+                            )}
+                            {row.staffName !== "—" && (
+                              <div className="text-[11px] text-muted-foreground">
+                                پرسنل: {row.staffName}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {formatJalaliNumeric(new Date(row.createdAt))}
+                          </TableCell>
+                          <TableCell className="text-left">
+                            <div className="flex items-center justify-end gap-1">
+                              {viewReportHref && (
+                                <Button
+                                  nativeButton={false}
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8 text-primary hover:text-primary"
+                                  title="مشاهده رسید و گزارش سرویس (مرحله سوم)"
+                                  render={<Link href={viewReportHref} />}
+                                >
+                                  <Eye className="size-3.5" />
+                                </Button>
+                              )}
+
+                              <Button
+                                nativeButton={false}
+                                variant="ghost"
+                                size="icon"
+                                className="size-8"
+                                title={
+                                  row.source === "SERVICE"
+                                    ? "ویرایش سرویس و فاکتور مراجع"
+                                    : "ویرایش خروج دستی کالا"
+                                }
+                                render={<Link href={editHref} />}
+                              >
+                                <Pencil className="size-3.5" />
+                              </Button>
                             </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {formatJalaliNumeric(new Date(row.createdAt))}
-                        </TableCell>
-                      </TableRow>
-                    ))
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
