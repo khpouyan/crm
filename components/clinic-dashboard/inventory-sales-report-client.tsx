@@ -103,6 +103,23 @@ export function InventorySalesReportClient({
         />
       </div>
 
+      {/* نوار فیلتر */}
+      <InventoryFilterBar
+        services={services}
+        staffs={staffs}
+        initialValues={filters}
+        disabled={isPending}
+        onApply={(vals) =>
+          updateUrlParams({
+            from: vals.from,
+            to: vals.to,
+            serviceId: vals.serviceId,
+            staffId: vals.staffId,
+            page: "1",
+          })
+        }
+      />
+
       {/* کارت‌های آماری جمع‌وجور (بهینه‌شده برای موبایل و دسکتاپ) */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Card>
@@ -156,23 +173,6 @@ export function InventorySalesReportClient({
           </CardContent>
         </Card>
       </div>
-
-      {/* نوار فیلتر */}
-      <InventoryFilterBar
-        services={services}
-        staffs={staffs}
-        initialValues={filters}
-        disabled={isPending}
-        onApply={(vals) =>
-          updateUrlParams({
-            from: vals.from,
-            to: vals.to,
-            serviceId: vals.serviceId,
-            staffId: vals.staffId,
-            page: "1",
-          })
-        }
-      />
 
       {/* جدول جزئیات */}
       <Card>
