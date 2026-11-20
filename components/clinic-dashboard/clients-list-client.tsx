@@ -203,8 +203,8 @@ function NicknameTooltipButton({
           </button>
         }
       />
-      <TooltipContent side="right" className="text-xs font-medium">
-        <span>نام مستعار: {nickname}</span>
+      <TooltipContent side="left" className="text-xs font-medium bg-amber-300 " >
+        <span>{nickname}</span>
       </TooltipContent>
     </Tooltip>
   )
