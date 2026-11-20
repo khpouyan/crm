@@ -200,6 +200,7 @@ model Client {
   userId        String
   clinicId      String
   fileNumber    Int?
+  nickname      String?
   walletBalance Int      @default(0)
 
   gender         String?
@@ -732,8 +733,8 @@ model CareSmsTemplate {
   isActive    Boolean @default(true)
 
   clinic     Clinic      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  service    Service?    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  subService SubService? @relation(fields: [subServiceId], references: [id], onDelete: Cascade)
+  service    Service?    @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  subService SubService? @relation(fields: [subServiceId], references: [id], onDelete: SetNull)
 }
 
 model BulkSmsCampaign {

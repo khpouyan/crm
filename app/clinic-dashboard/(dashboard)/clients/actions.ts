@@ -8,7 +8,7 @@ import {
   hasPermission,
   canAccessServiceCategory,
 } from "@/lib/permissions";
-import {normalizeIranPhone , isValidIranPhone } from "@/lib/iranian-mobile";
+import { normalizeIranPhone, isValidIranPhone } from "@/lib/iranian-mobile";
 import { normalizePersianDigits } from "@/lib/normalize-persian-digits";
 import { calculateInvoiceFinancials } from "@/lib/finance/invoice-calculator";
 
@@ -17,6 +17,7 @@ import { calculateInvoiceFinancials } from "@/lib/finance/invoice-calculator";
 // ==========================================
 export interface CreateClientInput {
   fullName: string;
+  nickname?: string | null;
   fileNumber?: number | null;
   gender: "FEMALE" | "MALE";
   phone?: string;
@@ -43,6 +44,8 @@ export async function createClientAction(input: CreateClientInput) {
     return { success: false, error: "نام و نام خانوادگی مراجعه‌کننده الزامی است." };
   }
 
+  const cleanNickname = input.nickname?.trim() || null;
+
   let normalizedPhone = "";
   if (input.noPhone) {
     normalizedPhone = `NO_PHONE_${ctx.clinicId.slice(0, 6)}_${Date.now()}`;
@@ -67,6 +70,53 @@ export async function createClientAction(input: CreateClientInput) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      // بررسی تکراری بودن شماره تماس یا کد ملی صرفاً در پرونده‌های (Client) همین کلینیک
+      if (!input.noPhone && normalizedPhone) {
+        const duplicatePhoneClient = await tx.client.findFirst({
+          where: {
+            clinicId: ctx.clinicId,
+            user: { phone: normalizedPhone },
+          },
+          select: {
+            id: true,
+            fileNumber: true,
+            user: { select: { fullName: true } },
+          },
+        });
+        if (duplicatePhoneClient) {
+          throw new Error(
+            `این شماره تماس قبلاً در پرونده «${duplicatePhoneClient.user.fullName || "بدون نام"}»${
+              duplicatePhoneClient.fileNumber
+                ? ` (شماره پرونده ${duplicatePhoneClient.fileNumber})`
+                : ""
+            } در همین کلینیک ثبت شده است.`
+          );
+        }
+      }
+
+      if (!input.noNationalId && cleanNationalId) {
+        const duplicateNationalIdClient = await tx.client.findFirst({
+          where: {
+            clinicId: ctx.clinicId,
+            user: { nationalId: cleanNationalId },
+          },
+          select: {
+            id: true,
+            fileNumber: true,
+            user: { select: { fullName: true } },
+          },
+        });
+        if (duplicateNationalIdClient) {
+          throw new Error(
+            `این کد ملی قبلاً در پرونده «${duplicateNationalIdClient.user.fullName || "بدون نام"}»${
+              duplicateNationalIdClient.fileNumber
+                ? ` (شماره پرونده ${duplicateNationalIdClient.fileNumber})`
+                : ""
+            } در همین کلینیک ثبت شده است.`
+          );
+        }
+      }
+
       let targetFileNumber = input.fileNumber;
       if (!targetFileNumber) {
         const lastClient = await tx.client.findFirst({
@@ -130,6 +180,7 @@ export async function createClientAction(input: CreateClientInput) {
           userId: user.id,
           clinicId: ctx.clinicId,
           fileNumber: targetFileNumber,
+          nickname: cleanNickname,
           gender: input.gender,
           birthDate: input.birthDate ? new Date(input.birthDate) : null,
           referralSource: input.referralSource || null,
@@ -1233,6 +1284,7 @@ export async function sendClientQuickSmsAction(input: {
 export interface QuickUpdateClientInput {
   clientId: string;
   fullName: string;
+  nickname?: string | null;
   fileNumber?: number | null;
   phone?: string;
   noPhone?: boolean;
@@ -1252,6 +1304,8 @@ export async function quickUpdateClientAction(input: QuickUpdateClientInput) {
   if (!fullName) {
     return { success: false, error: "نام و نام خانوادگی الزامی است." };
   }
+
+  const cleanNickname = input.nickname?.trim() || null;
 
   try {
     const client = await prisma.client.findFirst({
@@ -1325,6 +1379,7 @@ export async function quickUpdateClientAction(input: QuickUpdateClientInput) {
         where: { id: client.id },
         data: {
           fileNumber: input.fileNumber ?? client.fileNumber,
+          nickname: cleanNickname,
           gender: input.gender || client.gender,
         },
       });

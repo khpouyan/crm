@@ -67,6 +67,7 @@ export default async function ClientsPage({
       ? {
           OR: [
             { user: { fullName: { contains: query, mode: "insensitive" as const } } },
+            { nickname: { contains: query, mode: "insensitive" as const } },
             { user: { phone: { contains: query } } },
             { user: { nationalId: { contains: query } } },
             ...(numericQuery !== null ? [{ fileNumber: numericQuery }] : []),
@@ -89,13 +90,14 @@ export default async function ClientsPage({
           { fileNumber: { sort: "desc" as const, nulls: "last" as const } },
           { createdAt: "desc" as const },
         ];
+
   const [
     totalCount,
     clients,
     canExport,
     lastClient,
     staffReferrers,
-    clientReferrers,
+    allClinicClients,
   ] = await Promise.all([
     prisma.client.count({ where: whereClause }),
     prisma.client.findMany({
@@ -141,10 +143,10 @@ export default async function ClientsPage({
     prisma.client.findMany({
       where: { clinicId: ctx.clinicId },
       include: {
-        user: { select: { fullName: true, phone: true } },
+        user: { select: { fullName: true, phone: true, nationalId: true } },
       },
       orderBy: { createdAt: "desc" },
-      take: 200,
+      take: 500,
     }),
   ]);
 
@@ -158,6 +160,7 @@ export default async function ClientsPage({
       id: c.id,
       fileNumber: c.fileNumber,
       fullName: c.user.fullName || "بدون نام",
+      nickname: c.nickname,
       phone: isNoPhone ? null : c.user.phone,
       nationalId: c.user.nationalId,
       gender: c.gender,
@@ -171,9 +174,19 @@ export default async function ClientsPage({
     };
   });
 
+  const existingClientsSummary = allClinicClients.map((c) => ({
+    id: c.id,
+    fullName: c.user.fullName || "",
+    nickname: c.nickname,
+    fileNumber: c.fileNumber,
+    phone: c.user.phone.startsWith("NO_PHONE_") ? null : c.user.phone,
+    nationalId: c.user.nationalId || null,
+  }));
+
   return (
     <ClientsListClient
       clients={serializedClients}
+      existingClients={existingClientsSummary}
       totalCount={totalCount}
       page={page}
       pageSize={pageSize}
@@ -185,11 +198,11 @@ export default async function ClientsPage({
         id: s.id,
         label: s.user.fullName || s.jobTitle,
       }))}
-      clientReferrers={clientReferrers.map((c) => ({
+      clientReferrers={allClinicClients.slice(0, 200).map((c) => ({
         id: c.id,
         label: `${c.user.fullName || "بدون نام"}${
-          c.fileNumber ? ` (پرونده ${c.fileNumber})` : ""
-        }`,
+          c.nickname ? ` (${c.nickname})` : ""
+        }${c.fileNumber ? ` (پرونده ${c.fileNumber})` : ""}`,
       }))}
       canCreate={hasPermission(ctx.clinicUser, "patients.create")}
       canEdit={hasPermission(ctx.clinicUser, "patients.edit")}
