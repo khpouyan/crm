@@ -2,6 +2,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   Card,
@@ -11,9 +12,9 @@ import {
   CardContent,
   CardFooter,
 } from "@/components/ui/card"
-import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import {
   InputGroup,
   InputGroupAddon,
@@ -45,9 +46,11 @@ import {
   Loader2,
   AlertCircle,
   ShieldCheck,
+  Building2,
 } from "lucide-react"
 import { ModeToggle } from "@/components/mode-toggle"
 import DotField from "@/components/kokonutui/dot-field"
+import { normalizePersianDigits } from "@/lib/normalize-persian-digits"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -113,7 +116,7 @@ export default function LoginPage() {
     }
   }
 
-  // ۲. ارسال پیامک OTP و انتقال به مرحله کد تایید
+  // ۲. ارسال پیامک OTP و انتقال به مرحله کد تایید (یا هدایت خودکار به ثبت‌نام در صورت نبود حساب)
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMessage(null)
@@ -122,6 +125,13 @@ export default function LoginPage() {
     try {
       const res = await sendOtpAction(mobileNumber)
       if (res.success) {
+        if (res.redirectToRegister) {
+          const cleanPhone = normalizePersianDigits(mobileNumber).trim()
+          router.push(
+            `/clinic-dashboard/register?phone=${encodeURIComponent(cleanPhone)}&otpSent=1`
+          )
+          return
+        }
         setTimeLeft(120)
         setCanResend(false)
         setOtpCode("")
@@ -174,6 +184,11 @@ export default function LoginPage() {
           router.push("/clinic-dashboard")
           router.refresh()
         }
+      } else if (res.redirectToRegister) {
+        const cleanPhone = normalizePersianDigits(mobileNumber).trim()
+        router.push(
+          `/clinic-dashboard/register?phone=${encodeURIComponent(cleanPhone)}`
+        )
       } else {
         setErrorMessage(res.error || "کد وارد شده صحیح نمی‌باشد.")
       }
@@ -210,6 +225,12 @@ export default function LoginPage() {
     router.refresh()
   }
 
+  const registerHref = mobileNumber.trim()
+    ? `/clinic-dashboard/register?phone=${encodeURIComponent(
+        normalizePersianDigits(mobileNumber).trim()
+      )}`
+    : "/clinic-dashboard/register"
+
   return (
     <div className="relative min-h-screen w-full" dir="rtl">
       <DotField
@@ -241,7 +262,7 @@ export default function LoginPage() {
                 {authMode === "password" &&
                   "شماره موبایل و رمز عبور خود را وارد کنید"}
                 {authMode === "otp_phone" &&
-                  "کد یک‌بار مصرف به شماره همراه شما پیامک خواهد شد"}
+                  "اگر حسابی نداشته باشید، به صورت خودکار به ثبت‌نام هدایت می‌شوید"}
                 {authMode === "otp_verify" &&
                   `کد ۶ رقمی ارسال‌شده به ${mobileNumber || "شماره شما"} را وارد کنید`}
                 {authMode === "set_password" &&
@@ -260,78 +281,86 @@ export default function LoginPage() {
           {/* ۱. فرم ورود با کلمه عبور */}
           {authMode === "password" && (
             <form onSubmit={handlePasswordLogin}>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="mobile">شماره موبایل</Label>
-                  <InputGroup dir="ltr" className="h-12">
-                    <InputGroupAddon align="inline-start">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                    </InputGroupAddon>
-                    <InputGroupInput
-                      id="mobile"
-                      type="tel"
-                      inputMode="tel"
-                      placeholder="09123456789"
-                      className="text-left font-mono tracking-wider"
-                      value={mobileNumber}
-                      onChange={(e) => setMobileNumber(e.target.value)}
-                      required
-                    />
-                  </InputGroup>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password">رمز عبور</Label>
-                    <Button
-                      variant="link"
-                      size="sm"
-                      type="button"
-                      className="h-auto px-0 text-xs text-muted-foreground"
-                      onClick={() => {
-                        setErrorMessage(null)
-                        setAuthMode("otp_phone")
-                      }}
-                    >
-                      فراموشی رمز؟
-                    </Button>
-                  </div>
-
-                  <InputGroup dir="ltr" className="h-12">
-                    <InputGroupAddon align="inline-start">
-                      <Lock className="h-4 w-4 text-muted-foreground" />
-                    </InputGroupAddon>
-                    <InputGroupInput
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      className="text-left font-mono text-base"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                    <InputGroupAddon align="inline-end">
-                      <InputGroupButton
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setShowPassword((prev) => !prev)}
-                        tabIndex={-1}
-                        aria-label={
-                          showPassword ? "مخفی کردن رمز عبور" : "نمایش رمز عبور"
+              <CardContent>
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel htmlFor="mobile">شماره موبایل</FieldLabel>
+                    <InputGroup dir="ltr" className="h-12">
+                      <InputGroupAddon align="inline-start">
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                      </InputGroupAddon>
+                      <InputGroupInput
+                        id="mobile"
+                        type="tel"
+                        inputMode="tel"
+                        placeholder="09123456789"
+                        className="text-left font-mono tracking-wider"
+                        value={mobileNumber}
+                        onChange={(e) =>
+                          setMobileNumber(
+                            normalizePersianDigits(e.target.value)
+                          )
                         }
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </InputGroupButton>
-                    </InputGroupAddon>
-                  </InputGroup>
-                </div>
+                        required
+                      />
+                    </InputGroup>
+                  </Field>
 
-                <div className="pt-2">
+                  <Field>
+                    <div className="flex items-center justify-between">
+                      <FieldLabel htmlFor="password">رمز عبور</FieldLabel>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        type="button"
+                        className="h-auto px-0 text-xs text-muted-foreground"
+                        onClick={() => {
+                          setErrorMessage(null)
+                          setAuthMode("otp_phone")
+                        }}
+                      >
+                        فراموشی رمز؟
+                      </Button>
+                    </div>
+
+                    <InputGroup dir="ltr" className="h-12">
+                      <InputGroupAddon align="inline-start">
+                        <Lock className="h-4 w-4 text-muted-foreground" />
+                      </InputGroupAddon>
+                      <InputGroupInput
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        className="text-left font-mono text-base"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                      />
+                      <InputGroupAddon align="inline-end">
+                        <InputGroupButton
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          tabIndex={-1}
+                          aria-label={
+                            showPassword
+                              ? "مخفی کردن رمز عبور"
+                              : "نمایش رمز عبور"
+                          }
+                        >
+                          {showPassword ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </InputGroupButton>
+                      </InputGroupAddon>
+                    </InputGroup>
+                  </Field>
+                </FieldGroup>
+
+                <div className="pt-4">
                   <Separator />
                 </div>
               </CardContent>
@@ -361,6 +390,17 @@ export default function LoginPage() {
                   <KeyRound className="h-4 w-4" />
                   ورود با رمز یک‌بار مصرف
                 </Button>
+
+                <div className="text-s mt-2 flex w-full items-center justify-center gap-1.5 border-t pt-3 text-muted-foreground">
+                  <span>کلینیک یا مطب دارید؟</span>
+                  <Link
+                    href={registerHref}
+                    className="inline-flex items-center gap-1 font-bold text-primary hover:underline dark:text-yellow-600"
+                  >
+                    <Building2 className="size-3.5" />
+                    ثبت‌نام مرکز جدید
+                  </Link>
+                </div>
               </CardFooter>
             </form>
           )}
@@ -368,28 +408,34 @@ export default function LoginPage() {
           {/* ۲. فرم دریافت شماره موبایل جهت ارسال OTP */}
           {authMode === "otp_phone" && (
             <form onSubmit={handleSendOtp}>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="otp-mobile">شماره موبایل</Label>
-                  <InputGroup dir="ltr" className="h-12">
-                    <InputGroupAddon align="inline-start">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                    </InputGroupAddon>
-                    <InputGroupInput
-                      id="otp-mobile"
-                      type="tel"
-                      inputMode="tel"
-                      placeholder="09123456789"
-                      className="text-left font-mono tracking-wider"
-                      value={mobileNumber}
-                      onChange={(e) => setMobileNumber(e.target.value)}
-                      autoFocus
-                      required
-                    />
-                  </InputGroup>
-                </div>
+              <CardContent>
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel htmlFor="otp-mobile">شماره موبایل</FieldLabel>
+                    <InputGroup dir="ltr" className="h-12">
+                      <InputGroupAddon align="inline-start">
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                      </InputGroupAddon>
+                      <InputGroupInput
+                        id="otp-mobile"
+                        type="tel"
+                        inputMode="tel"
+                        placeholder="09123456789"
+                        className="text-left font-mono tracking-wider"
+                        value={mobileNumber}
+                        onChange={(e) =>
+                          setMobileNumber(
+                            normalizePersianDigits(e.target.value)
+                          )
+                        }
+                        autoFocus
+                        required
+                      />
+                    </InputGroup>
+                  </Field>
+                </FieldGroup>
 
-                <div className="pt-2">
+                <div className="pt-4">
                   <Separator />
                 </div>
               </CardContent>
@@ -419,6 +465,17 @@ export default function LoginPage() {
                   <ArrowRight className="h-4 w-4" />
                   ورود با نام کاربری و رمز عبور
                 </Button>
+
+                <div className="mt-1 flex w-full items-center justify-center gap-1.5 border-t pt-3 text-xs text-muted-foreground">
+                  <span>هنوز ثبت‌نام نکرده‌اید؟</span>
+                  <Link
+                    href={registerHref}
+                    className="inline-flex items-center gap-1 font-bold text-primary hover:underline"
+                  >
+                    <Building2 className="size-3.5" />
+                    ثبت‌نام کلینیک جدید
+                  </Link>
+                </div>
               </CardFooter>
             </form>
           )}
@@ -431,7 +488,8 @@ export default function LoginPage() {
                   <InputOTP
                     maxLength={6}
                     value={otpCode}
-                    onChange={(val) => setOtpCode(val)}
+                    onChange={(val) => setOtpCode(normalizePersianDigits(val))}
+                    containerClassName="[direction:ltr]"
                     autoFocus
                   >
                     <InputOTPGroup>
@@ -513,69 +571,73 @@ export default function LoginPage() {
           {/* ۴. مرحله تنظیم رمز عبور برای کاربران جدید (اختیاری) */}
           {authMode === "set_password" && (
             <form onSubmit={handleSetPassword}>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="new-password">
-                    رمز عبور جدید (حداقل ۶ کاراکتر)
-                  </Label>
-                  <InputGroup dir="ltr" className="h-12">
-                    <InputGroupAddon align="inline-start">
-                      <Lock className="h-4 w-4 text-muted-foreground" />
-                    </InputGroupAddon>
-                    <InputGroupInput
-                      id="new-password"
-                      type={showNewPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      className="text-left font-mono text-base"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      minLength={6}
-                      autoFocus
-                      required
-                    />
-                    <InputGroupAddon align="inline-end">
-                      <InputGroupButton
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setShowNewPassword((prev) => !prev)}
-                        tabIndex={-1}
-                        aria-label={
-                          showNewPassword
-                            ? "مخفی کردن رمز عبور"
-                            : "نمایش رمز عبور"
-                        }
-                      >
-                        {showNewPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </InputGroupButton>
-                    </InputGroupAddon>
-                  </InputGroup>
-                </div>
+              <CardContent>
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel htmlFor="new-password">
+                      رمز عبور جدید (حداقل ۶ کاراکتر)
+                    </FieldLabel>
+                    <InputGroup dir="ltr" className="h-12">
+                      <InputGroupAddon align="inline-start">
+                        <Lock className="h-4 w-4 text-muted-foreground" />
+                      </InputGroupAddon>
+                      <InputGroupInput
+                        id="new-password"
+                        type={showNewPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        className="text-left font-mono text-base"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        minLength={6}
+                        autoFocus
+                        required
+                      />
+                      <InputGroupAddon align="inline-end">
+                        <InputGroupButton
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setShowNewPassword((prev) => !prev)}
+                          tabIndex={-1}
+                          aria-label={
+                            showNewPassword
+                              ? "مخفی کردن رمز عبور"
+                              : "نمایش رمز عبور"
+                          }
+                        >
+                          {showNewPassword ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </InputGroupButton>
+                      </InputGroupAddon>
+                    </InputGroup>
+                  </Field>
 
-                <div className="space-y-2">
-                  <Label htmlFor="confirm-password">تکرار رمز عبور جدید</Label>
-                  <InputGroup dir="ltr" className="h-12">
-                    <InputGroupAddon align="inline-start">
-                      <Lock className="h-4 w-4 text-muted-foreground" />
-                    </InputGroupAddon>
-                    <InputGroupInput
-                      id="confirm-password"
-                      type={showNewPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      className="text-left font-mono text-base"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      minLength={6}
-                      required
-                    />
-                  </InputGroup>
-                </div>
+                  <Field>
+                    <FieldLabel htmlFor="confirm-password">
+                      تکرار رمز عبور جدید
+                    </FieldLabel>
+                    <InputGroup dir="ltr" className="h-12">
+                      <InputGroupAddon align="inline-start">
+                        <Lock className="h-4 w-4 text-muted-foreground" />
+                      </InputGroupAddon>
+                      <InputGroupInput
+                        id="confirm-password"
+                        type={showNewPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        className="text-left font-mono text-base"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        minLength={6}
+                        required
+                      />
+                    </InputGroup>
+                  </Field>
+                </FieldGroup>
 
-                <div className="pt-2">
+                <div className="pt-4">
                   <Separator />
                 </div>
               </CardContent>

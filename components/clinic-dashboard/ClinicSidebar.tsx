@@ -192,6 +192,11 @@ const COLLAPSIBLE_GROUPS: NavGroupItem[] = [
     requiredAnyPermissions: ["management.settings", "finance.accounting"],
     items: [
       {
+        title: "مشخصات و اطلاعات مرکز",
+        href: "/clinic-dashboard/settings/clinic-profile",
+        requiredAnyPermissions: ["management.settings"],
+      },
+      {
         title: "تنظیمات مالی و اعتباری",
         href: "/clinic-dashboard/settings/financial",
         requiredAnyPermissions: ["management.settings", "finance.accounting"],

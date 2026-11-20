@@ -97,6 +97,19 @@ model Clinic {
   name      String
   subdomain String @unique
 
+  // اطلاعات تکمیلی و هویتی مرکز
+  logoUrl            String?
+  province           String?
+  city               String?
+  address            String? @db.Text
+  postalCode         String?
+  landlinePhone      String?
+  secondaryPhone     String?
+  ownerNationalId    String?
+  medicalCouncilCode String?
+  website            String?
+  instagram          String?
+
   currentPlan   PlanTier  @default(FREE)
   planExpiresAt DateTime?
   smsBalance    Int       @default(50)
@@ -445,11 +458,11 @@ model ClinicProduct {
   unitsPerPackage Float   @default(1)
   alertThreshold  Float   @default(0)
 
-  clinic                     Clinic                        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  batches                    ProductBatch[]
-  usedInServices             UsedConsumable[]
-  stockOuts                  InventoryStockOut[]
-  defaultForServices         ServiceDefaultProduct[]
+  clinic                      Clinic                        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  batches                     ProductBatch[]
+  usedInServices              UsedConsumable[]
+  stockOuts                   InventoryStockOut[]
+  defaultForServices          ServiceDefaultProduct[]
   defaultForServiceCategories ServiceCategoryDefaultProduct[]
 
   @@index([clinicId])
