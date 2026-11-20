@@ -432,8 +432,8 @@ export function ClientsListClient({
           </div>
 
           {/* مرتب‌سازی و سوییچ نمای کارتی / جدولی */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="w-48">
+          <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
+            <div className="flex-1 sm:w-48 sm:flex-initial">
               <Select
                 value={initialSort}
                 items={SORT_OPTIONS}
@@ -441,7 +441,7 @@ export function ClientsListClient({
                   updateQueryParams({ sort: val || "fileNumber_desc" })
                 }
               >
-                <SelectTrigger className="h-9">
+                <SelectTrigger className="h-9 w-full">
                   <SelectValue placeholder="مرتب‌سازی" />
                 </SelectTrigger>
                 <SelectContent>
@@ -454,7 +454,7 @@ export function ClientsListClient({
               </Select>
             </div>
 
-            <div className="flex items-center rounded-lg border bg-background p-0.5">
+            <div className="flex shrink-0 items-center rounded-lg border bg-background p-0.5">
               <Button
                 type="button"
                 variant={viewMode === "card" ? "default" : "ghost"}
@@ -483,9 +483,9 @@ export function ClientsListClient({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <form
             onSubmit={handleSearchSubmit}
-            className="relative flex w-full max-w-md items-center gap-2"
+            className="relative flex w-full flex-col gap-2 sm:max-w-md sm:flex-row sm:items-center"
           >
-            <div className="relative flex-1">
+            <div className="relative w-full sm:flex-1">
               <Search className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={searchInput}
@@ -494,7 +494,12 @@ export function ClientsListClient({
                 className="pr-9"
               />
             </div>
-            <Button type="submit" variant="secondary" disabled={isPending}>
+            <Button
+              type="submit"
+              variant="secondary"
+              disabled={isPending}
+              className="w-full sm:w-auto"
+            >
               جستجو
             </Button>
           </form>
@@ -832,7 +837,9 @@ export function ClientsListClient({
                 <FieldGroup>
                   {/* نام و نام خانوادگی */}
                   <Field>
-                    <FieldLabel htmlFor="fullName">نام و نام خانوادگی*</FieldLabel>
+                    <FieldLabel htmlFor="fullName">
+                      نام و نام خانوادگی*
+                    </FieldLabel>
                     <Input
                       id="fullName"
                       required
@@ -865,7 +872,9 @@ export function ClientsListClient({
                         placeholder="09123456789"
                       />
                       {isPhoneInvalid && (
-                        <FieldError>شماره موبایل وارد شده معتبر نیست.</FieldError>
+                        <FieldError>
+                          شماره موبایل وارد شده معتبر نیست.
+                        </FieldError>
                       )}
                       <Field orientation="horizontal" className="pt-1">
                         <Checkbox

@@ -225,7 +225,7 @@ const SINGLE_BOTTOM_ITEMS: NavSingleItem[] = [
 ]
 
 const ACTIVE_ITEM_CLASS =
-  "data-[active=true]:bg-primary/15 data-[active=true]:font-semibold data-[active=true]:text-primary"
+  "data-[active=true]:bg-primary/15 data-[active=true]:font-semibold data-[active=true]:text-primary dark:data-[active=true]:bg-primary/20 dark:data-[active=true]:text-sidebar-foreground"
 
 function canSee(
   user: SidebarUserProp,
