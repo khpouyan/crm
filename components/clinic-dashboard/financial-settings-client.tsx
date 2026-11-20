@@ -12,12 +12,12 @@ import {
   Trash2,
   CheckCircle2,
   XCircle,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -35,7 +35,18 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
   ResponsiveDialogDescription,
+  ResponsiveDialogPanel,
+  ResponsiveDialogFooter,
+  ResponsiveDialogClose,
+  ResponsiveDialogDesktopOnly,
 } from "@/components/ui/responsive-dialog";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import {
   upsertBankAccountAction,
   deleteBankAccountAction,
@@ -247,7 +258,7 @@ export function FinancialSettingsClient({
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="space-y-6 p-4 md:p-0">
       <div>
         <h1 className="text-xl font-bold text-foreground">
           تنظیمات مالی، درگاه‌ها و سرویس‌های اعتباری
@@ -257,17 +268,26 @@ export function FinancialSettingsClient({
         </p>
       </div>
 
-      <Tabs defaultValue="credit"className="space-y-5" >
-        <TabsList className="grid w-full max-w-xl grid-cols-3">
-          <TabsTrigger value="credit" className="gap-1.5 text-xs">
+      <Tabs defaultValue="credit" className="space-y-5">
+        <TabsList className="grid w-full max-w-xl grid-cols-3 [&_[data-slot=tabs-indicator]]:hidden">
+          <TabsTrigger
+            value="credit"
+            className="gap-1.5 text-xs data-[active]:bg-primary data-[active]:text-primary-foreground data-[active]:shadow-xs"
+          >
             <Percent className="size-3.5" />
             سرویس‌های اعتباری
           </TabsTrigger>
-          <TabsTrigger value="banks" className="gap-1.5 text-xs">
+          <TabsTrigger
+            value="banks"
+            className="gap-1.5 text-xs data-[active]:bg-primary data-[active]:text-primary-foreground data-[active]:shadow-xs"
+          >
             <Landmark className="size-3.5" />
             حساب‌های بانکی
           </TabsTrigger>
-          <TabsTrigger value="terminals" className="gap-1.5 text-xs">
+          <TabsTrigger
+            value="terminals"
+            className="gap-1.5 text-xs data-[active]:bg-primary data-[active]:text-primary-foreground data-[active]:shadow-xs"
+          >
             <CreditCard className="size-3.5" />
             دستگاه‌های کارت‌خوان
           </TabsTrigger>
@@ -573,8 +593,14 @@ export function FinancialSettingsClient({
         </TabsContent>
       </Tabs>
 
+      {/* ========================================== */}
       {/* مودال افزودن/ویرایش سرویس اعتباری */}
-      <ResponsiveDialog open={creditModalOpen} onOpenChange={setCreditModalOpen}>
+      {/* ========================================== */}
+      <ResponsiveDialog
+        open={creditModalOpen}
+        onOpenChange={setCreditModalOpen}
+        drawerPosition="bottom"
+      >
         <ResponsiveDialogTrigger
           aria-hidden="true"
           className="sr-only"
@@ -592,86 +618,121 @@ export function FinancialSettingsClient({
             </ResponsiveDialogDescription>
           </ResponsiveDialogHeader>
 
-          <form onSubmit={handleSaveCredit} className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <Label>نام سرویس اعتباری *</Label>
-              <Input
-                placeholder="مثلاً: اسنپ‌پی، دیجی‌پی، تارا..."
-                value={cpTitle}
-                onChange={(e) => setCpTitle(e.target.value)}
-                required
-              />
-            </div>
+          <form onSubmit={handleSaveCredit} className="contents">
+            <ResponsiveDialogPanel className="no-scrollbar max-h-[70vh] overflow-y-auto pt-2">
+              <div className="px-5 pb-2">
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel htmlFor="cp-title">
+                      نام سرویس اعتباری *
+                    </FieldLabel>
+                    <Input
+                      id="cp-title"
+                      placeholder="مثلاً: اسنپ‌پی، دیجی‌پی، تارا..."
+                      value={cpTitle}
+                      onChange={(e) => setCpTitle(e.target.value)}
+                      required
+                    />
+                  </Field>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>درصد کل کارمزد سرویس (%)</Label>
-                <Input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="100"
-                  dir="ltr"
-                  value={cpCommission}
-                  onChange={(e) => setCpCommission(e.target.value)}
-                />
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel htmlFor="cp-commission">
+                        درصد کل کارمزد سرویس (%)
+                      </FieldLabel>
+                      <Input
+                        id="cp-commission"
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        dir="ltr"
+                        value={cpCommission}
+                        onChange={(e) => setCpCommission(e.target.value)}
+                      />
+                    </Field>
+
+                    <Field>
+                      <FieldLabel htmlFor="cp-client-fee">
+                        درصد دریافتی از مراجع (%)
+                      </FieldLabel>
+                      <Input
+                        id="cp-client-fee"
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        dir="ltr"
+                        value={cpClientFee}
+                        onChange={(e) => setCpClientFee(e.target.value)}
+                      />
+                    </Field>
+                  </div>
+
+                  <FieldDescription className="rounded-lg bg-muted/60 p-3 text-xs">
+                    مثال: اگر مانده فاکتور مراجع <strong>۱۰,۰۰۰,۰۰۰ تومان</strong> باشد و درصد دریافتی از مراجع{" "}
+                    <strong>{parseFloat(cpClientFee) || 0}%</strong> باشد، مبلغ{" "}
+                    <strong className="text-foreground">
+                      {Math.round(
+                        (10_000_000 * (parseFloat(cpClientFee) || 0)) / 100
+                      ).toLocaleString("fa-IR")}{" "}
+                      تومان
+                    </strong>{" "}
+                    به صورت خودکار به فاکتور اضافه می‌شود.
+                  </FieldDescription>
+
+                  <Field
+                    orientation="horizontal"
+                    className="justify-between rounded-lg border p-3"
+                  >
+                    <FieldContent>
+                      <FieldLabel
+                        htmlFor="cp-active"
+                        className="cursor-pointer text-xs font-medium"
+                      >
+                        سرویس فعال باشد
+                      </FieldLabel>
+                      <FieldDescription className="text-[11px]">
+                        در ویزارد صدور فاکتور نمایش داده شود
+                      </FieldDescription>
+                    </FieldContent>
+                    <Switch
+                      id="cp-active"
+                      checked={cpActive}
+                      onCheckedChange={setCpActive}
+                    />
+                  </Field>
+                </FieldGroup>
               </div>
+            </ResponsiveDialogPanel>
 
-              <div className="space-y-1.5">
-                <Label>درصد دریافتی از مراجع (%)</Label>
-                <Input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="100"
-                  dir="ltr"
-                  value={cpClientFee}
-                  onChange={(e) => setCpClientFee(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
-              مثال: اگر مانده فاکتور مراجع <strong>۱۰,۰۰۰,۰۰۰ تومان</strong> باشد و درصد دریافتی از مراجع{" "}
-              <strong>{parseFloat(cpClientFee) || 0}%</strong> باشد، مبلغ{" "}
-              <strong className="text-foreground">
-                {Math.round(
-                  (10_000_000 * (parseFloat(cpClientFee) || 0)) / 100
-                ).toLocaleString("fa-IR")}{" "}
-                تومان
-              </strong>{" "}
-              به صورت خودکار به فاکتور اضافه می‌شود.
-            </div>
-
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <Label htmlFor="cp-active" className="cursor-pointer text-xs">
-                سرویس فعال باشد و در ویزارد فاکتور نمایش داده شود
-              </Label>
-              <Switch
-                id="cp-active"
-                checked={cpActive}
-                onCheckedChange={setCpActive}
-              />
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setCreditModalOpen(false)}
-              >
-                انصراف
-              </Button>
+            <ResponsiveDialogFooter className="gap-2">
               <Button type="submit" disabled={isPending}>
+                {isPending && <Loader2 className="ml-2 size-4 animate-spin" />}
                 {isPending ? "در حال ذخیره..." : "ذخیره سرویس"}
               </Button>
-            </div>
+              <ResponsiveDialogDesktopOnly>
+                <ResponsiveDialogClose
+                  render={
+                    <Button type="button" variant="outline">
+                      انصراف
+                    </Button>
+                  }
+                />
+              </ResponsiveDialogDesktopOnly>
+            </ResponsiveDialogFooter>
           </form>
         </ResponsiveDialogContent>
       </ResponsiveDialog>
 
+      {/* ========================================== */}
       {/* مودال حساب بانکی */}
-      <ResponsiveDialog open={bankModalOpen} onOpenChange={setBankModalOpen}>
+      {/* ========================================== */}
+      <ResponsiveDialog
+        open={bankModalOpen}
+        onOpenChange={setBankModalOpen}
+        drawerPosition="bottom"
+      >
         <ResponsiveDialogTrigger
           aria-hidden="true"
           className="sr-only"
@@ -682,80 +743,132 @@ export function FinancialSettingsClient({
             <ResponsiveDialogTitle>
               {editingBank ? "ویرایش حساب بانکی" : "افزودن حساب بانکی"}
             </ResponsiveDialogTitle>
+            <ResponsiveDialogDescription>
+              اطلاعات حساب بانکی کلینیک را برای اتصال به کارت‌خوان یا کارت‌به‌کارت وارد کنید.
+            </ResponsiveDialogDescription>
           </ResponsiveDialogHeader>
-          <form onSubmit={handleSaveBank} className="space-y-3 pt-2">
-            <div className="space-y-1">
-              <Label>نام بانک *</Label>
-              <Input
-                placeholder="مثلاً: بانک ملت"
-                value={bankName}
-                onChange={(e) => setBankName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>نام صاحب حساب *</Label>
-              <Input
-                value={ownerName}
-                onChange={(e) => setOwnerName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>شماره حساب *</Label>
-              <Input
-                dir="ltr"
-                value={accountNumber}
-                onChange={(e) => setAccountNumber(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>شماره کارت (اختیاری)</Label>
-              <Input
-                dir="ltr"
-                maxLength={19}
-                value={cardNumber}
-                onChange={(e) => setCardNumber(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>شماره شبا (اختیاری)</Label>
-              <Input
-                dir="ltr"
-                placeholder="IR..."
-                value={iban}
-                onChange={(e) => setIban(e.target.value)}
-              />
-            </div>
-            <div className="flex items-center justify-between rounded-lg border p-2.5">
-              <Label htmlFor="bank-active" className="text-xs">
-                حساب فعال باشد
-              </Label>
-              <Switch
-                id="bank-active"
-                checked={bankActive}
-                onCheckedChange={setBankActive}
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setBankModalOpen(false)}
-              >
-                انصراف
-              </Button>
+
+          <form onSubmit={handleSaveBank} className="contents">
+            <ResponsiveDialogPanel className="no-scrollbar max-h-[70vh] overflow-y-auto pt-2">
+              <div className="px-5 pb-2">
+                <FieldGroup>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel htmlFor="bank-name">نام بانک *</FieldLabel>
+                      <Input
+                        id="bank-name"
+                        placeholder="مثلاً: بانک ملت"
+                        value={bankName}
+                        onChange={(e) => setBankName(e.target.value)}
+                        required
+                      />
+                    </Field>
+
+                    <Field>
+                      <FieldLabel htmlFor="bank-owner">
+                        نام صاحب حساب *
+                      </FieldLabel>
+                      <Input
+                        id="bank-owner"
+                        value={ownerName}
+                        onChange={(e) => setOwnerName(e.target.value)}
+                        required
+                      />
+                    </Field>
+                  </div>
+
+                  <Field>
+                    <FieldLabel htmlFor="bank-account-number">
+                      شماره حساب *
+                    </FieldLabel>
+                    <Input
+                      id="bank-account-number"
+                      dir="ltr"
+                      value={accountNumber}
+                      onChange={(e) => setAccountNumber(e.target.value)}
+                      required
+                    />
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="bank-card-number">
+                      شماره کارت (اختیاری)
+                    </FieldLabel>
+                    <Input
+                      id="bank-card-number"
+                      dir="ltr"
+                      maxLength={19}
+                      placeholder="6037-9975-..."
+                      value={cardNumber}
+                      onChange={(e) => setCardNumber(e.target.value)}
+                    />
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="bank-iban">
+                      شماره شبا (اختیاری)
+                    </FieldLabel>
+                    <Input
+                      id="bank-iban"
+                      dir="ltr"
+                      placeholder="IR..."
+                      value={iban}
+                      onChange={(e) => setIban(e.target.value)}
+                    />
+                  </Field>
+
+                  <Field
+                    orientation="horizontal"
+                    className="justify-between rounded-lg border p-3"
+                  >
+                    <FieldContent>
+                      <FieldLabel
+                        htmlFor="bank-active"
+                        className="cursor-pointer text-xs font-medium"
+                      >
+                        حساب فعال باشد
+                      </FieldLabel>
+                      <FieldDescription className="text-[11px]">
+                        امکان انتخاب در واریزهای کارت‌به‌کارت
+                      </FieldDescription>
+                    </FieldContent>
+                    <Switch
+                      id="bank-active"
+                      checked={bankActive}
+                      onCheckedChange={setBankActive}
+                    />
+                  </Field>
+                </FieldGroup>
+              </div>
+            </ResponsiveDialogPanel>
+
+            <ResponsiveDialogFooter className="gap-2">
               <Button type="submit" disabled={isPending}>
-                ذخیره
+                {isPending && <Loader2 className="ml-2 size-4 animate-spin" />}
+                {isPending ? "در حال ذخیره..." : "ذخیره حساب بانکی"}
               </Button>
-            </div>
+              <ResponsiveDialogDesktopOnly>
+                <ResponsiveDialogClose
+                  render={
+                    <Button type="button" variant="outline">
+                      انصراف
+                    </Button>
+                  }
+                />
+              </ResponsiveDialogDesktopOnly>
+            </ResponsiveDialogFooter>
           </form>
         </ResponsiveDialogContent>
       </ResponsiveDialog>
 
+      {/* ========================================== */}
       {/* مودال دستگاه کارت‌خوان */}
-      <ResponsiveDialog open={posModalOpen} onOpenChange={setPosModalOpen}>
+      {/* ========================================== */}
+      <ResponsiveDialog
+        open={posModalOpen}
+        onOpenChange={setPosModalOpen}
+        drawerPosition="bottom"
+      >
         <ResponsiveDialogTrigger
           aria-hidden="true"
           className="sr-only"
@@ -766,88 +879,127 @@ export function FinancialSettingsClient({
             <ResponsiveDialogTitle>
               {editingPos ? "ویرایش کارت‌خوان" : "افزودن دستگاه کارت‌خوان"}
             </ResponsiveDialogTitle>
+            <ResponsiveDialogDescription>
+              مشخصات دستگاه کارت‌خوان و حساب بانکی متصل به آن را تعیین کنید.
+            </ResponsiveDialogDescription>
           </ResponsiveDialogHeader>
-          <form onSubmit={handleSavePos} className="space-y-3 pt-2">
-            <div className="space-y-1">
-              <Label>عنوان دستگاه کارت‌خوان *</Label>
-              <Input
-                placeholder="مثلاً: کارت‌خوان پذیرش ۱"
-                value={posName}
-                onChange={(e) => setPosName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>حساب بانکی متصل *</Label>
-              <Select
-                value={posBankId}
-                items={bankAccounts.map((b) => ({
-                  value: b.id,
-                  label: `${b.bankName} (${b.ownerName})`,
-                }))}
-                onValueChange={(v) => setPosBankId(v || "")}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {bankAccounts.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.bankName} ({b.ownerName})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>نوع دستگاه</Label>
-              <Select
-                value={posType}
-                items={TERMINAL_TYPE_OPTIONS}
-                onValueChange={(v) => setPosType(v || "POS")}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TERMINAL_TYPE_OPTIONS.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>شماره ترمینال (اختیاری)</Label>
-              <Input
-                dir="ltr"
-                value={posCode}
-                onChange={(e) => setPosCode(e.target.value)}
-              />
-            </div>
-            <div className="flex items-center justify-between rounded-lg border p-2.5">
-              <Label htmlFor="pos-active" className="text-xs">
-                دستگاه فعال باشد
-              </Label>
-              <Switch
-                id="pos-active"
-                checked={posActive}
-                onCheckedChange={setPosActive}
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setPosModalOpen(false)}
-              >
-                انصراف
-              </Button>
+
+          <form onSubmit={handleSavePos} className="contents">
+            <ResponsiveDialogPanel className="no-scrollbar max-h-[70vh] overflow-y-auto pt-2">
+              <div className="px-5 pb-2">
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel htmlFor="pos-name">
+                      عنوان دستگاه کارت‌خوان *
+                    </FieldLabel>
+                    <Input
+                      id="pos-name"
+                      placeholder="مثلاً: کارت‌خوان پذیرش ۱"
+                      value={posName}
+                      onChange={(e) => setPosName(e.target.value)}
+                      required
+                    />
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="pos-bank">
+                      حساب بانکی متصل *
+                    </FieldLabel>
+                    <Select
+                      value={posBankId}
+                      items={bankAccounts.map((b) => ({
+                        value: b.id,
+                        label: `${b.bankName} (${b.ownerName})`,
+                      }))}
+                      onValueChange={(v) => setPosBankId(v || "")}
+                    >
+                      <SelectTrigger id="pos-bank" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {bankAccounts.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {b.bankName} ({b.ownerName})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel htmlFor="pos-type">نوع دستگاه</FieldLabel>
+                      <Select
+                        value={posType}
+                        items={TERMINAL_TYPE_OPTIONS}
+                        onValueChange={(v) => setPosType(v || "POS")}
+                      >
+                        <SelectTrigger id="pos-type" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TERMINAL_TYPE_OPTIONS.map((t) => (
+                            <SelectItem key={t.value} value={t.value}>
+                              {t.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+
+                    <Field>
+                      <FieldLabel htmlFor="pos-code">
+                        شماره ترمینال (اختیاری)
+                      </FieldLabel>
+                      <Input
+                        id="pos-code"
+                        dir="ltr"
+                        value={posCode}
+                        onChange={(e) => setPosCode(e.target.value)}
+                      />
+                    </Field>
+                  </div>
+
+                  <Field
+                    orientation="horizontal"
+                    className="justify-between rounded-lg border p-3"
+                  >
+                    <FieldContent>
+                      <FieldLabel
+                        htmlFor="pos-active"
+                        className="cursor-pointer text-xs font-medium"
+                      >
+                        دستگاه فعال باشد
+                      </FieldLabel>
+                      <FieldDescription className="text-[11px]">
+                        در فرم تسویه و صدور فاکتور نمایش داده شود
+                      </FieldDescription>
+                    </FieldContent>
+                    <Switch
+                      id="pos-active"
+                      checked={posActive}
+                      onCheckedChange={setPosActive}
+                    />
+                  </Field>
+                </FieldGroup>
+              </div>
+            </ResponsiveDialogPanel>
+
+            <ResponsiveDialogFooter className="gap-2">
               <Button type="submit" disabled={isPending}>
-                ذخیره
+                {isPending && <Loader2 className="ml-2 size-4 animate-spin" />}
+                {isPending ? "در حال ذخیره..." : "ذخیره کارت‌خوان"}
               </Button>
-            </div>
+              <ResponsiveDialogDesktopOnly>
+                <ResponsiveDialogClose
+                  render={
+                    <Button type="button" variant="outline">
+                      انصراف
+                    </Button>
+                  }
+                />
+              </ResponsiveDialogDesktopOnly>
+            </ResponsiveDialogFooter>
           </form>
         </ResponsiveDialogContent>
       </ResponsiveDialog>
