@@ -22,6 +22,7 @@ import {
   Pencil,
   Trash2,
   AlertTriangle,
+  X,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -972,19 +973,37 @@ export function ClientsListClient({
                     </Field>
                   </div>
 
-                  {/* تاریخ تولد */}
+                  {/* تاریخ تولد با قابلیت پاک کردن مقدار */}
                   <Field>
                     <FieldLabel>تاریخ تولد</FieldLabel>
-                    <DatePicker
-                      calendarType="shamsi"
-                      value={birthDate}
-                      onValueChange={setBirthDate}
-                      calendarProps={{
-                        captionLayout: "dropdown",
-                        startMonth: new Date(1940, 0),
-                        endMonth: new Date(),
-                      }}
-                    />
+                    <div className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <DatePicker
+                          calendarType="shamsi"
+                          value={birthDate}
+                          onValueChange={setBirthDate}
+                          placeholder="انتخاب تاریخ تولد (اختیاری)"
+                          className="w-full"
+                          calendarProps={{
+                            captionLayout: "dropdown",
+                            startMonth: new Date(1940, 0),
+                            endMonth: new Date(),
+                          }}
+                        />
+                      </div>
+                      {birthDate && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="size-9 shrink-0 text-muted-foreground hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => setBirthDate(null)}
+                          title="پاک کردن تاریخ تولد"
+                        >
+                          <X className="size-4" />
+                        </Button>
+                      )}
+                    </div>
                   </Field>
 
                   {/* نحوه آشنایی با کلینیک */}
