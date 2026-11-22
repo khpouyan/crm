@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentClinicContext } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/permissions";
-import * as jalaliLib from "@/lib/jalali";
+import { toGregorian, toJalali } from "@/lib/jalali";
 import { normalizePersianDigits } from "@/lib/normalize-persian-digits";
 import {
   StaffScheduleClient,
@@ -17,55 +17,15 @@ export const metadata = {
 };
 
 function gregorianUtcToJalaliKey(date: Date): string {
-  const fn = (
-    jalaliLib as {
-      gregorianToJalali?: (d: Date) => { year: number; month: number; day: number };
-    }
-  ).gregorianToJalali;
-
-  if (typeof fn === "function") {
-    const j = fn(date);
-    if (j?.year && j?.month && j?.day) {
-      return normalizePersianDigits(
-        `${j.year}/${String(j.month).padStart(2, "0")}/${String(j.day).padStart(
-          2,
-          "0"
-        )}`
-      );
-    }
-  }
-
-  const gy = date.getUTCFullYear();
-  const gm = date.getUTCMonth() + 1;
-  const gd = date.getUTCDate();
-
-  const gMonthDays = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
-  const gy2 = gm > 2 ? gy + 1 : gy;
-  let days =
-    355666 +
-    365 * gy +
-    Math.floor((gy2 + 3) / 4) -
-    Math.floor((gy2 + 99) / 100) +
-    Math.floor((gy2 + 399) / 400) +
-    gd +
-    gMonthDays[gm - 1];
-
-  let jy = -1595 + 33 * Math.floor(days / 12053);
-  days %= 12053;
-
-  jy += 4 * Math.floor(days / 1461);
-  days %= 1461;
-
-  if (days > 365) {
-    jy += Math.floor((days - 1) / 365);
-    days = (days - 1) % 365;
-  }
-
-  const jm =
-    days < 186 ? 1 + Math.floor(days / 31) : 7 + Math.floor((days - 186) / 30);
-  const jd = 1 + (days < 186 ? days % 31 : (days - 186) % 30);
-
-  return `${jy}/${String(jm).padStart(2, "0")}/${String(jd).padStart(2, "0")}`;
+  const localRef = new Date(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate()
+  );
+  const j = toJalali(localRef);
+  return normalizePersianDigits(
+    `${j.jy}/${String(j.jm).padStart(2, "0")}/${String(j.jd).padStart(2, "0")}`
+  );
 }
 
 export default async function StaffScheduleSettingsPage() {
@@ -230,8 +190,12 @@ export default async function StaffScheduleSettingsPage() {
       .filter((sch) => sch.specificDate !== null)
       .map((sch) => {
         const dt = sch.specificDate as Date;
-        const jsDay = dt.getUTCDay();
-        const weekday = sch.weekday ?? (jsDay + 1) % 7;
+        const gLocal = new Date(
+          dt.getUTCFullYear(),
+          dt.getUTCMonth(),
+          dt.getUTCDate()
+        );
+        const weekday = sch.weekday ?? (gLocal.getDay() + 1) % 7;
         return {
           id: sch.id,
           jalaliDate: gregorianUtcToJalaliKey(dt),

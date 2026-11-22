@@ -73,7 +73,7 @@ import {
   generateBulkStaffSchedulesAction,
   deleteStaffScheduleAction,
 } from "@/app/clinic-dashboard/(dashboard)/settings/appointments/staff-schedule/actions"
-import * as jalaliLib from "@/lib/jalali"
+import { toGregorian, toJalali } from "@/lib/jalali"
 import * as persianHolidaysLib from "@/lib/persian-holidays"
 import "@/lib/persian-holidays-data"
 import { normalizePersianDigits } from "@/lib/normalize-persian-digits"
@@ -152,7 +152,7 @@ function toFa(val: number | string): string {
   return String(val).replace(/\d/g, (d) => FA_DIGITS[Number(d)])
 }
 
-const FALLBACK_JALALI_MONTHS = [
+const JALALI_MONTHS = [
   "فروردین",
   "اردیبهشت",
   "خرداد",
@@ -166,12 +166,6 @@ const FALLBACK_JALALI_MONTHS = [
   "بهمن",
   "اسفند",
 ]
-
-const JALALI_MONTHS: string[] =
-  (jalaliLib as { JALALI_MONTHS?: string[]; PERSIAN_MONTHS?: string[] })
-    .JALALI_MONTHS ||
-  (jalaliLib as { PERSIAN_MONTHS?: string[] }).PERSIAN_MONTHS ||
-  FALLBACK_JALALI_MONTHS
 
 const WEEKDAYS: Array<{ index: number; label: string }> = [
   { index: 0, label: "شنبه" },
@@ -188,181 +182,51 @@ function timeToMinutes(hhmm: string): number {
   return (h || 0) * 60 + (m || 0)
 }
 
-function isJalaliLeapYear(jy: number): boolean {
-  const fn = (jalaliLib as { isLeapJalaliYear?: (y: number) => boolean })
-    .isLeapJalaliYear
-  if (typeof fn === "function") return fn(jy)
-  const rem = ((((jy - 474) % 2820) + 2820) % 2820)
-  return (((rem + 38) * 682) % 2816) < 682
-}
-
 function getJalaliMonthDaysCount(jy: number, jm: number): number {
-  const fn = (
-    jalaliLib as { getJalaliMonthDays?: (y: number, m: number) => number }
-  ).getJalaliMonthDays
-  if (typeof fn === "function") return fn(jy, jm)
   if (jm <= 6) return 31
   if (jm <= 11) return 30
-  return isJalaliLeapYear(jy) ? 30 : 29
+  const g30 = toGregorian(jy, 12, 30)
+  const j30 = toJalali(g30)
+  return j30.jy === jy && j30.jm === 12 && j30.jd === 30 ? 30 : 29
 }
 
-function jalaliToGregorianUtc(jy: number, jm: number, jd: number): Date {
-  const fn = (
-    jalaliLib as {
-      jalaliToGregorian?: (y: number, m: number, d: number) => Date
-    }
-  ).jalaliToGregorian
-  if (typeof fn === "function") {
-    const res = fn(jy, jm, jd)
-    if (res instanceof Date && !Number.isNaN(res.getTime())) {
-      return new Date(
-        Date.UTC(res.getFullYear(), res.getMonth(), res.getDate(), 0, 0, 0, 0)
-      )
-    }
-  }
-
-  const jyAdj = jy - 979
-  const jmAdj = jm - 1
-  const jdAdj = jd - 1
-
-  let jDayNo =
-    365 * jyAdj +
-    Math.floor(jyAdj / 33) * 8 +
-    Math.floor(((jyAdj % 33) + 3) / 4)
-  const monthDays = [31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29]
-  for (let i = 0; i < jmAdj; ++i) {
-    jDayNo += monthDays[i]
-  }
-  jDayNo += jdAdj
-
-  let gDayNo = jDayNo + 79
-
-  let gy = 1600 + 400 * Math.floor(gDayNo / 146097)
-  gDayNo = gDayNo % 146097
-
-  let leap = true
-  if (gDayNo >= 36525) {
-    gDayNo--
-    gy += 100 * Math.floor(gDayNo / 36524)
-    gDayNo = gDayNo % 36524
-
-    if (gDayNo >= 365) {
-      gDayNo++
-    } else {
-      leap = false
-    }
-  }
-
-  gy += 4 * Math.floor(gDayNo / 1461)
-  gDayNo %= 1461
-
-  if (gDayNo >= 366) {
-    leap = false
-    gDayNo -= 366
-    gy += Math.floor(gDayNo / 365)
-    gDayNo = gDayNo % 365
-  }
-
-  const gMonthDays = [
-    31,
-    leap ? 29 : 28,
-    31,
-    30,
-    31,
-    30,
-    31,
-    31,
-    30,
-    31,
-    30,
-    31,
-  ]
-  let gm = 0
-  for (; gm < 12 && gDayNo >= gMonthDays[gm]; gm++) {
-    gDayNo -= gMonthDays[gm]
-  }
-  const gd = gDayNo + 1
-
-  return new Date(Date.UTC(gy, gm, gd, 0, 0, 0, 0))
-}
-
-function getHolidayTitleForDate(
-  jy: number,
-  jm: number,
-  jd: number,
-  utcDate: Date
-): string | null {
+function getHolidayTitleForDate(gDate: Date): string | null {
   const hLib = persianHolidaysLib as {
-    getHolidayForDate?: (
-      d: Date
-    ) => { title?: string; isHoliday?: boolean } | null
-    isPersianHoliday?: (d: Date) => boolean
-    getPersianHolidayTitle?: (y: number, m: number, d: number) => string | null
+    getHolidaysInRange?: (
+      start: Date,
+      end: Date
+    ) => Array<{ date: Date; title?: string; isHoliday?: boolean }>
   }
-
-  if (typeof hLib.getPersianHolidayTitle === "function") {
-    const title = hLib.getPersianHolidayTitle(jy, jm, jd)
-    if (title) return title
+  if (typeof hLib.getHolidaysInRange === "function") {
+    const startOfDay = new Date(
+      gDate.getFullYear(),
+      gDate.getMonth(),
+      gDate.getDate(),
+      0,
+      0,
+      0
+    )
+    const endOfDay = new Date(
+      gDate.getFullYear(),
+      gDate.getMonth(),
+      gDate.getDate(),
+      23,
+      59,
+      59
+    )
+    const list = hLib.getHolidaysInRange(startOfDay, endOfDay)
+    const found = list.find((item) => item.isHoliday !== false)
+    if (found) return found.title || "تعطیل رسمی"
   }
-
-  if (typeof hLib.getHolidayForDate === "function") {
-    const found = hLib.getHolidayForDate(utcDate)
-    if (found && found.isHoliday !== false) {
-      return found.title || "تعطیل رسمی"
-    }
-  }
-
-  if (typeof hLib.isPersianHoliday === "function") {
-    if (hLib.isPersianHoliday(utcDate)) {
-      return "تعطیل رسمی"
-    }
-  }
-
   return null
 }
 
 function getCurrentJalaliYearMonth(): { year: number; month: number } {
-  const fn = (
-    jalaliLib as {
-      getCurrentJalaliDate?: () => { year: number; month: number }
-    }
-  ).getCurrentJalaliDate
-  if (typeof fn === "function") {
-    const cur = fn()
-    if (cur?.year && cur?.month) {
-      return { year: cur.year, month: cur.month }
-    }
-  }
-
-  try {
-    const parts = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
-      year: "numeric",
-      month: "numeric",
-      timeZone: "Asia/Tehran",
-    }).formatToParts(new Date())
-
-    const yearStr = parts.find((p) => p.type === "year")?.value || "1405"
-    const monthStr = parts.find((p) => p.type === "month")?.value || "9"
-    const normalized = normalizePersianDigits(`${yearStr}/${monthStr}`)
-    const [y, m] = normalized.split("/").map(Number)
-    if (y >= 1350 && y <= 1480 && m >= 1 && m <= 12) {
-      return { year: y, month: m }
-    }
-  } catch {
-    // fallback below
-  }
-  return { year: 1405, month: 9 }
+  const cur = toJalali(new Date())
+  return { year: cur.jy, month: cur.jm }
 }
 
 function formatJalaliKey(jy: number, jm: number, jd: number): string {
-  const fn = (
-    jalaliLib as {
-      formatJalaliDate?: (y: number, m: number, d: number) => string
-    }
-  ).formatJalaliDate
-  if (typeof fn === "function") {
-    return normalizePersianDigits(fn(jy, jm, jd))
-  }
   return `${jy}/${String(jm).padStart(2, "0")}/${String(jd).padStart(2, "0")}`
 }
 
@@ -553,8 +417,8 @@ export function StaffScheduleClient({
 
   const calendarCells = React.useMemo(() => {
     const daysCount = getJalaliMonthDaysCount(selectedYear, selectedMonth)
-    const firstUtc = jalaliToGregorianUtc(selectedYear, selectedMonth, 1)
-    const firstWeekday = (firstUtc.getUTCDay() + 1) % 7
+    const firstGDate = toGregorian(selectedYear, selectedMonth, 1)
+    const firstWeekday = (firstGDate.getDay() + 1) % 7
 
     const cells: Array<{
       key: string | null
@@ -584,14 +448,9 @@ export function StaffScheduleClient({
 
     for (let d = 1; d <= daysCount; d++) {
       const key = formatJalaliKey(selectedYear, selectedMonth, d)
-      const utc = jalaliToGregorianUtc(selectedYear, selectedMonth, d)
-      const weekday = (utc.getUTCDay() + 1) % 7
-      const holidayTitle = getHolidayTitleForDate(
-        selectedYear,
-        selectedMonth,
-        d,
-        utc
-      )
+      const gDate = toGregorian(selectedYear, selectedMonth, d)
+      const weekday = (gDate.getDay() + 1) % 7
+      const holidayTitle = getHolidayTitleForDate(gDate)
       const clinicDay = workingDaysByJalali[key]
       const isDayBlockedForStaff =
         !clinicDay ||
