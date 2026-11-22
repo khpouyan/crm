@@ -16,6 +16,7 @@ export type PermissionKey =
   | "appointments.edit"
   | "appointments.delete"
   | "appointments.settings"
+  | "appointments.self_schedule"
   // مالی و انبار
   | "finance.accounting"
   | "finance.inventory"
@@ -75,6 +76,10 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       {
         key: "appointments.settings",
         label: "تنظیمات نوبت‌دهی کل کلینیک",
+      },
+      {
+        key: "appointments.self_schedule",
+        label: "تنظیم تایم و سرویس شخصی پرسنل",
       },
     ],
   },

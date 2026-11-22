@@ -202,6 +202,7 @@ const COLLAPSIBLE_GROUPS: NavGroupItem[] = [
       "management.settings",
       "finance.accounting",
       "appointments.settings",
+      "appointments.self_schedule",
     ],
     items: [
       {
@@ -216,7 +217,11 @@ const COLLAPSIBLE_GROUPS: NavGroupItem[] = [
       },
       {
         title: "نوبت دهی",
-        requiredAnyPermissions: ["appointments.settings", "management.settings"],
+        requiredAnyPermissions: [
+          "appointments.settings",
+          "appointments.self_schedule",
+          "management.settings",
+        ],
         items: [
           {
             title: "ساعات کاری کلینیک",
@@ -228,6 +233,15 @@ const COLLAPSIBLE_GROUPS: NavGroupItem[] = [
             href: "/clinic-dashboard/settings/appointments/spaces",
             requiredAnyPermissions: [
               "appointments.settings",
+              "management.settings",
+            ],
+          },
+          {
+            title: "زمان‌بندی پرسنل و سرویس‌ها",
+            href: "/clinic-dashboard/settings/appointments/staff-schedule",
+            requiredAnyPermissions: [
+              "appointments.settings",
+              "appointments.self_schedule",
               "management.settings",
             ],
           },

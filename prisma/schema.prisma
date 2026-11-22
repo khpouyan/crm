@@ -44,6 +44,19 @@ enum ClinicSpaceType {
   HOSPITAL   // بیمارستان / اتاق عمل / آنکال
 }
 
+enum ServiceTimingMode {
+  SINGLE_STAGE // تک‌مرحله‌ای عادی
+  SPLIT_STAGE  // چندمرحله‌ای با تایم آزاد میانی (مثل PRP: مرحله ۱ + تایم آزاد دستگاه/آماده‌سازی + مرحله ۲)
+}
+
+enum StaffScheduleStatus {
+  IN_CLINIC      // حضور عادی در کلینیک / مطب برای نوبت‌دهی
+  ON_CALL        // آنکال بیمارستان (امکان حضور مشروط در مطب تا زمان فراخوان)
+  RESIDENT       // مقیم بیمارستان/مرکز (الزام حضور در مکان مشخص)
+  HOSPITAL_SHIFT // شیفت بیمارستان (بسته بودن نوبت‌دهی مطب در این بازه)
+  DAY_OFF        // مرخصی / عدم حضور
+}
+
 // ==========================================
 // 1. هویت، احراز هویت و دسترسی‌های سراسری
 // ==========================================
@@ -127,6 +140,8 @@ model Clinic {
   clients         Client[]
   services        Service[]
   spaces          ClinicSpace[]
+  staffSchedules  ClinicStaffSchedule[]
+  staffServiceTimings ClinicStaffServiceTiming[]
   products        ClinicProduct[]
   stockOuts       InventoryStockOut[]
   bankAccounts    ClinicBankAccount[]
@@ -178,11 +193,62 @@ model ClinicSpace {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @default(now()) @updatedAt
 
-  clinic          Clinic    @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  allowedServices Service[] @relation("SpaceAllowedServices")
+  clinic          Clinic                @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  allowedServices Service[]             @relation("SpaceAllowedServices")
+  staffSchedules  ClinicStaffSchedule[]
 
   @@index([clinicId, spaceType, isActive])
   @@index([clinicId, sortOrder])
+}
+
+model ClinicStaffSchedule {
+  id               String              @id @default(uuid())
+  clinicId         String
+  clinicUserId     String
+  spaceId          String?
+  weekday          Int?                // ۰=شنبه تا ۶=جمعه (برای برنامه هفتگی تکرارشونده)
+  specificDate     DateTime?           // برای تاریخ/استثنای خاص
+  startTime        String              // فرمت HH:mm مثل "09:00"
+  endTime          String              // فرمت HH:mm مثل "17:00"
+  status           StaffScheduleStatus @default(IN_CLINIC)
+  blocksClinicBook Boolean              @default(false) // مثلاً true وقتی در شیفت بیمارستان است و نوبت مطب بسته می‌شود
+  note             String?             @db.Text
+  isActive         Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @default(now()) @updatedAt
+
+  clinic          Clinic      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  clinicUser      ClinicUser  @relation(fields: [clinicUserId], references: [id], onDelete: Cascade)
+  space           ClinicSpace? @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+  allowedServices Service[]   @relation("ScheduleAllowedServices")
+
+  @@index([clinicId, clinicUserId, weekday])
+  @@index([clinicId, clinicUserId, specificDate])
+  @@index([clinicId, spaceId])
+}
+
+model ClinicStaffServiceTiming {
+  id               String            @id @default(uuid())
+  clinicId         String
+  clinicUserId     String
+  serviceId        String
+  timingMode       ServiceTimingMode @default(SINGLE_STAGE)
+  prepBeforeMinutes Int              @default(0)
+  durationMinutes  Int               @default(30)
+  stage1Minutes    Int               @default(15)
+  freeGapMinutes   Int               @default(0)
+  stage2Minutes    Int               @default(15)
+  restAfterMinutes Int               @default(0)
+  requiresPrivacy  Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @default(now()) @updatedAt
+
+  clinic     Clinic     @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  clinicUser ClinicUser @relation(fields: [clinicUserId], references: [id], onDelete: Cascade)
+  service    Service    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicUserId, serviceId])
+  @@index([clinicId, serviceId])
 }
 
 model ClinicRole {
@@ -227,15 +293,17 @@ model ClinicUser {
   clinic Clinic      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   role   ClinicRole? @relation(fields: [roleId], references: [id], onDelete: SetNull)
 
-  assignedServices Service[]           @relation("ServiceStaff")
-  providedServices ProvidedService[]   @relation("ServiceTherapist")
-  assistedServices ProvidedService[]   @relation("ServiceAssistants")
-  referredServices ProvidedService[]   @relation("ServiceReferrer")
-  referredClients  Client[]            @relation("StaffClientReferrer")
-  exclusiveBatches ProductBatch[]
-  stockOuts        InventoryStockOut[]
-  exportLogs       DataExportLog[]
-  createdTickets   SupportTicket[]
+  assignedServices   Service[]                  @relation("ServiceStaff")
+  staffSchedules     ClinicStaffSchedule[]
+  staffServiceTimings ClinicStaffServiceTiming[]
+  providedServices   ProvidedService[]          @relation("ServiceTherapist")
+  assistedServices   ProvidedService[]          @relation("ServiceAssistants")
+  referredServices   ProvidedService[]          @relation("ServiceReferrer")
+  referredClients    Client[]                   @relation("StaffClientReferrer")
+  exclusiveBatches   ProductBatch[]
+  stockOuts          InventoryStockOut[]
+  exportLogs         DataExportLog[]
+  createdTickets     SupportTicket[]
 
   @@unique([userId, clinicId])
   @@index([clinicId, deletedAt])
@@ -464,19 +532,31 @@ model TicketMessage {
 }
 
 // ==========================================
-// 6. کاتالوگ خدمات کلینیک (ساختار دو سطحی + مصرفی دیفالت در هر دو سطح)
+// 6. کاتالوگ خدمات کلینیک (ساختار دو سطحی + زمان‌بندی سرویس و تایم آزاد میانی)
 // ==========================================
 model Service {
   id       String @id @default(uuid())
   clinicId String
   title    String
 
-  clinic                 Clinic                        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  subServices            SubService[]
+  // زمان‌بندی پیش‌فرض سرویس (تک‌مرحله‌ای یا چندمرحله‌ای با تایم آزاد میانی مثل PRP)
+  timingMode        ServiceTimingMode @default(SINGLE_STAGE)
+  prepBeforeMinutes Int               @default(0)  // زمان حضور مراجع قبل از شروع کار (مثلاً بی‌حسی)
+  durationMinutes   Int               @default(30) // مدت انجام در حالت تک‌مرحله‌ای
+  stage1Minutes     Int               @default(15) // مرحله اول (مثلاً خون‌گیری در PRP)
+  freeGapMinutes    Int               @default(0)  // تایم آزاد میانی (مثلاً قرارگیری در دستگاه سانتریفیوژ؛ امکان رزرو مراجع دیگر)
+  stage2Minutes     Int               @default(15) // مرحله دوم (مثلاً تزریق نهایی در PRP)
+  restAfterMinutes  Int               @default(0)  // زمان استراحت/پاکسازی بعد از سرویس
+  requiresPrivacy   Boolean           @default(false)
+
+  clinic              Clinic                     @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  subServices         SubService[]
   defaultServiceProducts ServiceCategoryDefaultProduct[]
-  careSmsTemplates       CareSmsTemplate[]
-  assignedStaff          ClinicUser[]                  @relation("ServiceStaff")
-  allowedSpaces          ClinicSpace[]                 @relation("SpaceAllowedServices")
+  careSmsTemplates    CareSmsTemplate[]
+  assignedStaff       ClinicUser[]               @relation("ServiceStaff")
+  allowedSpaces       ClinicSpace[]              @relation("SpaceAllowedServices")
+  staffSchedules      ClinicStaffSchedule[]      @relation("ScheduleAllowedServices")
+  staffServiceTimings ClinicStaffServiceTiming[]
 }
 
 model SubService {
@@ -485,6 +565,16 @@ model SubService {
   title      String
   price      Int
   attributes Json   @default("[]")
+
+  // زمان‌بندی اختیاری در سطح زیرسرویس (در صورت null بودن از Service ارث می‌برد)
+  timingMode        ServiceTimingMode?
+  prepBeforeMinutes Int?
+  durationMinutes   Int?
+  stage1Minutes     Int?
+  freeGapMinutes    Int?
+  stage2Minutes     Int?
+  restAfterMinutes  Int?
+  requiresPrivacy   Boolean?
 
   service          Service                 @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   providedServices ProvidedService[]
