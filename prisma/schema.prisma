@@ -127,6 +127,7 @@ model Clinic {
   creditProviders ClinicCreditProvider[]
   invoices        Invoice[]
   exportLogs      DataExportLog[]
+  workingDays     ClinicWorkingDay[]
 
   smsSetting       ClinicSmsSetting?
   careSmsTemplates CareSmsTemplate[]
@@ -137,6 +138,22 @@ model Clinic {
   purchasedAddons ClinicPurchasedAddon[]
   supportTickets  SupportTicket[]
   b2bOrders       B2BOrder[]
+}
+
+model ClinicWorkingDay {
+  id              String   @id @default(uuid())
+  clinicId        String
+  date            DateTime
+  isClinicHoliday Boolean  @default(false)
+  holidayNote     String?
+  shifts          Json     @default("[]")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, date])
+  @@index([clinicId, date])
 }
 
 model ClinicRole {
