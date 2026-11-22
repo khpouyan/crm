@@ -57,6 +57,20 @@ enum StaffScheduleStatus {
   DAY_OFF        // مرخصی / عدم حضور
 }
 
+enum AppointmentBookingSource {
+  MANUAL // رزرو دستی توسط پذیرش / پرسنل کلینیک
+  AUTO   // رزرو اتوماتیک / دستیار هوشمند / نوبت‌دهی خودکار
+}
+
+enum AppointmentStatus {
+  PENDING     // در انتظار تایید
+  CONFIRMED   // تایید شده
+  IN_PROGRESS // در حال انجام
+  COMPLETED   // انجام شده
+  CANCELED    // لغو شده
+  NO_SHOW     // عدم حضور مراجع
+}
+
 // ==========================================
 // 1. هویت، احراز هویت و دسترسی‌های سراسری
 // ==========================================
@@ -135,21 +149,22 @@ model Clinic {
 
   createdAt DateTime @default(now())
 
-  roles           ClinicRole[]
-  users           ClinicUser[]
-  clients         Client[]
-  services        Service[]
-  spaces          ClinicSpace[]
-  staffSchedules  ClinicStaffSchedule[]
+  roles               ClinicRole[]
+  users               ClinicUser[]
+  clients             Client[]
+  services            Service[]
+  spaces              ClinicSpace[]
+  staffSchedules      ClinicStaffSchedule[]
   staffServiceTimings ClinicStaffServiceTiming[]
-  products        ClinicProduct[]
-  stockOuts       InventoryStockOut[]
-  bankAccounts    ClinicBankAccount[]
-  terminals       PaymentTerminal[]
-  creditProviders ClinicCreditProvider[]
-  invoices        Invoice[]
-  exportLogs      DataExportLog[]
-  workingDays     ClinicWorkingDay[]
+  appointments        Appointment[]
+  products            ClinicProduct[]
+  stockOuts           InventoryStockOut[]
+  bankAccounts        ClinicBankAccount[]
+  terminals           PaymentTerminal[]
+  creditProviders     ClinicCreditProvider[]
+  invoices            Invoice[]
+  exportLogs          DataExportLog[]
+  workingDays         ClinicWorkingDay[]
 
   smsSetting       ClinicSmsSetting?
   careSmsTemplates CareSmsTemplate[]
@@ -196,6 +211,7 @@ model ClinicSpace {
   clinic          Clinic                @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   allowedServices Service[]             @relation("SpaceAllowedServices")
   staffSchedules  ClinicStaffSchedule[]
+  appointments    Appointment[]
 
   @@index([clinicId, spaceType, isActive])
   @@index([clinicId, sortOrder])
@@ -211,16 +227,16 @@ model ClinicStaffSchedule {
   startTime        String              // فرمت HH:mm مثل "09:00"
   endTime          String              // فرمت HH:mm مثل "17:00"
   status           StaffScheduleStatus @default(IN_CLINIC)
-  blocksClinicBook Boolean              @default(false) // مثلاً true وقتی در شیفت بیمارستان است و نوبت مطب بسته می‌شود
+  blocksClinicBook Boolean             @default(false) // مثلاً true وقتی در شیفت بیمارستان است و نوبت مطب بسته می‌شود
   note             String?             @db.Text
   isActive         Boolean             @default(true)
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @default(now()) @updatedAt
 
-  clinic          Clinic      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  clinicUser      ClinicUser  @relation(fields: [clinicUserId], references: [id], onDelete: Cascade)
+  clinic          Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  clinicUser      ClinicUser   @relation(fields: [clinicUserId], references: [id], onDelete: Cascade)
   space           ClinicSpace? @relation(fields: [spaceId], references: [id], onDelete: SetNull)
-  allowedServices Service[]   @relation("ScheduleAllowedServices")
+  allowedServices Service[]    @relation("ScheduleAllowedServices")
 
   @@index([clinicId, clinicUserId, weekday])
   @@index([clinicId, clinicUserId, specificDate])
@@ -228,20 +244,20 @@ model ClinicStaffSchedule {
 }
 
 model ClinicStaffServiceTiming {
-  id               String            @id @default(uuid())
-  clinicId         String
-  clinicUserId     String
-  serviceId        String
-  timingMode       ServiceTimingMode @default(SINGLE_STAGE)
-  prepBeforeMinutes Int              @default(0)
-  durationMinutes  Int               @default(30)
-  stage1Minutes    Int               @default(15)
-  freeGapMinutes   Int               @default(0)
-  stage2Minutes    Int               @default(15)
-  restAfterMinutes Int               @default(0)
-  requiresPrivacy  Boolean           @default(false)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @default(now()) @updatedAt
+  id                String            @id @default(uuid())
+  clinicId          String
+  clinicUserId      String
+  serviceId         String
+  timingMode        ServiceTimingMode @default(SINGLE_STAGE)
+  prepBeforeMinutes Int               @default(0)
+  durationMinutes   Int               @default(30)
+  stage1Minutes     Int               @default(15)
+  freeGapMinutes    Int               @default(0)
+  stage2Minutes     Int               @default(15)
+  restAfterMinutes  Int               @default(0)
+  requiresPrivacy   Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @default(now()) @updatedAt
 
   clinic     Clinic     @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   clinicUser ClinicUser @relation(fields: [clinicUserId], references: [id], onDelete: Cascade)
@@ -293,17 +309,19 @@ model ClinicUser {
   clinic Clinic      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   role   ClinicRole? @relation(fields: [roleId], references: [id], onDelete: SetNull)
 
-  assignedServices   Service[]                  @relation("ServiceStaff")
-  staffSchedules     ClinicStaffSchedule[]
+  assignedServices    Service[]                  @relation("ServiceStaff")
+  staffSchedules      ClinicStaffSchedule[]
   staffServiceTimings ClinicStaffServiceTiming[]
-  providedServices   ProvidedService[]          @relation("ServiceTherapist")
-  assistedServices   ProvidedService[]          @relation("ServiceAssistants")
-  referredServices   ProvidedService[]          @relation("ServiceReferrer")
-  referredClients    Client[]                   @relation("StaffClientReferrer")
-  exclusiveBatches   ProductBatch[]
-  stockOuts          InventoryStockOut[]
-  exportLogs         DataExportLog[]
-  createdTickets     SupportTicket[]
+  staffAppointments   Appointment[]              @relation("AppointmentTherapist")
+  createdAppointments Appointment[]              @relation("AppointmentCreator")
+  providedServices    ProvidedService[]          @relation("ServiceTherapist")
+  assistedServices    ProvidedService[]          @relation("ServiceAssistants")
+  referredServices    ProvidedService[]          @relation("ServiceReferrer")
+  referredClients     Client[]                   @relation("StaffClientReferrer")
+  exclusiveBatches    ProductBatch[]
+  stockOuts           InventoryStockOut[]
+  exportLogs          DataExportLog[]
+  createdTickets      SupportTicket[]
 
   @@unique([userId, clinicId])
   @@index([clinicId, deletedAt])
@@ -338,6 +356,7 @@ model Client {
   referredClients Client[]    @relation("ClientToClientReferral")
   referrerStaff   ClinicUser? @relation("StaffClientReferrer", fields: [referrerStaffId], references: [id], onDelete: SetNull)
 
+  appointments       Appointment[]
   providedServices   ProvidedService[]
   referredServices   ProvidedService[]   @relation("ServiceClientReferrer")
   invoices           Invoice[]
@@ -549,14 +568,15 @@ model Service {
   restAfterMinutes  Int               @default(0)  // زمان استراحت/پاکسازی بعد از سرویس
   requiresPrivacy   Boolean           @default(false)
 
-  clinic              Clinic                     @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  subServices         SubService[]
+  clinic                 Clinic                          @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  subServices            SubService[]
   defaultServiceProducts ServiceCategoryDefaultProduct[]
-  careSmsTemplates    CareSmsTemplate[]
-  assignedStaff       ClinicUser[]               @relation("ServiceStaff")
-  allowedSpaces       ClinicSpace[]              @relation("SpaceAllowedServices")
-  staffSchedules      ClinicStaffSchedule[]      @relation("ScheduleAllowedServices")
-  staffServiceTimings ClinicStaffServiceTiming[]
+  careSmsTemplates       CareSmsTemplate[]
+  assignedStaff          ClinicUser[]                    @relation("ServiceStaff")
+  allowedSpaces          ClinicSpace[]                   @relation("SpaceAllowedServices")
+  staffSchedules         ClinicStaffSchedule[]           @relation("ScheduleAllowedServices")
+  staffServiceTimings    ClinicStaffServiceTiming[]
+  appointments           Appointment[]
 }
 
 model SubService {
@@ -581,10 +601,68 @@ model SubService {
   defaultProducts  ServiceDefaultProduct[]
   exclusiveBatches ProductBatch[]
   careSmsTemplates CareSmsTemplate[]
+  appointments     Appointment[]
 }
 
 // ==========================================
-// 7. انبارداری داخلی کلینیک (ERP دو واحدی: بسته + جزء مصرفی)
+// 7. نوبت‌دهی و رزرواسیون (دستی و اتوماتیک)
+// ==========================================
+model Appointment {
+  id          String       @id @default(uuid())
+  clinicId    String
+  clientId    String
+  serviceId   String
+  subServiceId String?
+  therapistId String?      // پزشک یا اپراتور انجام‌دهنده
+  spaceId     String?      // اتاق / یونیت / بیمارستان رزرو‌شده
+  createdById String?      // پرسنل ثبت‌کننده نوبت
+
+  bookingSource AppointmentBookingSource @default(MANUAL)
+  status        AppointmentStatus        @default(CONFIRMED)
+
+  // تاریخ (UTC midnight روز تقویمی) و ساعات دقیق نوبت (HH:mm)
+  date         DateTime
+  arrivalTime  String   // ساعت حضور مراجع (شامل prepBeforeMinutes)
+  startTime    String   // ساعت شروع واقعی سرویس
+  endTime      String   // ساعت پایان کار سرویس (قبل از restAfterMinutes)
+  blockEndTime String   // پایان کل اشغال (شامل restAfterMinutes)
+
+  // اسنپ‌شات زمان‌بندی سرویس در لحظه رزرو (جهت محاسبه دقیق تداخل و تایم آزاد میانی مثل PRP)
+  timingMode        ServiceTimingMode @default(SINGLE_STAGE)
+  prepBeforeMinutes Int               @default(0)
+  durationMinutes   Int               @default(30)
+  stage1Minutes     Int               @default(15)
+  freeGapMinutes    Int               @default(0)
+  stage2Minutes     Int               @default(15)
+  restAfterMinutes  Int               @default(0)
+  requiresPrivacy   Boolean           @default(false)
+
+  // در صورت رزرو دستی با تایید هشدار مدیریتی
+  isManualOverride   Boolean @default(false)
+  overrideReason     String? @db.Text
+  notes              String? @db.Text
+  cancellationReason String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  clinic     Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  client     Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  service    Service      @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  subService SubService?  @relation(fields: [subServiceId], references: [id], onDelete: SetNull)
+  therapist  ClinicUser?  @relation("AppointmentTherapist", fields: [therapistId], references: [id], onDelete: SetNull)
+  space      ClinicSpace? @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+  createdBy  ClinicUser?  @relation("AppointmentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([clinicId, date])
+  @@index([clinicId, therapistId, date])
+  @@index([clinicId, spaceId, date])
+  @@index([clinicId, clientId, date])
+  @@index([clinicId, status])
+}
+
+// ==========================================
+// 8. انبارداری داخلی کلینیک (ERP دو واحدی: بسته + جزء مصرفی)
 // ==========================================
 model ClinicProduct {
   id              String  @id @default(uuid())
@@ -671,7 +749,7 @@ model ServiceDefaultProduct {
 }
 
 // ==========================================
-// 8. فاکتور، اقساط، خدمات ارائه‌شده و مصرفیات بیمار
+// 9. فاکتور، اقساط، خدمات ارائه‌شده و مصرفیات بیمار
 // ==========================================
 model Invoice {
   id            String @id @default(uuid())
@@ -767,7 +845,7 @@ model UsedConsumable {
 }
 
 // ==========================================
-// 9. مالی و پرداخت‌ها
+// 10. مالی و پرداخت‌ها
 // ==========================================
 model ClinicBankAccount {
   id            String  @id @default(uuid())
@@ -835,7 +913,7 @@ model Payment {
 }
 
 // ==========================================
-// 10. سیستم اطلاع‌رسانی و پیامک
+// 11. سیستم اطلاع‌رسانی و پیامک
 // ==========================================
 model ClinicSmsSetting {
   id       String @id @default(uuid())
