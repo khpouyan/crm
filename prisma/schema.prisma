@@ -38,6 +38,12 @@ enum TicketPriority {
   URGENT
 }
 
+enum ClinicSpaceType {
+  ROOM       // اتاق کلینیک
+  MULTI_UNIT // فضای چندیونیتی / چندتخته
+  HOSPITAL   // بیمارستان / اتاق عمل / آنکال
+}
+
 // ==========================================
 // 1. هویت، احراز هویت و دسترسی‌های سراسری
 // ==========================================
@@ -120,6 +126,7 @@ model Clinic {
   users           ClinicUser[]
   clients         Client[]
   services        Service[]
+  spaces          ClinicSpace[]
   products        ClinicProduct[]
   stockOuts       InventoryStockOut[]
   bankAccounts    ClinicBankAccount[]
@@ -154,6 +161,28 @@ model ClinicWorkingDay {
 
   @@unique([clinicId, date])
   @@index([clinicId, date])
+}
+
+model ClinicSpace {
+  id              String          @id @default(uuid())
+  clinicId        String
+  name            String
+  spaceType       ClinicSpaceType @default(ROOM)
+  capacity        Int             @default(1)
+  allowOverlap    Boolean         @default(false)
+  requiresPrivacy Boolean         @default(false)
+  equipmentNotes  String?         @db.Text
+  description     String?         @db.Text
+  isActive        Boolean         @default(true)
+  sortOrder       Int             @default(0)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @default(now()) @updatedAt
+
+  clinic          Clinic    @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  allowedServices Service[] @relation("SpaceAllowedServices")
+
+  @@index([clinicId, spaceType, isActive])
+  @@index([clinicId, sortOrder])
 }
 
 model ClinicRole {
@@ -447,6 +476,7 @@ model Service {
   defaultServiceProducts ServiceCategoryDefaultProduct[]
   careSmsTemplates       CareSmsTemplate[]
   assignedStaff          ClinicUser[]                  @relation("ServiceStaff")
+  allowedSpaces          ClinicSpace[]                 @relation("SpaceAllowedServices")
 }
 
 model SubService {

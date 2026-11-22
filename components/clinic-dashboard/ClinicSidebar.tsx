@@ -69,15 +69,24 @@ interface NavSingleItem {
   requiredAnyPermissions?: PermissionKey[]
 }
 
+interface NavLeafItem {
+  title: string
+  href: string
+  requiredAnyPermissions?: PermissionKey[]
+}
+
+interface NavSubItem {
+  title: string
+  href?: string
+  requiredAnyPermissions?: PermissionKey[]
+  items?: NavLeafItem[]
+}
+
 interface NavGroupItem {
   title: string
   icon: React.ElementType
   requiredAnyPermissions?: PermissionKey[]
-  items: {
-    title: string
-    href: string
-    requiredAnyPermissions?: PermissionKey[]
-  }[]
+  items: NavSubItem[]
 }
 
 const SINGLE_TOP_ITEMS: NavSingleItem[] = [
@@ -189,7 +198,11 @@ const COLLAPSIBLE_GROUPS: NavGroupItem[] = [
   {
     title: "تنظیمات",
     icon: Settings2,
-    requiredAnyPermissions: ["management.settings", "finance.accounting"],
+    requiredAnyPermissions: [
+      "management.settings",
+      "finance.accounting",
+      "appointments.settings",
+    ],
     items: [
       {
         title: "مشخصات و اطلاعات مرکز",
@@ -200,6 +213,25 @@ const COLLAPSIBLE_GROUPS: NavGroupItem[] = [
         title: "تنظیمات مالی و اعتباری",
         href: "/clinic-dashboard/settings/financial",
         requiredAnyPermissions: ["management.settings", "finance.accounting"],
+      },
+      {
+        title: "نوبت دهی",
+        requiredAnyPermissions: ["appointments.settings", "management.settings"],
+        items: [
+          {
+            title: "ساعات کاری کلینیک",
+            href: "/clinic-dashboard/settings/appointments/working-hours",
+            requiredAnyPermissions: ["appointments.settings"],
+          },
+          {
+            title: "مدیریت مکان‌ها",
+            href: "/clinic-dashboard/settings/appointments/spaces",
+            requiredAnyPermissions: [
+              "appointments.settings",
+              "management.settings",
+            ],
+          },
+        ],
       },
       {
         title: "مدیریت پرسنل و دسترسی‌ها",
@@ -243,6 +275,18 @@ function canSee(
   return requiredAnyPermissions.some((perm) => user.permissions.includes(perm))
 }
 
+function subItemHasActivePath(sub: NavSubItem, pathname: string): boolean {
+  if (sub.href && pathname.startsWith(sub.href.split("?")[0])) {
+    return true
+  }
+  if (sub.items) {
+    return sub.items.some((leaf) =>
+      pathname.startsWith(leaf.href.split("?")[0])
+    )
+  }
+  return false
+}
+
 export interface ClinicSidebarProps extends React.ComponentProps<
   typeof Sidebar
 > {
@@ -264,16 +308,30 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
     canSee(user, item.requiredAnyPermissions)
   )
 
-  const visibleGroups = COLLAPSIBLE_GROUPS.filter((group) =>
-    canSee(user, group.requiredAnyPermissions)
+  const visibleGroups = React.useMemo(
+    () =>
+      COLLAPSIBLE_GROUPS.filter((group) =>
+        canSee(user, group.requiredAnyPermissions)
+      )
+        .map((group) => ({
+          ...group,
+          items: group.items
+            .filter((sub) => canSee(user, sub.requiredAnyPermissions))
+            .map((sub) =>
+              sub.items
+                ? {
+                    ...sub,
+                    items: sub.items.filter((leaf) =>
+                      canSee(user, leaf.requiredAnyPermissions)
+                    ),
+                  }
+                : sub
+            )
+            .filter((sub) => !sub.items || sub.items.length > 0),
+        }))
+        .filter((group) => group.items.length > 0),
+    [user]
   )
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((sub) =>
-        canSee(user, sub.requiredAnyPermissions)
-      ),
-    }))
-    .filter((group) => group.items.length > 0)
 
   const visibleBottomItems = SINGLE_BOTTOM_ITEMS.filter((item) =>
     canSee(user, item.requiredAnyPermissions)
@@ -283,9 +341,17 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
     () => {
       const initial: Record<string, boolean> = {}
       for (const group of visibleGroups) {
-        initial[group.title] = group.items.some((i) =>
-          pathname.startsWith(i.href.split("?")[0])
+        initial[group.title] = group.items.some((sub) =>
+          subItemHasActivePath(sub, pathname)
         )
+        for (const sub of group.items) {
+          if (sub.items) {
+            initial[`${group.title}::${sub.title}`] = subItemHasActivePath(
+              sub,
+              pathname
+            )
+          }
+        }
       }
       return initial
     }
@@ -295,16 +361,19 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
     setOpenGroups((prev) => {
       const next = { ...prev }
       for (const group of visibleGroups) {
-        if (
-          group.items.some((i) => pathname.startsWith(i.href.split("?")[0]))
-        ) {
+        if (group.items.some((sub) => subItemHasActivePath(sub, pathname))) {
           next[group.title] = true
+        }
+        for (const sub of group.items) {
+          if (sub.items && subItemHasActivePath(sub, pathname)) {
+            next[`${group.title}::${sub.title}`] = true
+          }
         }
       }
       return next
     })
     closeMobileSidebar()
-  }, [pathname])
+  }, [pathname, visibleGroups, closeMobileSidebar])
 
   const isRouteActive = (href: string) => {
     const cleanHref = href.split("?")[0]
@@ -376,22 +445,76 @@ export function ClinicSidebar({ clinic, user, ...props }: ClinicSidebarProps) {
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <SidebarMenuSub className="border-s-1 border-primary/20">
-                        {group.items.map((subItem) => (
-                          <SidebarMenuSubItem key={subItem.title}>
-                            <SidebarMenuSubButton
-                              isActive={pathname === subItem.href.split("?")[0]}
-                              className={ACTIVE_ITEM_CLASS}
-                              render={
-                                <Link
-                                  href={subItem.href}
-                                  onClick={closeMobileSidebar}
+                        {group.items.map((subItem) =>
+                          subItem.items ? (
+                            <SidebarMenuSubItem key={subItem.title}>
+                              <Collapsible
+                                open={Boolean(
+                                  openGroups[`${group.title}::${subItem.title}`]
+                                )}
+                                onOpenChange={(isOpen) =>
+                                  setOpenGroups((prev) => ({
+                                    ...prev,
+                                    [`${group.title}::${subItem.title}`]:
+                                      isOpen,
+                                  }))
+                                }
+                                className="group/subcollapsible"
+                              >
+                                <CollapsibleTrigger
+                                  nativeButton={false}
+                                  render={
+                                    <SidebarMenuSubButton className="w-full cursor-pointer justify-between" />
+                                  }
                                 >
-                                  {subItem.title}
-                                </Link>
-                              }
-                            />
-                          </SidebarMenuSubItem>
-                        ))}
+                                  <span>{subItem.title}</span>
+                                  <ChevronRight className="ms-auto size-3.5 transition-transform duration-300 group-data-[open]/subcollapsible:rotate-90 rtl:-scale-x-100 rtl:group-data-[open]/subcollapsible:-rotate-90" />
+                                </CollapsibleTrigger>
+                                <CollapsibleContent>
+                                  <SidebarMenuSub className="me-0 border-s-1 border-primary/20 ps-2.5">
+                                    {subItem.items.map((leafItem) => (
+                                      <SidebarMenuSubItem key={leafItem.title}>
+                                        <SidebarMenuSubButton
+                                          isActive={
+                                            pathname ===
+                                            leafItem.href.split("?")[0]
+                                          }
+                                          className={ACTIVE_ITEM_CLASS}
+                                          render={
+                                            <Link
+                                              href={leafItem.href}
+                                              onClick={closeMobileSidebar}
+                                            >
+                                              {leafItem.title}
+                                            </Link>
+                                          }
+                                        />
+                                      </SidebarMenuSubItem>
+                                    ))}
+                                  </SidebarMenuSub>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            </SidebarMenuSubItem>
+                          ) : (
+                            <SidebarMenuSubItem key={subItem.title}>
+                              <SidebarMenuSubButton
+                                isActive={
+                                  pathname ===
+                                  (subItem.href || "").split("?")[0]
+                                }
+                                className={ACTIVE_ITEM_CLASS}
+                                render={
+                                  <Link
+                                    href={subItem.href || "#"}
+                                    onClick={closeMobileSidebar}
+                                  >
+                                    {subItem.title}
+                                  </Link>
+                                }
+                              />
+                            </SidebarMenuSubItem>
+                          )
+                        )}
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </SidebarMenuItem>
