@@ -4,6 +4,8 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentClinicContext } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/permissions";
+import { normalizePersianDigits } from "@/lib/normalize-persian-digits";
+import { ServiceTimingMode } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 export type ServiceAttributeItem = {
@@ -16,14 +18,62 @@ export type DefaultProductInput = {
   quantity: number;
 };
 
+export type ServiceTimingInput = {
+  timingMode: ServiceTimingMode;
+  prepBeforeMinutes: number;
+  durationMinutes: number;
+  stage1Minutes: number;
+  freeGapMinutes: number;
+  stage2Minutes: number;
+  restAfterMinutes: number;
+  requiresPrivacy: boolean;
+};
+
+export type OptionalSubServiceTimingInput = {
+  overrideTiming: boolean;
+  timingMode: ServiceTimingMode;
+  prepBeforeMinutes: number;
+  durationMinutes: number;
+  stage1Minutes: number;
+  freeGapMinutes: number;
+  stage2Minutes: number;
+  restAfterMinutes: number;
+  requiresPrivacy: boolean;
+};
+
+function parseMinutes(raw: unknown, fallback: number, max = 600): number {
+  const num = Number(normalizePersianDigits(String(raw ?? fallback)).trim());
+  if (!Number.isFinite(num) || num < 0) return fallback;
+  return Math.min(max, Math.floor(num));
+}
+
+function sanitizeTiming(input?: Partial<ServiceTimingInput>): ServiceTimingInput {
+  const mode =
+    input?.timingMode === ServiceTimingMode.SPLIT_STAGE
+      ? ServiceTimingMode.SPLIT_STAGE
+      : ServiceTimingMode.SINGLE_STAGE;
+
+  return {
+    timingMode: mode,
+    prepBeforeMinutes: parseMinutes(input?.prepBeforeMinutes, 0, 240),
+    durationMinutes: Math.max(5, parseMinutes(input?.durationMinutes, 30, 480)),
+    stage1Minutes: Math.max(5, parseMinutes(input?.stage1Minutes, 15, 240)),
+    freeGapMinutes: parseMinutes(input?.freeGapMinutes, 0, 360),
+    stage2Minutes: Math.max(5, parseMinutes(input?.stage2Minutes, 15, 240)),
+    restAfterMinutes: parseMinutes(input?.restAfterMinutes, 0, 180),
+    requiresPrivacy: Boolean(input?.requiresPrivacy),
+  };
+}
+
 /**
- * ایجاد یا ویرایش خدمت اصلی (همراه با انتساب پرسنل و کالاهای مصرفی پیش‌فرض کل خدمت)
+ * ایجاد یا ویرایش خدمت اصلی (همراه با زمان‌بندی پیش‌فرض، انتساب پرسنل و کالاهای مصرفی پیش‌فرض)
  */
 export async function upsertServiceAction(data: {
   id?: string;
   title: string;
   assignedStaffIds: string[];
   defaultProducts?: DefaultProductInput[];
+  timing?: ServiceTimingInput;
 }) {
   const ctx = await getCurrentClinicContext();
   if (!ctx) return { success: false, error: "دسترسی غیرمجاز" };
@@ -41,6 +91,8 @@ export async function upsertServiceAction(data: {
   if (!data.title.trim()) {
     return { success: false, error: "عنوان خدمت الزامی است" };
   }
+
+  const timing = sanitizeTiming(data.timing);
 
   const productMap = new Map<string, number>();
   for (const p of data.defaultProducts ?? []) {
@@ -97,6 +149,14 @@ export async function upsertServiceAction(data: {
           where: { id: data.id },
           data: {
             title: data.title.trim(),
+            timingMode: timing.timingMode,
+            prepBeforeMinutes: timing.prepBeforeMinutes,
+            durationMinutes: timing.durationMinutes,
+            stage1Minutes: timing.stage1Minutes,
+            freeGapMinutes: timing.freeGapMinutes,
+            stage2Minutes: timing.stage2Minutes,
+            restAfterMinutes: timing.restAfterMinutes,
+            requiresPrivacy: timing.requiresPrivacy,
             assignedStaff: {
               set: finalStaffIds.map((id) => ({ id })),
             },
@@ -121,6 +181,14 @@ export async function upsertServiceAction(data: {
           data: {
             clinicId: ctx.clinicId,
             title: data.title.trim(),
+            timingMode: timing.timingMode,
+            prepBeforeMinutes: timing.prepBeforeMinutes,
+            durationMinutes: timing.durationMinutes,
+            stage1Minutes: timing.stage1Minutes,
+            freeGapMinutes: timing.freeGapMinutes,
+            stage2Minutes: timing.stage2Minutes,
+            restAfterMinutes: timing.restAfterMinutes,
+            requiresPrivacy: timing.requiresPrivacy,
             assignedStaff: {
               connect: finalStaffIds.map((id) => ({ id })),
             },
@@ -139,6 +207,7 @@ export async function upsertServiceAction(data: {
     });
 
     revalidatePath("/clinic-dashboard/services");
+    revalidatePath("/clinic-dashboard/settings/appointments/staff-schedule");
     return { success: true };
   } catch (error: unknown) {
     console.error("upsertServiceAction error:", error);
@@ -183,8 +252,9 @@ export async function deleteServiceAction(serviceId: string) {
     });
 
     revalidatePath("/clinic-dashboard/services");
+    revalidatePath("/clinic-dashboard/settings/appointments/staff-schedule");
     return { success: true };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error:
@@ -194,7 +264,7 @@ export async function deleteServiceAction(serviceId: string) {
 }
 
 /**
- * ایجاد یا ویرایش زیرسرویس
+ * ایجاد یا ویرایش زیرسرویس (همراه با زمان‌بندی اختصاصی یا ارث‌بری از خدمت اصلی)
  */
 export async function upsertSubServiceAction(data: {
   id?: string;
@@ -203,6 +273,7 @@ export async function upsertSubServiceAction(data: {
   price: number;
   attributes: ServiceAttributeItem[];
   defaultProducts: DefaultProductInput[];
+  timing?: OptionalSubServiceTimingInput;
 }) {
   const ctx = await getCurrentClinicContext();
   if (!ctx) return { success: false, error: "دسترسی غیرمجاز" };
@@ -244,6 +315,31 @@ export async function upsertSubServiceAction(data: {
     })
   );
 
+  const override = Boolean(data.timing?.overrideTiming);
+  const customTiming = sanitizeTiming(data.timing);
+
+  const subTimingFields = override
+    ? {
+        timingMode: customTiming.timingMode,
+        prepBeforeMinutes: customTiming.prepBeforeMinutes,
+        durationMinutes: customTiming.durationMinutes,
+        stage1Minutes: customTiming.stage1Minutes,
+        freeGapMinutes: customTiming.freeGapMinutes,
+        stage2Minutes: customTiming.stage2Minutes,
+        restAfterMinutes: customTiming.restAfterMinutes,
+        requiresPrivacy: customTiming.requiresPrivacy,
+      }
+    : {
+        timingMode: null,
+        prepBeforeMinutes: null,
+        durationMinutes: null,
+        stage1Minutes: null,
+        freeGapMinutes: null,
+        stage2Minutes: null,
+        restAfterMinutes: null,
+        requiresPrivacy: null,
+      };
+
   try {
     const service = await prisma.service.findFirst({
       where: {
@@ -269,6 +365,7 @@ export async function upsertSubServiceAction(data: {
             title: data.title.trim(),
             price: Number(data.price),
             attributes: cleanAttributes,
+            ...subTimingFields,
           },
         });
 
@@ -292,6 +389,7 @@ export async function upsertSubServiceAction(data: {
             title: data.title.trim(),
             price: Number(data.price),
             attributes: cleanAttributes,
+            ...subTimingFields,
             defaultProducts: {
               create: cleanProducts.map((p) => ({
                 clinicProductId: p.clinicProductId,
@@ -304,6 +402,7 @@ export async function upsertSubServiceAction(data: {
     });
 
     revalidatePath("/clinic-dashboard/services");
+    revalidatePath("/clinic-dashboard/settings/appointments/staff-schedule");
     return { success: true };
   } catch (error) {
     console.error("upsertSubServiceAction error:", error);
@@ -347,8 +446,9 @@ export async function deleteSubServiceAction(subServiceId: string) {
     });
 
     revalidatePath("/clinic-dashboard/services");
+    revalidatePath("/clinic-dashboard/settings/appointments/staff-schedule");
     return { success: true };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error:

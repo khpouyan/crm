@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { ServiceTimingMode } from "@prisma/client";
 import {
   Plus,
   Search,
@@ -11,6 +12,8 @@ import {
   Users,
   Package,
   Layers,
+  Clock,
+  Split,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +63,14 @@ import { toast } from "sonner";
 export type ServiceWithDetails = {
   id: string;
   title: string;
+  timingMode: ServiceTimingMode;
+  prepBeforeMinutes: number;
+  durationMinutes: number;
+  stage1Minutes: number;
+  freeGapMinutes: number;
+  stage2Minutes: number;
+  restAfterMinutes: number;
+  requiresPrivacy: boolean;
   assignedStaff: {
     id: string;
     user: { id: string; fullName: string | null; phone: string };
@@ -75,6 +86,14 @@ export type ServiceWithDetails = {
     title: string;
     price: number;
     attributes: unknown;
+    timingMode: ServiceTimingMode | null;
+    prepBeforeMinutes: number | null;
+    durationMinutes: number | null;
+    stage1Minutes: number | null;
+    freeGapMinutes: number | null;
+    stage2Minutes: number | null;
+    restAfterMinutes: number | null;
+    requiresPrivacy: boolean | null;
     defaultProducts: {
       id: string;
       quantity: number;
@@ -107,7 +126,6 @@ export function ServicesClientView({
 }: ServicesClientViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
-  // استیت مودال خدمت اصلی
   const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
   const [editingService, setEditingService] =
     useState<ServiceWithDetails | null>(null);
@@ -115,7 +133,6 @@ export function ServicesClientView({
     initialServices.map((s) => s.id)
   );
 
-  // استیت مودال زیرسرویس
   const [subDialogOpen, setSubDialogOpen] = useState(false);
   const [targetService, setTargetService] = useState<{
     id: string;
@@ -125,7 +142,6 @@ export function ServicesClientView({
     ServiceWithDetails["subServices"][number] | null
   >(null);
 
-  // استیت دیالوگ تایید حذف
   const [deleteTarget, setDeleteTarget] = useState<{
     type: "service" | "subService";
     id: string;
@@ -205,15 +221,13 @@ export function ServicesClientView({
 
   return (
     <div className="space-y-6">
-      {/* هدر */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
             خدمات و تعرفه‌های کلینیک
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            دسته‌بندی خدمات اصلی، زیرسرویس‌ها، قیمت‌گذاری و اقلام مصرفی پیش‌فرض
-            را مدیریت کنید.
+            دسته‌بندی خدمات اصلی، زمان‌بندی پیش‌فرض و چندمرحله‌ای، زیرسرویس‌ها، قیمت‌گذاری و اقلام مصرفی را مدیریت کنید.
           </p>
         </div>
 
@@ -225,7 +239,6 @@ export function ServicesClientView({
         )}
       </div>
 
-      {/* نوار جستجو و آمار */}
       <div className="flex flex-col gap-3 rounded-xl border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full sm:max-w-sm">
           <Search className="absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -256,7 +269,6 @@ export function ServicesClientView({
         </div>
       </div>
 
-      {/* لیست آکاردئونی خدمات */}
       {filteredServices.length === 0 ? (
         <Empty className="border bg-card py-12">
           <EmptyHeader>
@@ -271,7 +283,7 @@ export function ServicesClientView({
             <EmptyDescription>
               {searchQuery
                 ? "عبارت جستجو را تغییر دهید یا خدمت جدیدی ایجاد کنید."
-                : "برای شروع، اولین دسته‌بندی خدمت (مثلاً لیزر موهای زائد یا تزریق ژل) را ایجاد کنید."}
+                : "برای شروع، اولین دسته‌بندی خدمت (مثلاً PRP یا تزریق ژل) را ایجاد کنید."}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
@@ -289,230 +301,283 @@ export function ServicesClientView({
           onValueChange={setOpenItems}
           className="space-y-4"
         >
-          {filteredServices.map((service) => (
-            <AccordionItem
-              key={service.id}
-              value={service.id}
-              className="rounded-xl border bg-card px-4 shadow-sm"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <AccordionTrigger className="flex-1 py-4 hover:no-underline">
-                  <div className="flex flex-wrap items-center gap-3 text-right">
-                    <span className="text-base font-bold">{service.title}</span>
-                    <Badge variant="secondary" className="gap-1 font-normal">
-                      <Layers className="size-3" />
-                      {service.subServices.length.toLocaleString("fa-IR")}{" "}
-                      زیرسرویس
-                    </Badge>
-                    {service.defaultServiceProducts?.map((dp) => (
+          {filteredServices.map((service) => {
+            const isSplit =
+              service.timingMode === ServiceTimingMode.SPLIT_STAGE;
+            const timingLabel = isSplit
+              ? `چندمرحله‌ای (${service.stage1Minutes.toLocaleString(
+                  "fa-IR"
+                )}د + ${service.freeGapMinutes.toLocaleString(
+                  "fa-IR"
+                )}د آزاد + ${service.stage2Minutes.toLocaleString("fa-IR")}د)`
+              : `تک‌مرحله‌ای (${service.durationMinutes.toLocaleString(
+                  "fa-IR"
+                )} دقیقه)`;
+
+            return (
+              <AccordionItem
+                key={service.id}
+                value={service.id}
+                className="rounded-xl border bg-card px-4 shadow-sm"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <AccordionTrigger className="flex-1 py-4 hover:no-underline">
+                    <div className="flex flex-wrap items-center gap-2 text-right">
+                      <span className="text-base font-bold">
+                        {service.title}
+                      </span>
+                      <Badge variant="secondary" className="gap-1 font-normal">
+                        <Layers className="size-3" />
+                        {service.subServices.length.toLocaleString("fa-IR")}{" "}
+                        زیرسرویس
+                      </Badge>
                       <Badge
-                        key={dp.id}
-                        variant="outline"
-                        className="gap-1 border-primary/30 bg-primary/5 text-xs font-normal text-primary"
+                        variant={isSplit ? "default" : "outline"}
+                        className="gap-1 text-xs font-normal"
                       >
-                        <Package className="size-3" />
-                        {dp.clinicProduct.name} (
-                        {dp.quantity.toLocaleString("fa-IR")}{" "}
-                        {dp.clinicProduct.unit})
+                        {isSplit ? (
+                          <Split className="size-3" />
+                        ) : (
+                          <Clock className="size-3" />
+                        )}
+                        {timingLabel}
                       </Badge>
-                    ))}
-                    {service.assignedStaff.length > 0 && (
-                      <Badge variant="outline" className="gap-1 font-normal">
-                        <Users className="size-3" />
-                        {service.assignedStaff
-                          .map((st) => st.user.fullName || st.user.phone)
-                          .join("، ")}
-                      </Badge>
-                    )}
-                  </div>
-                </AccordionTrigger>
+                      {service.defaultServiceProducts?.map((dp) => (
+                        <Badge
+                          key={dp.id}
+                          variant="outline"
+                          className="gap-1 border-primary/30 bg-primary/5 text-xs font-normal text-primary"
+                        >
+                          <Package className="size-3" />
+                          {dp.clinicProduct.name} (
+                          {dp.quantity.toLocaleString("fa-IR")}{" "}
+                          {dp.clinicProduct.unit})
+                        </Badge>
+                      ))}
+                      {service.assignedStaff.length > 0 && (
+                        <Badge variant="outline" className="gap-1 font-normal">
+                          <Users className="size-3" />
+                          {service.assignedStaff
+                            .map((st) => st.user.fullName || st.user.phone)
+                            .join("، ")}
+                        </Badge>
+                      )}
+                    </div>
+                  </AccordionTrigger>
 
-                <div className="flex shrink-0 items-center gap-1">
-                  {permissions.canCreate && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleOpenNewSubService(service)}
-                      className="h-8 gap-1 text-xs"
-                    >
-                      <Plus className="size-3.5" />
-                      زیرسرویس
-                    </Button>
-                  )}
-                  {permissions.canEdit && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleEditService(service)}
-                      className="size-8"
-                      title="ویرایش خدمت"
-                    >
-                      <Pencil className="size-3.5" />
-                    </Button>
-                  )}
-                  {permissions.canDelete && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() =>
-                        setDeleteTarget({
-                          type: "service",
-                          id: service.id,
-                          title: service.title,
-                        })
-                      }
-                      className="size-8 text-destructive hover:text-destructive"
-                      title="حذف خدمت"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              <AccordionContent className="pt-1 pb-4">
-                {service.subServices.length === 0 ? (
-                  <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                    هنوز زیرسرویسی برای این خدمت تعریف نشده است.{" "}
+                  <div className="flex shrink-0 items-center gap-1">
                     {permissions.canCreate && (
-                      <button
-                        type="button"
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleOpenNewSubService(service)}
-                        className="font-medium text-primary underline underline-offset-4"
+                        className="h-8 gap-1 text-xs"
                       >
-                        افزودن اولین زیرسرویس
-                      </button>
+                        <Plus className="size-3.5" />
+                        زیرسرویس
+                      </Button>
+                    )}
+                    {permissions.canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEditService(service)}
+                        className="size-8"
+                        title="ویرایش خدمت"
+                      >
+                        <Pencil className="size-3.5" />
+                      </Button>
+                    )}
+                    {permissions.canDelete && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() =>
+                          setDeleteTarget({
+                            type: "service",
+                            id: service.id,
+                            title: service.title,
+                          })
+                        }
+                        className="size-8 text-destructive hover:text-destructive"
+                        title="حذف خدمت"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
                     )}
                   </div>
-                ) : (
-                  <div className="overflow-hidden rounded-lg border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/40">
-                          <TableHead className="text-right">
-                            عنوان زیرسرویس
-                          </TableHead>
-                          <TableHead className="text-right">
-                            تعرفه (مبنای فاکتور)
-                          </TableHead>
-                          <TableHead className="text-right">مشخصه‌ها</TableHead>
-                          <TableHead className="text-right">
-                            مصرفی دیفالت
-                          </TableHead>
-                          {(permissions.canEdit || permissions.canDelete) && (
-                            <TableHead className="w-24 text-left">
-                              عملیات
-                            </TableHead>
-                          )}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {service.subServices.map((sub) => {
-                          const attrs = Array.isArray(sub.attributes)
-                            ? (sub.attributes as ServiceAttributeItem[])
-                            : [];
+                </div>
 
-                          return (
-                            <TableRow key={sub.id}>
-                              <TableCell className="font-medium">
-                                {sub.title}
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-1 font-semibold tabular-nums">
-                                  {sub.price.toLocaleString("fa-IR")}
-                                  <TomanIcon className="size-3.5 text-muted-foreground" />
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                {attrs.length === 0 ? (
-                                  <span className="text-xs text-muted-foreground">
-                                    —
-                                  </span>
-                                ) : (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {attrs.map((a, i) => (
-                                      <Badge
-                                        key={i}
-                                        variant="secondary"
-                                        className="text-xs font-normal"
-                                      >
-                                        {a.key}: {a.value}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {sub.defaultProducts.length === 0 ? (
-                                  <span className="text-xs text-muted-foreground">
-                                    —
-                                  </span>
-                                ) : (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {sub.defaultProducts.map((dp) => (
-                                      <Badge
-                                        key={dp.id}
-                                        variant="outline"
-                                        className="gap-1 text-xs font-normal"
-                                      >
-                                        <Package className="size-3 text-muted-foreground" />
-                                        {dp.clinicProduct.name} (
-                                        {dp.quantity.toLocaleString("fa-IR")}{" "}
-                                        {dp.clinicProduct.unit})
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                )}
-                              </TableCell>
-                              {(permissions.canEdit ||
-                                permissions.canDelete) && (
-                                <TableCell className="text-left">
-                                  <div className="flex items-center justify-end gap-1">
-                                    {permissions.canEdit && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() =>
-                                          handleEditSubService(service, sub)
-                                        }
-                                        className="size-8"
-                                      >
-                                        <Pencil className="size-3.5" />
-                                      </Button>
-                                    )}
-                                    {permissions.canDelete && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() =>
-                                          setDeleteTarget({
-                                            type: "subService",
-                                            id: sub.id,
-                                            title: sub.title,
-                                          })
-                                        }
-                                        className="size-8 text-destructive hover:text-destructive"
-                                      >
-                                        <Trash2 className="size-3.5" />
-                                      </Button>
-                                    )}
+                <AccordionContent className="pt-1 pb-4">
+                  {service.subServices.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                      هنوز زیرسرویسی برای این خدمت تعریف نشده است.{" "}
+                      {permissions.canCreate && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenNewSubService(service)}
+                          className="font-medium text-primary underline underline-offset-4"
+                        >
+                          افزودن اولین زیرسرویس
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="overflow-hidden rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/40">
+                            <TableHead className="text-right">
+                              عنوان زیرسرویس
+                            </TableHead>
+                            <TableHead className="text-right">
+                              تعرفه (مبنای فاکتور)
+                            </TableHead>
+                            <TableHead className="text-right">
+                              زمان‌بندی
+                            </TableHead>
+                            <TableHead className="text-right">مشخصه‌ها</TableHead>
+                            <TableHead className="text-right">
+                              مصرفی دیفالت
+                            </TableHead>
+                            {(permissions.canEdit || permissions.canDelete) && (
+                              <TableHead className="w-24 text-left">
+                                عملیات
+                              </TableHead>
+                            )}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {service.subServices.map((sub) => {
+                            const attrs = Array.isArray(sub.attributes)
+                              ? (sub.attributes as ServiceAttributeItem[])
+                              : [];
+                            const effMode = sub.timingMode ?? service.timingMode;
+                            const effIsSplit =
+                              effMode === ServiceTimingMode.SPLIT_STAGE;
+                            const effLabel = effIsSplit
+                              ? `چندمرحله‌ای (${(
+                                  sub.stage1Minutes ?? service.stage1Minutes
+                                ).toLocaleString("fa-IR")}د + ${(
+                                  sub.freeGapMinutes ?? service.freeGapMinutes
+                                ).toLocaleString("fa-IR")}د آزاد + ${(
+                                  sub.stage2Minutes ?? service.stage2Minutes
+                                ).toLocaleString("fa-IR")}د)`
+                              : `${(
+                                  sub.durationMinutes ?? service.durationMinutes
+                                ).toLocaleString("fa-IR")} دقیقه`;
+
+                            return (
+                              <TableRow key={sub.id}>
+                                <TableCell className="font-medium">
+                                  {sub.title}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-1 font-semibold tabular-nums">
+                                    {sub.price.toLocaleString("fa-IR")}
+                                    <TomanIcon className="size-3.5 text-muted-foreground" />
                                   </div>
                                 </TableCell>
-                              )}
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </AccordionContent>
-            </AccordionItem>
-          ))}
+                                <TableCell>
+                                  <Badge
+                                    variant={
+                                      sub.timingMode ? "secondary" : "outline"
+                                    }
+                                    className="text-xs font-normal"
+                                  >
+                                    {effLabel}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  {attrs.length === 0 ? (
+                                    <span className="text-xs text-muted-foreground">
+                                      —
+                                    </span>
+                                  ) : (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {attrs.map((a, i) => (
+                                        <Badge
+                                          key={i}
+                                          variant="secondary"
+                                          className="text-xs font-normal"
+                                        >
+                                          {a.key}: {a.value}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {sub.defaultProducts.length === 0 ? (
+                                    <span className="text-xs text-muted-foreground">
+                                      —
+                                    </span>
+                                  ) : (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {sub.defaultProducts.map((dp) => (
+                                        <Badge
+                                          key={dp.id}
+                                          variant="outline"
+                                          className="gap-1 text-xs font-normal"
+                                        >
+                                          <Package className="size-3 text-muted-foreground" />
+                                          {dp.clinicProduct.name} (
+                                          {dp.quantity.toLocaleString("fa-IR")}{" "}
+                                          {dp.clinicProduct.unit})
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                {(permissions.canEdit ||
+                                  permissions.canDelete) && (
+                                  <TableCell className="text-left">
+                                    <div className="flex items-center justify-end gap-1">
+                                      {permissions.canEdit && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() =>
+                                            handleEditSubService(service, sub)
+                                          }
+                                          className="size-8"
+                                        >
+                                          <Pencil className="size-3.5" />
+                                        </Button>
+                                      )}
+                                      {permissions.canDelete && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() =>
+                                            setDeleteTarget({
+                                              type: "subService",
+                                              id: sub.id,
+                                              title: sub.title,
+                                            })
+                                          }
+                                          className="size-8 text-destructive hover:text-destructive"
+                                        >
+                                          <Trash2 className="size-3.5" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+            );
+          })}
         </Accordion>
       )}
 
-      {/* مودال ایجاد / ویرایش خدمت اصلی */}
       <ServiceFormDialog
         open={serviceDialogOpen}
         onOpenChange={setServiceDialogOpen}
@@ -521,7 +586,6 @@ export function ServicesClientView({
         clinicProducts={clinicProducts}
       />
 
-      {/* مودال ایجاد / ویرایش زیرسرویس */}
       {targetService && (
         <SubServiceFormDialog
           open={subDialogOpen}
@@ -533,7 +597,6 @@ export function ServicesClientView({
         />
       )}
 
-      {/* دیالوگ تایید حذف خدمت یا زیرسرویس */}
       <AlertDialog
         open={Boolean(deleteTarget)}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
