@@ -74,7 +74,7 @@ function normalizeIranPhoneLocal(raw?: string | null): string {
 }
 
 /**
- * ثبت سریع پرونده مراجع جدید در کلینیک از داخل فرم نوبت‌دهی
+ * ثبت سریع پرونده مراجع جدید در کلینیک از داخل ویزارد نوبت‌دهی
  * بررسی تکراری بودن صرفاً در مدل Client همین کلینیک انجام می‌شود.
  */
 export async function quickCreateClientAction(
@@ -117,7 +117,6 @@ export async function quickCreateClientAction(
       ) || null;
     const cleanNickname = String(input.nickname || "").trim() || null;
 
-    // بررسی تکراری بودن کد ملی یا شماره موبایل در بین مراجع همین کلینیک
     const existingClinicClients = await prisma.client.findMany({
       where: { clinicId: ctx.clinicId },
       include: {
@@ -199,7 +198,7 @@ export async function quickCreateClientAction(
         });
       }
 
-      const client = await tx.client.create({
+      return tx.client.create({
         data: {
           clinicId: ctx.clinicId,
           userId: targetUser.id,
@@ -216,8 +215,6 @@ export async function quickCreateClientAction(
           },
         },
       });
-
-      return client;
     });
 
     revalidatePath(CALENDAR_PATH);
@@ -384,17 +381,6 @@ export async function upsertAppointmentAction(
       Boolean(input.allowManualOverride) &&
       hasBlockingIssues;
 
-    if (isManualOverride && !input.overrideReason?.trim()) {
-      return {
-        success: false,
-        error:
-          "برای ثبت دستی نوبت با وجود تداخل یا هشدار، وارد کردن دلیل هماهنگی الزامی است.",
-        reasons: evaluation.reasons,
-        issues: evaluation.issues,
-        canOverrideManually: true,
-      };
-    }
-
     const nextStatus = input.status ?? AppointmentStatus.CONFIRMED;
     const therapistId =
       input.therapistId && input.therapistId !== "NONE"
@@ -426,8 +412,7 @@ export async function upsertAppointmentAction(
         requiresPrivacy: evaluation.timing!.requiresPrivacy,
         isManualOverride,
         overrideReason: isManualOverride
-          ? input.overrideReason?.trim() ||
-            evaluation.reasons.join(" — ")
+          ? input.overrideReason?.trim() || "ثبت دستی با هماهنگی ویژه"
           : null,
         notes: input.notes?.trim() || null,
       };
@@ -483,7 +468,7 @@ export async function getAvailableAppointmentSlotsAction(params: {
 }): Promise<{
   success: boolean;
   slots: AvailableSlotSuggestion[];
-  blockingReasons: string[];
+  summaryReason: string | null;
   error?: string;
 }> {
   try {
@@ -492,7 +477,7 @@ export async function getAvailableAppointmentSlotsAction(params: {
       return {
         success: false,
         slots: [],
-        blockingReasons: [],
+        summaryReason: null,
         error: "نشست کاربری معتبر نیست.",
       };
     }
@@ -504,7 +489,7 @@ export async function getAvailableAppointmentSlotsAction(params: {
       return {
         success: false,
         slots: [],
-        blockingReasons: [],
+        summaryReason: null,
         error: "شما مجوز مشاهده زمان‌های نوبت‌دهی را ندارید.",
       };
     }
@@ -527,20 +512,22 @@ export async function getAvailableAppointmentSlotsAction(params: {
       includeConditionalOnCall: params.includeConditionalOnCall ?? true,
     });
 
+    const summaryReason =
+      res.slots.length === 0
+        ? res.blockingReasons[0] ||
+          "در تاریخ انتخاب‌شده، زمان آزاد و معتبری برای این سرویس و شرایط یافت نشد."
+        : null;
+
     return {
       success: true,
       slots: res.slots,
-      blockingReasons: res.blockingReasons,
-      error:
-        res.slots.length === 0 && res.blockingReasons.length > 0
-          ? res.blockingReasons.join(" | ")
-          : undefined,
+      summaryReason,
     };
   } catch (err: unknown) {
     return {
       success: false,
       slots: [],
-      blockingReasons: [],
+      summaryReason: null,
       error:
         err instanceof Error
           ? err.message

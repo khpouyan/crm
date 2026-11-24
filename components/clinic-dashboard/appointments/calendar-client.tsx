@@ -10,12 +10,16 @@ import {
   ServiceTimingMode,
 } from "@prisma/client"
 import {
-  Bot,
+  AlertCircle,
+  CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Clock,
   Edit3,
   Filter,
+  LayoutPanelTop,
   MoreVertical,
   Plus,
   RefreshCw,
@@ -26,8 +30,6 @@ import {
   UserCheck,
   Users,
   X,
-  AlertCircle,
-  CheckCircle2,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -36,7 +38,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Select,
   SelectContent,
@@ -71,11 +73,14 @@ import {
   ResponsiveDialogPanel,
   ResponsiveDialogDesktopOnly,
 } from "@/components/ui/responsive-dialog"
+import { DatePicker } from "@/components/ui/date-picker"
 import {
-  Field,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field"
+  ResponsiveTimePicker,
+  ResponsiveTimePickerContent,
+  ResponsiveTimePickerTrigger,
+  type TimePickerValue,
+} from "@/components/ui/time-picker"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import {
   upsertAppointmentAction,
   getAvailableAppointmentSlotsAction,
@@ -139,12 +144,15 @@ export interface CalendarStaffOption {
   id: string
   fullName: string
   jobTitle: string
+  hasAllServicesAccess?: boolean
+  assignedServiceIds?: string[]
 }
 
 export interface CalendarSpaceOption {
   id: string
   name: string
   spaceType: ClinicSpaceType
+  allowedServiceIds?: string[]
 }
 
 export type CalendarClientOption = ClientComboboxItem
@@ -213,6 +221,65 @@ const STATUS_CONFIG: Record<
 const HOURS_LIST = Array.from({ length: 16 }, (_, i) =>
   `${String(i + 7).padStart(2, "0")}:00`
 )
+
+function getCurrentSystemTimeHHmm(): string {
+  const now = new Date()
+  const hh = String(now.getHours()).padStart(2, "0")
+  const mm = String(now.getMinutes()).padStart(2, "0")
+  return `${hh}:${mm}`
+}
+
+function parseHHmmToPickerValue(hhmm: string): TimePickerValue {
+  const clean = normalizePersianDigits(hhmm || "").trim()
+  const [h, m] = clean.split(":").map(Number)
+  return {
+    hour: Number.isFinite(h) ? Math.min(23, Math.max(0, h)) : 9,
+    minute: Number.isFinite(m) ? Math.min(59, Math.max(0, m)) : 0,
+  }
+}
+
+function normalizeTypedHHmm(raw: string, fallback: string): string {
+  const clean = normalizePersianDigits(raw || "").trim()
+  const match = /^(\d{1,2}):(\d{1,2})$/.exec(clean)
+  if (!match) return fallback
+  const h = Number(match[1])
+  const m = Number(match[2])
+  if (
+    !Number.isInteger(h) ||
+    !Number.isInteger(m) ||
+    h < 0 ||
+    h > 23 ||
+    m < 0 ||
+    m > 59
+  ) {
+    return fallback
+  }
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+}
+
+function jalaliStringToDate(jStr: string): Date | null {
+  const norm = normalizePersianDigits(jStr || "").trim()
+  const match = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/.exec(norm)
+  if (!match) return null
+  const jy = Number(match[1])
+  const jm = Number(match[2])
+  const jd = Number(match[3])
+  if (jy < 1300 || jy > 1500 || jm < 1 || jm > 12 || jd < 1 || jd > 31) {
+    return null
+  }
+  const g = toGregorian(jy, jm, jd)
+  const check = toJalali(g)
+  if (check.jy !== jy || check.jm !== jm || check.jd !== jd) return null
+  return g
+}
+
+function dateToJalaliString(d: Date): string {
+  const j = toJalali(d)
+  return `${j.jy}/${String(j.jm).padStart(2, "0")}/${String(j.jd).padStart(
+    2,
+    "0"
+  )}`
+}
 
 function parseJalaliParts(jStr: string): { jy: number; jm: number; jd: number } {
   const norm = normalizePersianDigits(jStr).trim()
@@ -288,6 +355,18 @@ export function CalendarClient({
   >(initialView)
   const [filtersOpen, setFiltersOpen] = React.useState(true)
 
+  // ویزارد هم به‌صورت مودال و هم به‌صورت نمایش در صفحه زیر فیلترها
+  const [inlineWizardOpen, setInlineWizardOpen] = React.useState(false)
+  const [dialogOpen, setDialogOpen] = React.useState(false)
+  const [wizardStep, setWizardStep] = React.useState<1 | 2 | 3>(1)
+
+  const [dialogMode, setDialogMode] = React.useState<
+    "create" | "edit" | "reschedule" | "replace_client"
+  >("create")
+  const [editingAppt, setEditingAppt] = React.useState<AppointmentRecord | null>(
+    null
+  )
+
   const [selectedDate, setSelectedDate] = React.useState(
     normalizePersianDigits(initialJalaliDate)
   )
@@ -299,33 +378,35 @@ export function CalendarClient({
   const [filterStatus, setFilterStatus] = React.useState<string>("ALL")
   const [searchQuery, setSearchQuery] = React.useState("")
 
-  const [dialogOpen, setDialogOpen] = React.useState(false)
-  const [dialogMode, setDialogMode] = React.useState<
-    "create" | "edit" | "reschedule" | "replace_client"
-  >("create")
-  const [editingAppt, setEditingAppt] = React.useState<AppointmentRecord | null>(
-    null
-  )
-
   const [bookingSource, setBookingSource] =
     React.useState<AppointmentBookingSource>(AppointmentBookingSource.MANUAL)
   const [formClientId, setFormClientId] = React.useState<string>(
     initialClients[0]?.id || ""
   )
+  const [quickCreateRowOpen, setQuickCreateRowOpen] = React.useState(false)
+
   const [formServiceId, setFormServiceId] = React.useState<string>(
     services[0]?.id || ""
   )
   const [formSubServiceId, setFormSubServiceId] = React.useState<string>("NONE")
-  const [formTherapistId, setFormTherapistId] = React.useState<string>(
-    staff[0]?.id || "NONE"
-  )
-  const [formSpaceId, setFormSpaceId] = React.useState<string>(
-    spaces[0]?.id || "NONE"
-  )
+  const [formTherapistId, setFormTherapistId] = React.useState<string>("NONE")
+  const [formSpaceId, setFormSpaceId] = React.useState<string>("NONE")
+
   const [formDate, setFormDate] = React.useState<string>(
     normalizePersianDigits(initialJalaliDate)
   )
-  const [formStartTime, setFormStartTime] = React.useState<string>("09:00")
+  const [formStartTime, setFormStartTime] = React.useState<string>(() =>
+    getCurrentSystemTimeHHmm()
+  )
+  const [typedTimeText, setTypedTimeText] = React.useState<string>(() =>
+    toFa(getCurrentSystemTimeHHmm())
+  )
+  const [timePickerOpen, setTimePickerOpen] = React.useState(false)
+
+  React.useEffect(() => {
+    setTypedTimeText(toFa(formStartTime))
+  }, [formStartTime])
+
   const [formStatus, setFormStatus] = React.useState<AppointmentStatus>(
     AppointmentStatus.CONFIRMED
   )
@@ -337,8 +418,8 @@ export function CalendarClient({
   const [overrideReason, setOverrideReason] = React.useState("")
 
   const [autoSlots, setAutoSlots] = React.useState<AvailableSlotSuggestion[]>([])
-  const [autoBlockingReasons, setAutoBlockingReasons] = React.useState<string[]>(
-    []
+  const [autoSummaryReason, setAutoSummaryReason] = React.useState<string | null>(
+    null
   )
   const [isLoadingSlots, setIsLoadingSlots] = React.useState(false)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
@@ -352,6 +433,43 @@ export function CalendarClient({
     () => services.find((s) => s.id === formServiceId) || null,
     [services, formServiceId]
   )
+
+  const eligibleStaff = React.useMemo(() => {
+    if (!formServiceId) return staff
+    return staff.filter(
+      (st) =>
+        Boolean(st.hasAllServicesAccess) ||
+        (st.assignedServiceIds || []).includes(formServiceId)
+    )
+  }, [staff, formServiceId])
+
+  const eligibleSpaces = React.useMemo(() => {
+    if (!formServiceId) return spaces
+    return spaces.filter(
+      (sp) =>
+        !sp.allowedServiceIds ||
+        sp.allowedServiceIds.length === 0 ||
+        sp.allowedServiceIds.includes(formServiceId)
+    )
+  }, [spaces, formServiceId])
+
+  React.useEffect(() => {
+    if (
+      formTherapistId !== "NONE" &&
+      !eligibleStaff.some((s) => s.id === formTherapistId)
+    ) {
+      setFormTherapistId(eligibleStaff[0]?.id || "NONE")
+    }
+  }, [eligibleStaff, formTherapistId])
+
+  React.useEffect(() => {
+    if (
+      formSpaceId !== "NONE" &&
+      !eligibleSpaces.some((sp) => sp.id === formSpaceId)
+    ) {
+      setFormSpaceId(eligibleSpaces[0]?.id || "NONE")
+    }
+  }, [eligibleSpaces, formSpaceId])
 
   const handleDateChange = (nextJalaliDate: string) => {
     const norm = normalizePersianDigits(nextJalaliDate).trim()
@@ -420,26 +538,38 @@ export function CalendarClient({
     )
   }, [filteredAppointments, selectedDate])
 
-  const openCreateDialog = (
-    presetDate?: string,
-    presetTime?: string,
-    presetSource: AppointmentBookingSource = AppointmentBookingSource.MANUAL
-  ) => {
-    if (!permissions.canCreate) {
-      toast.error("شما مجوز ثبت نوبت جدید را ندارید.")
-      return
-    }
+  const prepareCreateForm = (presetDate?: string, presetTime?: string) => {
+    const defaultSrv = services[0]
+    const defaultStaff = defaultSrv
+      ? staff.filter(
+          (st) =>
+            Boolean(st.hasAllServicesAccess) ||
+            (st.assignedServiceIds || []).includes(defaultSrv.id)
+        )
+      : staff
+    const defaultSpaces = defaultSrv
+      ? spaces.filter(
+          (sp) =>
+            !sp.allowedServiceIds ||
+            sp.allowedServiceIds.length === 0 ||
+            sp.allowedServiceIds.includes(defaultSrv.id)
+        )
+      : spaces
+
+    const nowTime = presetTime || getCurrentSystemTimeHHmm()
     setDialogMode("create")
     setEditingAppt(null)
-    setBookingSource(presetSource)
+    setWizardStep(1)
+    setBookingSource(AppointmentBookingSource.MANUAL)
     setFormClientId(clientList[0]?.id || "")
-    const defaultSrv = services[0]
+    setQuickCreateRowOpen(false)
     setFormServiceId(defaultSrv?.id || "")
     setFormSubServiceId(defaultSrv?.subServices[0]?.id || "NONE")
-    setFormTherapistId(staff[0]?.id || "NONE")
-    setFormSpaceId(spaces[0]?.id || "NONE")
+    setFormTherapistId(defaultStaff[0]?.id || "NONE")
+    setFormSpaceId(defaultSpaces[0]?.id || "NONE")
     setFormDate(normalizePersianDigits(presetDate || selectedDate))
-    setFormStartTime(presetTime || "09:00")
+    setFormStartTime(nowTime)
+    setTypedTimeText(toFa(nowTime))
     setFormStatus(AppointmentStatus.CONFIRMED)
     setFormNotes("")
     setErrorReasons([])
@@ -447,8 +577,25 @@ export function CalendarClient({
     setAllowOverride(false)
     setOverrideReason("")
     setAutoSlots([])
-    setAutoBlockingReasons([])
+    setAutoSummaryReason(null)
+  }
+
+  const openModalWizard = (presetDate?: string, presetTime?: string) => {
+    if (!permissions.canCreate) {
+      toast.error("شما مجوز ثبت نوبت جدید را ندارید.")
+      return
+    }
+    prepareCreateForm(presetDate, presetTime)
     setDialogOpen(true)
+  }
+
+  const openInlineWizard = (presetDate?: string, presetTime?: string) => {
+    if (!permissions.canCreate) {
+      toast.error("شما مجوز ثبت نوبت جدید را ندارید.")
+      return
+    }
+    prepareCreateForm(presetDate, presetTime)
+    setInlineWizardOpen(true)
   }
 
   const openActionDialog = (
@@ -461,14 +608,17 @@ export function CalendarClient({
     }
     setDialogMode(mode)
     setEditingAppt(appt)
+    setWizardStep(mode === "reschedule" ? 3 : 1)
     setBookingSource(AppointmentBookingSource.MANUAL)
     setFormClientId(appt.clientId)
+    setQuickCreateRowOpen(false)
     setFormServiceId(appt.serviceId)
     setFormSubServiceId(appt.subServiceId || "NONE")
     setFormTherapistId(appt.therapistId || "NONE")
     setFormSpaceId(appt.spaceId || "NONE")
     setFormDate(normalizePersianDigits(appt.jalaliDate))
     setFormStartTime(appt.startTime)
+    setTypedTimeText(toFa(appt.startTime))
     setFormStatus(appt.status)
     setFormNotes(appt.notes || "")
     setErrorReasons([])
@@ -476,18 +626,18 @@ export function CalendarClient({
     setAllowOverride(false)
     setOverrideReason(appt.overrideReason || "")
     setAutoSlots([])
-    setAutoBlockingReasons([])
+    setAutoSummaryReason(null)
     setDialogOpen(true)
   }
 
   const handleLoadAutoSlots = async () => {
     if (!formServiceId) {
-      toast.error("ابتدا سرویس را انتخاب کنید.")
+      toast.error("ابتدا خدمت را در مرحله دوم انتخاب کنید.")
       return
     }
     setIsLoadingSlots(true)
     setAutoSlots([])
-    setAutoBlockingReasons([])
+    setAutoSummaryReason(null)
     try {
       const res = await getAvailableAppointmentSlotsAction({
         serviceId: formServiceId,
@@ -505,13 +655,14 @@ export function CalendarClient({
       }
 
       setAutoSlots(res.slots)
-      setAutoBlockingReasons(res.blockingReasons)
+      setAutoSummaryReason(res.summaryReason)
       if (res.slots.length === 0) {
         toast.error(
-          res.blockingReasons[0] ||
-            "در این تاریخ بازه خالی و معتبری برای سرویس انتخاب‌شده یافت نشد."
+          res.summaryReason ||
+            "در تاریخ انتخاب‌شده بازه آزاد و معتبری یافت نشد."
         )
       } else {
+        setFormStartTime(res.slots[0].startTime)
         toast.success(`${toFa(res.slots.length)} بازه آزاد و معتبر پیدا شد.`)
       }
     } finally {
@@ -525,12 +676,17 @@ export function CalendarClient({
 
     if (!formClientId) {
       toast.error("لطفاً مراجع را انتخاب کنید یا پرونده جدید ثبت نمایید.")
+      setWizardStep(1)
       return
     }
     if (!formServiceId) {
       toast.error("لطفاً سرویس را انتخاب کنید.")
+      setWizardStep(2)
       return
     }
+
+    const finalTime = normalizeTypedHHmm(typedTimeText, formStartTime)
+    setFormStartTime(finalTime)
 
     setIsSubmitting(true)
     try {
@@ -547,7 +703,7 @@ export function CalendarClient({
         therapistId: formTherapistId === "NONE" ? null : formTherapistId,
         spaceId: formSpaceId === "NONE" ? null : formSpaceId,
         dateInput: normalizePersianDigits(formDate),
-        startTime: formStartTime,
+        startTime: finalTime,
         bookingSource,
         status: formStatus,
         allowManualOverride:
@@ -575,6 +731,7 @@ export function CalendarClient({
           : "تغییرات نوبت با موفقیت ذخیره شد."
       )
       setDialogOpen(false)
+      setInlineWizardOpen(false)
       router.refresh()
     } finally {
       setIsSubmitting(false)
@@ -668,6 +825,499 @@ export function CalendarClient({
     filteredAppointments,
   ])
 
+  const selectedFormDateObj = React.useMemo(
+    () => jalaliStringToDate(formDate),
+    [formDate]
+  )
+
+  const selectedTimePickerValue = React.useMemo(
+    () => parseHHmmToPickerValue(formStartTime),
+    [formStartTime]
+  )
+
+  const renderWizardBody = () => (
+    <form onSubmit={handleSubmitAppointment} className="space-y-4">
+      <div className="grid grid-cols-3 gap-2 rounded-xl border bg-muted/30 p-2 text-xs">
+        <button
+          type="button"
+          onClick={() => setWizardStep(1)}
+          className={cn(
+            "flex items-center justify-center gap-1.5 rounded-lg py-2 font-bold transition-colors",
+            wizardStep === 1
+              ? "bg-primary text-primary-foreground shadow-xs"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <span>۱. انتخاب مراجع</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setWizardStep(2)}
+          className={cn(
+            "flex items-center justify-center gap-1.5 rounded-lg py-2 font-bold transition-colors",
+            wizardStep === 2
+              ? "bg-primary text-primary-foreground shadow-xs"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <span>۲. خدمت و پرسنل/اتاق</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setWizardStep(3)}
+          className={cn(
+            "flex items-center justify-center gap-1.5 rounded-lg py-2 font-bold transition-colors",
+            wizardStep === 3
+              ? "bg-primary text-primary-foreground shadow-xs"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <span>۳. زمان نوبت</span>
+        </button>
+      </div>
+
+      {wizardStep === 1 && (
+        <div className="space-y-4 rounded-xl border p-4">
+          <FieldGroup>
+            <Field>
+              <FieldLabel>مراجعه‌کننده *</FieldLabel>
+              <ClientCombobox
+                clients={clientList}
+                value={formClientId}
+                disabled={dialogMode === "reschedule"}
+                quickCreateOpen={quickCreateRowOpen}
+                onQuickCreateOpenChange={setQuickCreateRowOpen}
+                onChange={(id) => setFormClientId(id)}
+                onClientCreated={(created) =>
+                  setClientList((prev) => [created, ...prev])
+                }
+              />
+            </Field>
+          </FieldGroup>
+
+          <div className="flex justify-end border-t pt-3">
+            <Button
+              type="button"
+              onClick={() => {
+                if (!formClientId) {
+                  toast.error("لطفاً ابتدا مراجع را انتخاب یا ثبت کنید.")
+                  return
+                }
+                setWizardStep(2)
+              }}
+            >
+              مرحله بعد (انتخاب خدمت)
+              <ChevronLeft className="mr-1.5 size-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {wizardStep === 2 && (
+        <div className="space-y-4 rounded-xl border p-4">
+          <FieldGroup>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel>خدمت *</FieldLabel>
+                <Select
+                  value={formServiceId}
+                  onValueChange={(v) => {
+                    if (!v) return
+                    setFormServiceId(v)
+                    const found = services.find((s) => s.id === v)
+                    setFormSubServiceId(found?.subServices[0]?.id || "NONE")
+                  }}
+                >
+                  <SelectTrigger className="bg-background">
+                    <SelectValue>
+                      {formSelectedService?.title || "انتخاب خدمت"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {services.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field>
+                <FieldLabel>ریز خدمت (اختیاری)</FieldLabel>
+                <Select
+                  value={formSubServiceId}
+                  onValueChange={(v) => setFormSubServiceId(v || "NONE")}
+                >
+                  <SelectTrigger className="bg-background">
+                    <SelectValue>
+                      {formSubServiceId === "NONE"
+                        ? "بدون زیرسرویس خاص"
+                        : formSelectedService?.subServices.find(
+                            (sub) => sub.id === formSubServiceId
+                          )?.title || "بدون زیرسرویس خاص"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">بدون زیرسرویس خاص</SelectItem>
+                    {(formSelectedService?.subServices || []).map((sub) => (
+                      <SelectItem key={sub.id} value={sub.id}>
+                        {sub.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel>
+                  درمانگر مجاز این خدمت ({toFa(eligibleStaff.length)} نفر)
+                </FieldLabel>
+                <Select
+                  value={formTherapistId}
+                  onValueChange={(v) => setFormTherapistId(v || "NONE")}
+                >
+                  <SelectTrigger className="bg-background">
+                    <SelectValue>
+                      {formTherapistId === "NONE"
+                        ? "بدون تعیین درمانگر خاص"
+                        : eligibleStaff.find((st) => st.id === formTherapistId)
+                            ?.fullName || "انتخاب درمانگر"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">بدون تعیین درمانگر خاص</SelectItem>
+                    {eligibleStaff.map((st) => (
+                      <SelectItem key={st.id} value={st.id}>
+                        {st.fullName} ({st.jobTitle})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field>
+                <FieldLabel>
+                  اتاق / مکان مجاز این خدمت ({toFa(eligibleSpaces.length)} مورد)
+                </FieldLabel>
+                <Select
+                  value={formSpaceId}
+                  onValueChange={(v) => setFormSpaceId(v || "NONE")}
+                >
+                  <SelectTrigger className="bg-background">
+                    <SelectValue>
+                      {formSpaceId === "NONE"
+                        ? "بدون تعیین اتاق خاص"
+                        : eligibleSpaces.find((sp) => sp.id === formSpaceId)
+                            ?.name || "انتخاب اتاق"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">بدون تعیین اتاق خاص</SelectItem>
+                    {eligibleSpaces.map((sp) => (
+                      <SelectItem key={sp.id} value={sp.id}>
+                        {sp.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+          </FieldGroup>
+
+          <div className="flex items-center justify-between border-t pt-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setWizardStep(1)}
+            >
+              <ChevronRight className="ml-1.5 size-4" />
+              مرحله قبل
+            </Button>
+            <Button type="button" onClick={() => setWizardStep(3)}>
+              مرحله بعد (زمان نوبت)
+              <ChevronLeft className="mr-1.5 size-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {wizardStep === 3 && (
+        <div className="space-y-4 rounded-xl border p-4">
+          {dialogMode === "create" && (
+            <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setBookingSource(AppointmentBookingSource.MANUAL)
+                  setErrorReasons([])
+                  setAutoSummaryReason(null)
+                }}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-colors",
+                  bookingSource === AppointmentBookingSource.MANUAL
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <UserCheck className="size-4" />
+                رزرو دستی
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setBookingSource(AppointmentBookingSource.AUTO)
+                  setAllowOverride(false)
+                  setErrorReasons([])
+                }}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-colors",
+                  bookingSource === AppointmentBookingSource.AUTO
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Sparkles className="size-4" />
+                رزرو اتوماتیک
+              </button>
+            </div>
+          )}
+
+          <FieldGroup>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel>تاریخ شمسی *</FieldLabel>
+                <DatePicker
+                  calendarType="shamsi"
+                  value={selectedFormDateObj}
+                  onValueChange={(d) => {
+                    if (d) {
+                      setFormDate(normalizePersianDigits(dateToJalaliString(d)))
+                    }
+                  }}
+                  className="w-full"
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="appt-keyboard-time">
+                  ساعت شروع نوبت (تایپ با کیبورد یا انتخابگر ساعت) *
+                </FieldLabel>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="appt-keyboard-time"
+                    dir="ltr"
+                    value={typedTimeText}
+                    onChange={(e) => setTypedTimeText(e.target.value)}
+                    onBlur={(e) => {
+                      const norm = normalizeTypedHHmm(
+                        e.target.value,
+                        formStartTime
+                      )
+                      setFormStartTime(norm)
+                      setTypedTimeText(toFa(norm))
+                    }}
+                    placeholder="۱۶:۳۰"
+                    className="h-9 flex-1 font-mono tabular-nums"
+                  />
+
+                  <ResponsiveTimePicker
+                    open={timePickerOpen}
+                    onOpenChange={setTimePickerOpen}
+                  >
+                    <ResponsiveTimePickerTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="size-9 shrink-0"
+                          title="انتخاب ساعت با چرخ‌دنده"
+                        >
+                          <Clock className="size-4" />
+                        </Button>
+                      }
+                    />
+                    <ResponsiveTimePickerContent
+                      value={selectedTimePickerValue}
+                      onValueChange={(tv) => {
+                        const next = `${String(tv.hour).padStart(
+                          2,
+                          "0"
+                        )}:${String(tv.minute).padStart(2, "0")}`
+                        setFormStartTime(next)
+                        setTypedTimeText(toFa(next))
+                      }}
+                      hourFormat="24"
+                      digits="fa"
+                      drawerTitle="انتخاب ساعت شروع نوبت"
+                      drawerConfirmLabel="تایید ساعت"
+                      onDrawerConfirm={() => setTimePickerOpen(false)}
+                    />
+                  </ResponsiveTimePicker>
+                </div>
+              </Field>
+            </div>
+
+            {bookingSource === AppointmentBookingSource.AUTO && (
+              <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-3.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-primary">
+                    پیشنهاد خودکار زمان‌های آزاد و معتبر روز
+                  </span>
+                  <Button
+                    type="button"
+                    size="xs"
+                    disabled={isLoadingSlots}
+                    onClick={() => void handleLoadAutoSlots()}
+                  >
+                    <Clock className="ml-1 size-3.5" />
+                    {isLoadingSlots ? "در حال بررسی..." : "یافتن زمان آزاد"}
+                  </Button>
+                </div>
+
+                {autoSlots.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {autoSlots.map((sl) => {
+                      const active = formStartTime === sl.startTime
+                      return (
+                        <button
+                          key={`${sl.startTime}-${sl.spaceId || "any"}`}
+                          type="button"
+                          onClick={() => setFormStartTime(sl.startTime)}
+                          className={cn(
+                            "rounded-lg border px-2.5 py-1.5 font-mono text-xs transition-colors",
+                            active
+                              ? "border-primary bg-primary font-bold text-primary-foreground"
+                              : "bg-background hover:bg-muted"
+                          )}
+                        >
+                          {toFa(sl.startTime)} - {toFa(sl.blockEndTime)}
+                          {sl.isConditionalOnCall ? " (آنکال)" : ""}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {autoSummaryReason && (
+                  <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive">
+                    <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                    <span>{autoSummaryReason}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel>وضعیت نوبت</FieldLabel>
+                <Select
+                  value={formStatus}
+                  onValueChange={(v) =>
+                    v && setFormStatus(v as AppointmentStatus)
+                  }
+                >
+                  <SelectTrigger className="bg-background">
+                    <SelectValue>
+                      {STATUS_CONFIG[formStatus]?.label || "قطعی شده"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(STATUS_CONFIG) as AppointmentStatus[]).map(
+                      (st) => (
+                        <SelectItem key={st} value={st}>
+                          {STATUS_CONFIG[st].label}
+                        </SelectItem>
+                      )
+                    )}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="appt-notes-field">
+                  توضیحات نوبت (اختیاری)
+                </FieldLabel>
+                <Input
+                  id="appt-notes-field"
+                  value={formNotes}
+                  onChange={(e) => setFormNotes(e.target.value)}
+                  placeholder="یادداشت پذیرش یا آماده‌سازی..."
+                />
+              </Field>
+            </div>
+
+            {errorReasons.length > 0 && (
+              <div className="space-y-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3.5 text-xs text-destructive">
+                <div className="font-bold">علت محدودیت یا تداخل:</div>
+                <ul className="space-y-1">
+                  {errorReasons.map((reason, idx) => (
+                    <li key={idx} className="flex items-start gap-1.5">
+                      <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+                      <span>{reason}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {canOverride &&
+                  bookingSource === AppointmentBookingSource.MANUAL && (
+                    <div className="mt-2 space-y-2 border-t border-destructive/20 pt-2.5 text-foreground">
+                      <label className="flex cursor-pointer items-center gap-2 font-semibold">
+                        <Checkbox
+                          checked={allowOverride}
+                          onCheckedChange={(v) => setAllowOverride(Boolean(v))}
+                        />
+                        <span>قبول شرایط / ثبت دستی با هماهنگی ویژه</span>
+                      </label>
+                      {allowOverride && (
+                        <div>
+                          <label
+                            htmlFor="override-reason-input"
+                            className="block text-[11px] font-medium text-muted-foreground"
+                          >
+                            توضیحات هماهنگی (اختیاری)
+                          </label>
+                          <Textarea
+                            id="override-reason-input"
+                            rows={2}
+                            className="mt-1 bg-background text-xs"
+                            value={overrideReason}
+                            onChange={(e) => setOverrideReason(e.target.value)}
+                            placeholder="در صورت تمایل توضیح مختصری بنویسید..."
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+              </div>
+            )}
+          </FieldGroup>
+
+          <div className="flex items-center justify-between border-t pt-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setWizardStep(2)}
+            >
+              <ChevronRight className="ml-1.5 size-4" />
+              مرحله قبل
+            </Button>
+
+            <Button type="submit" disabled={isSubmitting}>
+              <CheckCircle2 className="ml-1.5 size-4" />
+              {isSubmitting ? "در حال ثبت..." : "ثبت نهایی نوبت"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </form>
+  )
+
   return (
     <div className="space-y-4 p-4 md:p-0" dir="rtl">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -689,25 +1339,17 @@ export function CalendarClient({
             variant="outline"
             size="sm"
             onClick={() =>
-              openCreateDialog(
-                selectedDate,
-                "09:00",
-                AppointmentBookingSource.AUTO
-              )
+              openInlineWizard(selectedDate, getCurrentSystemTimeHHmm())
             }
           >
-            <Bot className="ml-1.5 size-4 text-primary" />
-            رزرو اتوماتیک
+            <LayoutPanelTop className="ml-1.5 size-4 text-primary" />
+            ویزارد در صفحه
           </Button>
           <Button
             type="button"
             size="sm"
             onClick={() =>
-              openCreateDialog(
-                selectedDate,
-                "09:00",
-                AppointmentBookingSource.MANUAL
-              )
+              openModalWizard(selectedDate, getCurrentSystemTimeHHmm())
             }
           >
             <Plus className="ml-1.5 size-4" />
@@ -716,6 +1358,7 @@ export function CalendarClient({
         </div>
       </div>
 
+      {/* پنل فیلترها */}
       <Card>
         <div className="flex items-center justify-between border-b px-4 py-2.5">
           <div className="flex items-center gap-2">
@@ -755,13 +1398,14 @@ export function CalendarClient({
         {filtersOpen && (
           <CardContent className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
             <Field>
-              <FieldLabel htmlFor="cal-date-input">تاریخ (شمسی)</FieldLabel>
-              <Input
-                id="cal-date-input"
-                dir="ltr"
-                value={selectedDate}
-                onChange={(e) => handleDateChange(e.target.value)}
-                placeholder="1405/08/12"
+              <FieldLabel>تاریخ (شمسی)</FieldLabel>
+              <DatePicker
+                calendarType="shamsi"
+                value={jalaliStringToDate(selectedDate)}
+                onValueChange={(d) => {
+                  if (d) handleDateChange(dateToJalaliString(d))
+                }}
+                className="w-full"
               />
             </Field>
 
@@ -888,6 +1532,26 @@ export function CalendarClient({
         )}
       </Card>
 
+      {/* نمایش ویزارد در صفحه زیر فیلترها */}
+      {inlineWizardOpen && (
+        <Card className="border-primary/40 shadow-xs">
+          <CardHeader className="flex flex-row items-center justify-between border-b py-3">
+            <CardTitle className="text-sm font-bold">
+              ویزارد سه‌مرحله‌ای ثبت نوبت (در صفحه)
+            </CardTitle>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => setInlineWizardOpen(false)}
+            >
+              <X className="size-4" />
+            </Button>
+          </CardHeader>
+          <CardContent className="pt-4">{renderWizardBody()}</CardContent>
+        </Card>
+      )}
+
       <Tabs
         value={activeTab}
         onValueChange={(v) =>
@@ -940,13 +1604,7 @@ export function CalendarClient({
                     <div className="col-span-2 sm:col-span-1">
                       <button
                         type="button"
-                        onClick={() =>
-                          openCreateDialog(
-                            selectedDate,
-                            hourLabel,
-                            AppointmentBookingSource.MANUAL
-                          )
-                        }
+                        onClick={() => openModalWizard(selectedDate, hourLabel)}
                         className="w-full rounded-lg border bg-muted/50 px-2 py-1.5 text-center font-mono text-xs font-semibold hover:border-primary hover:text-primary"
                         title={`ثبت نوبت در ساعت ${toFa(hourLabel)}`}
                       >
@@ -1381,6 +2039,7 @@ export function CalendarClient({
         </TabsContent>
       </Tabs>
 
+      {/* ویزارد هم به‌صورت مودال برای ثبت سریع یا ویرایش/جابه‌جایی/جایگزینی مراجع */}
       <ResponsiveDialog
         open={dialogOpen}
         onOpenChange={(open) => !isSubmitting && setDialogOpen(open)}
@@ -1394,389 +2053,32 @@ export function CalendarClient({
         <ResponsiveDialogContent className="sm:max-w-2xl">
           <ResponsiveDialogHeader>
             <ResponsiveDialogTitle>
-              {dialogMode === "create" &&
-                (bookingSource === AppointmentBookingSource.AUTO
-                  ? "رزرو اتوماتیک نوبت"
-                  : "رزرو دستی نوبت جدید")}
+              {dialogMode === "create" && "رزرو نوبت (ویزارد سه‌مرحله‌ای)"}
               {dialogMode === "edit" && "ویرایش نوبت"}
               {dialogMode === "reschedule" && "جابه‌جایی زمان نوبت"}
               {dialogMode === "replace_client" && "جایگزین کردن مراجع‌کننده"}
             </ResponsiveDialogTitle>
             <ResponsiveDialogDescription>
-              در رزرو اتوماتیک فقط زمان‌های کاملاً آزاد و معتبر پیشنهاد می‌شوند؛ در صورت وجود محدودیت یا تداخل، علت دقیق نمایش داده می‌شود.
+              مراحل انتخاب مراجع، خدمت/پرسنل/اتاق و تعیین زمان نوبت را گام‌به‌گام تکمیل کنید.
             </ResponsiveDialogDescription>
           </ResponsiveDialogHeader>
 
-          <form onSubmit={handleSubmitAppointment} className="contents">
-            <ResponsiveDialogPanel className="no-scrollbar max-h-[70vh] overflow-y-auto pt-2">
-              <div className="space-y-4 px-5">
-                {dialogMode === "create" && (
-                  <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBookingSource(AppointmentBookingSource.MANUAL)
-                        setErrorReasons([])
-                      }}
-                      className={cn(
-                        "flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-colors",
-                        bookingSource === AppointmentBookingSource.MANUAL
-                          ? "bg-primary text-primary-foreground shadow-xs"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      <UserCheck className="size-4" />
-                      رزرو دستی
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBookingSource(AppointmentBookingSource.AUTO)
-                        setAllowOverride(false)
-                        setErrorReasons([])
-                      }}
-                      className={cn(
-                        "flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-colors",
-                        bookingSource === AppointmentBookingSource.AUTO
-                          ? "bg-primary text-primary-foreground shadow-xs"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      <Sparkles className="size-4" />
-                      رزرو اتوماتیک (پیشنهاد زمان آزاد)
-                    </button>
-                  </div>
-                )}
+          <ResponsiveDialogPanel className="no-scrollbar max-h-[72vh] overflow-y-auto pt-2">
+            <div className="px-5">{renderWizardBody()}</div>
+          </ResponsiveDialogPanel>
 
-                <FieldGroup>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel>مراجعه‌کننده *</FieldLabel>
-                      <ClientCombobox
-                        clients={clientList}
-                        value={formClientId}
-                        disabled={dialogMode === "reschedule"}
-                        onChange={(id) => setFormClientId(id)}
-                        onClientCreated={(created) =>
-                          setClientList((prev) => [created, ...prev])
-                        }
-                      />
-                    </Field>
-
-                    <Field>
-                      <FieldLabel htmlFor="appt-date-field">
-                        تاریخ شمسی (YYYY/MM/DD) *
-                      </FieldLabel>
-                      <Input
-                        id="appt-date-field"
-                        dir="ltr"
-                        required
-                        value={formDate}
-                        onChange={(e) => setFormDate(e.target.value)}
-                        placeholder="1405/08/12"
-                      />
-                    </Field>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel>خدمت *</FieldLabel>
-                      <Select
-                        value={formServiceId}
-                        onValueChange={(v) => {
-                          if (!v) return
-                          setFormServiceId(v)
-                          const found = services.find((s) => s.id === v)
-                          setFormSubServiceId(found?.subServices[0]?.id || "NONE")
-                        }}
-                      >
-                        <SelectTrigger className="bg-background">
-                          <SelectValue>
-                            {formSelectedService?.title || "انتخاب خدمت"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {services.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.title}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-
-                    <Field>
-                      <FieldLabel>ریز خدمت (اختیاری)</FieldLabel>
-                      <Select
-                        value={formSubServiceId}
-                        onValueChange={(v) => setFormSubServiceId(v || "NONE")}
-                      >
-                        <SelectTrigger className="bg-background">
-                          <SelectValue>
-                            {formSubServiceId === "NONE"
-                              ? "بدون زیرسرویس خاص"
-                              : formSelectedService?.subServices.find(
-                                  (sub) => sub.id === formSubServiceId
-                                )?.title || "بدون زیرسرویس خاص"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="NONE">
-                            بدون زیرسرویس خاص
-                          </SelectItem>
-                          {(formSelectedService?.subServices || []).map(
-                            (sub) => (
-                              <SelectItem key={sub.id} value={sub.id}>
-                                {sub.title}
-                              </SelectItem>
-                            )
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel>درمانگر / پرسنل</FieldLabel>
-                      <Select
-                        value={formTherapistId}
-                        onValueChange={(v) => setFormTherapistId(v || "NONE")}
-                      >
-                        <SelectTrigger className="bg-background">
-                          <SelectValue>
-                            {formTherapistId === "NONE"
-                              ? "بدون تعیین درمانگر خاص"
-                              : staff.find((st) => st.id === formTherapistId)
-                                  ?.fullName || "انتخاب درمانگر"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="NONE">
-                            بدون تعیین درمانگر خاص
-                          </SelectItem>
-                          {staff.map((st) => (
-                            <SelectItem key={st.id} value={st.id}>
-                              {st.fullName} ({st.jobTitle})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-
-                    <Field>
-                      <FieldLabel>اتاق / مکان</FieldLabel>
-                      <Select
-                        value={formSpaceId}
-                        onValueChange={(v) => setFormSpaceId(v || "NONE")}
-                      >
-                        <SelectTrigger className="bg-background">
-                          <SelectValue>
-                            {formSpaceId === "NONE"
-                              ? "بدون تعیین اتاق خاص"
-                              : spaces.find((sp) => sp.id === formSpaceId)
-                                  ?.name || "انتخاب اتاق"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="NONE">
-                            بدون تعیین اتاق خاص
-                          </SelectItem>
-                          {spaces.map((sp) => (
-                            <SelectItem key={sp.id} value={sp.id}>
-                              {sp.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  </div>
-
-                  {bookingSource === AppointmentBookingSource.AUTO && (
-                    <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-3.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-bold text-primary">
-                          یافتن خودکار زمان‌های آزاد و معتبر در این روز
-                        </span>
-                        <Button
-                          type="button"
-                          size="xs"
-                          disabled={isLoadingSlots}
-                          onClick={() => void handleLoadAutoSlots()}
-                        >
-                          <Clock className="ml-1 size-3.5" />
-                          {isLoadingSlots
-                            ? "در حال بررسی..."
-                            : "جستجوی زمان‌های آزاد"}
-                        </Button>
-                      </div>
-
-                      {autoSlots.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {autoSlots.map((sl) => {
-                            const active = formStartTime === sl.startTime
-                            return (
-                              <button
-                                key={`${sl.startTime}-${sl.spaceId || "any"}`}
-                                type="button"
-                                onClick={() => setFormStartTime(sl.startTime)}
-                                className={cn(
-                                  "rounded-lg border px-2.5 py-1.5 font-mono text-xs transition-colors",
-                                  active
-                                    ? "border-primary bg-primary font-bold text-primary-foreground"
-                                    : "bg-background hover:bg-muted"
-                                )}
-                              >
-                                {toFa(sl.startTime)} - {toFa(sl.blockEndTime)}
-                                {sl.isConditionalOnCall ? " (آنکال)" : ""}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )}
-
-                      {autoBlockingReasons.length > 0 && (
-                        <div className="space-y-1 rounded-lg border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive">
-                          {autoBlockingReasons.map((r, i) => (
-                            <div key={i} className="flex items-start gap-1.5">
-                              <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
-                              <span>{r}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel htmlFor="appt-start-time">
-                        ساعت شروع نوبت (HH:mm) *
-                      </FieldLabel>
-                      <Input
-                        id="appt-start-time"
-                        dir="ltr"
-                        required
-                        value={formStartTime}
-                        onChange={(e) =>
-                          setFormStartTime(normalizePersianDigits(e.target.value))
-                        }
-                        placeholder="09:00"
-                      />
-                    </Field>
-
-                    <Field>
-                      <FieldLabel>وضعیت نوبت</FieldLabel>
-                      <Select
-                        value={formStatus}
-                        onValueChange={(v) =>
-                          v && setFormStatus(v as AppointmentStatus)
-                        }
-                      >
-                        <SelectTrigger className="bg-background">
-                          <SelectValue>
-                            {STATUS_CONFIG[formStatus]?.label || "قطعی شده"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(
-                            Object.keys(STATUS_CONFIG) as AppointmentStatus[]
-                          ).map((st) => (
-                            <SelectItem key={st} value={st}>
-                              {STATUS_CONFIG[st].label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  </div>
-
-                  {errorReasons.length > 0 && (
-                    <div className="space-y-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3.5 text-xs text-destructive">
-                      <div className="font-bold">
-                        علت عدم تایید یا تداخل در این بازه زمانی:
-                      </div>
-                      <ul className="space-y-1">
-                        {errorReasons.map((reason, idx) => (
-                          <li key={idx} className="flex items-start gap-1.5">
-                            <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
-                            <span>{reason}</span>
-                          </li>
-                        ))}
-                      </ul>
-
-                      {canOverride &&
-                        bookingSource === AppointmentBookingSource.MANUAL && (
-                          <div className="mt-2 space-y-2 border-t border-destructive/20 pt-2.5 text-foreground">
-                            <label className="flex cursor-pointer items-center gap-2 font-semibold">
-                              <Checkbox
-                                checked={allowOverride}
-                                onCheckedChange={(v) =>
-                                  setAllowOverride(Boolean(v))
-                                }
-                              />
-                              <span>
-                                ثبت دستی با هماهنگی ویژه (با وجود هشدار/تداخل)
-                              </span>
-                            </label>
-                            {allowOverride && (
-                              <div>
-                                <FieldLabel htmlFor="override-reason-input">
-                                  علت هماهنگی ویژه *
-                                </FieldLabel>
-                                <Input
-                                  id="override-reason-input"
-                                  className="mt-1 bg-background"
-                                  value={overrideReason}
-                                  onChange={(e) =>
-                                    setOverrideReason(e.target.value)
-                                  }
-                                  placeholder="مثلاً: هماهنگی تلفنی با پزشک یا مورد اورژانسی"
-                                />
-                              </div>
-                            )}
-                          </div>
-                        )}
-                    </div>
-                  )}
-
-                  <Field>
-                    <FieldLabel htmlFor="appt-notes-field">
-                      توضیحات نوبت (اختیاری)
-                    </FieldLabel>
-                    <Textarea
-                      id="appt-notes-field"
-                      rows={2}
-                      value={formNotes}
-                      onChange={(e) => setFormNotes(e.target.value)}
-                      placeholder="یادداشت پذیرش یا دستور آماده‌سازی..."
-                    />
-                  </Field>
-                </FieldGroup>
-              </div>
-            </ResponsiveDialogPanel>
-
-            <ResponsiveDialogFooter className="gap-2">
-              <ResponsiveDialogDesktopOnly>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={isSubmitting}
-                  onClick={() => setDialogOpen(false)}
-                >
-                  انصراف
-                </Button>
-              </ResponsiveDialogDesktopOnly>
+          <ResponsiveDialogFooter className="gap-2">
+            <ResponsiveDialogDesktopOnly>
               <Button
-                type="submit"
+                type="button"
+                variant="outline"
                 disabled={isSubmitting}
-                className="w-full sm:w-auto"
+                onClick={() => setDialogOpen(false)}
               >
-                <CheckCircle2 className="ml-1.5 size-4" />
-                {isSubmitting ? "در حال ثبت..." : "ثبت نوبت"}
+                بستن
               </Button>
-            </ResponsiveDialogFooter>
-          </form>
+            </ResponsiveDialogDesktopOnly>
+          </ResponsiveDialogFooter>
         </ResponsiveDialogContent>
       </ResponsiveDialog>
     </div>

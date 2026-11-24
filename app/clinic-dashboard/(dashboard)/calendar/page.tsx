@@ -221,6 +221,9 @@ export default async function CalendarPage({
               phone: true,
             },
           },
+          assignedServices: {
+            select: { id: true },
+          },
         },
       }),
       prisma.clinicSpace.findMany({
@@ -233,12 +236,15 @@ export default async function CalendarPage({
           id: true,
           name: true,
           spaceType: true,
+          allowedServices: {
+            select: { id: true },
+          },
         },
       }),
       prisma.client.findMany({
         where: { clinicId: ctx.clinicId },
         orderBy: [{ fileNumber: { sort: "desc", nulls: "last" } }],
-        take: 400,
+        take: 1000,
         include: {
           user: {
             select: {
@@ -299,12 +305,15 @@ export default async function CalendarPage({
     id: st.id,
     fullName: st.user.fullName || st.user.phone,
     jobTitle: st.jobTitle,
+    hasAllServicesAccess: st.isOwner || st.hasAllServicesAccess,
+    assignedServiceIds: st.assignedServices.map((as) => as.id),
   }));
 
   const spaces: CalendarSpaceOption[] = spacesRows.map((sp) => ({
     id: sp.id,
     name: sp.name,
     spaceType: sp.spaceType,
+    allowedServiceIds: sp.allowedServices.map((s) => s.id),
   }));
 
   const clients: CalendarClientOption[] = clientsRows.map((c) => ({
@@ -321,7 +330,9 @@ export default async function CalendarPage({
       clinicName={ctx.clinic.name}
       initialJalaliDate={selected.jalaliStr}
       initialView={
-        params.view === "monthly" || params.view === "table" || params.view === "logs"
+        params.view === "monthly" ||
+        params.view === "table" ||
+        params.view === "logs"
           ? params.view
           : "daily"
       }
