@@ -8,13 +8,18 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Infinity as InfinityIcon,
   Plus,
   RotateCcw,
   Save,
+  SlidersHorizontal,
   Sparkles,
-  CalendarRange,
+  Sunrise,
+  Sunset,
   Trash2,
   Ban,
+  SunMedium,
+  SunMoon,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -119,55 +124,105 @@ const SHIFT_MODEL_OPTIONS: {
   label: string
   defaultStart: string
   defaultEnd: string
+  icon: React.ElementType
+  pillClass: string
+  textClass: string
 }[] = [
   {
     value: "MORNING",
     label: "صبح",
-    defaultStart: "08:30",
-    defaultEnd: "13:00",
+    defaultStart: "09:00",
+    defaultEnd: "16:00",
+    icon: SunMedium,
+    pillClass:
+      "border-amber-500/35 bg-amber-500/15 text-amber-800 dark:text-amber-300",
+    textClass: "text-amber-700 dark:text-amber-300",
   },
   {
     value: "AFTERNOON",
     label: "بعد از ظهر",
     defaultStart: "16:00",
-    defaultEnd: "21:00",
+    defaultEnd: "20:00",
+    icon: SunMoon,
+    pillClass:
+      "border-sky-500/35 bg-sky-500/15 text-sky-800 dark:text-sky-300",
+    textClass: "text-sky-700 dark:text-sky-300",
   },
   {
     value: "FULL_DAY",
     label: "یکپارچه",
     defaultStart: "09:00",
     defaultEnd: "18:00",
+    icon: Clock,
+    pillClass:
+      "border-emerald-500/35 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300",
+    textClass: "text-emerald-700 dark:text-emerald-300",
   },
   {
     value: "ALL_DAY",
-    label: "شبانه روزی",
+    label: "۲۴ ساعته",
     defaultStart: "00:00",
     defaultEnd: "23:59",
+    icon: InfinityIcon,
+    pillClass:
+      "border-violet-500/35 bg-violet-500/15 text-violet-800 dark:text-violet-300",
+    textClass: "text-violet-700 dark:text-violet-300",
   },
   {
     value: "CUSTOM",
     label: "سفارشی",
     defaultStart: "10:00",
     defaultEnd: "14:00",
+    icon: SlidersHorizontal,
+    pillClass:
+      "border-rose-500/35 bg-rose-500/15 text-rose-800 dark:text-rose-300",
+    textClass: "text-rose-700 dark:text-rose-300",
   },
 ]
 
+function getShiftModelMeta(cat: ShiftCategory) {
+  return (
+    SHIFT_MODEL_OPTIONS.find((m) => m.value === cat) || SHIFT_MODEL_OPTIONS[4]
+  )
+}
+
 function getShiftModelLabel(cat: ShiftCategory, customLabel?: string): string {
   if (customLabel?.trim()) return customLabel.trim()
-  return SHIFT_MODEL_OPTIONS.find((m) => m.value === cat)?.label || "سفارشی"
+  return getShiftModelMeta(cat).label
+}
+
+function formatSingleClockCompact(hhmm: string): string {
+  const clean = normalizePersianDigits(hhmm || "").trim()
+  const match = /^(\d{1,2}):(\d{2})$/.exec(clean)
+  if (!match) return toFa(clean)
+  const h = Number(match[1])
+  const m = Number(match[2])
+  if (m === 0) return toFa(h)
+  return `${toFa(h)}:${toFa(String(m).padStart(2, "0"))}`
+}
+
+function formatCompactShiftRange(
+  category: ShiftCategory,
+  startTime: string,
+  endTime: string
+): string {
+  if (category === "ALL_DAY") return "۲۴ ساعته"
+  return `${formatSingleClockCompact(startTime)} - ${formatSingleClockCompact(
+    endTime
+  )}`
 }
 
 function createShiftByCategory(
   category: ShiftCategory,
   index: number
 ): WorkingShiftInput {
-  const found = SHIFT_MODEL_OPTIONS.find((m) => m.value === category)
+  const found = getShiftModelMeta(category)
   return {
     id: `shift-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`,
     category,
-    label: found?.label,
-    startTime: found?.defaultStart || "09:00",
-    endTime: found?.defaultEnd || "17:00",
+    label: found.label,
+    startTime: found.defaultStart,
+    endTime: found.defaultEnd,
   }
 }
 
@@ -485,20 +540,17 @@ export function WorkingHoursClient({
     shiftId: string,
     nextCat: ShiftCategory
   ) => {
-    const model = SHIFT_MODEL_OPTIONS.find((m) => m.value === nextCat)
+    const model = getShiftModelMeta(nextCat)
     setBulkShifts((prev) =>
       prev.map((s) =>
         s.id === shiftId
           ? {
               ...s,
               category: nextCat,
-              label: model?.label,
+              label: model.label,
               startTime:
-                nextCat === "ALL_DAY"
-                  ? "00:00"
-                  : model?.defaultStart || s.startTime,
-              endTime:
-                nextCat === "ALL_DAY" ? "23:59" : model?.defaultEnd || s.endTime,
+                nextCat === "ALL_DAY" ? "00:00" : model.defaultStart,
+              endTime: nextCat === "ALL_DAY" ? "23:59" : model.defaultEnd,
             }
           : s
       )
@@ -509,20 +561,17 @@ export function WorkingHoursClient({
     shiftId: string,
     nextCat: ShiftCategory
   ) => {
-    const model = SHIFT_MODEL_OPTIONS.find((m) => m.value === nextCat)
+    const model = getShiftModelMeta(nextCat)
     setDayShifts((prev) =>
       prev.map((s) =>
         s.id === shiftId
           ? {
               ...s,
               category: nextCat,
-              label: model?.label,
+              label: model.label,
               startTime:
-                nextCat === "ALL_DAY"
-                  ? "00:00"
-                  : model?.defaultStart || s.startTime,
-              endTime:
-                nextCat === "ALL_DAY" ? "23:59" : model?.defaultEnd || s.endTime,
+                nextCat === "ALL_DAY" ? "00:00" : model.defaultStart,
+              endTime: nextCat === "ALL_DAY" ? "23:59" : model.defaultEnd,
             }
           : s
       )
@@ -624,7 +673,6 @@ export function WorkingHoursClient({
   return (
     <TooltipProvider>
       <div className="space-y-6 p-4 md:p-0" dir="rtl">
-        {/* هدر صفحه */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
@@ -635,20 +683,19 @@ export function WorkingHoursClient({
             </p>
           </div>
 
-          {/* انتخابگر ماه و سال شمسی */}
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <Button
               type="button"
               variant="outline"
               size="icon"
-              className="size-9"
+              className="size-9 rounded-md sm:rounded-lg"
               onClick={() => navigateToMonth(jy, jm - 1)}
               title="ماه قبل"
             >
               <ChevronRight className="size-4" />
             </Button>
 
-            <div className="flex min-w-36 items-center justify-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-sm font-semibold">
+            <div className="flex min-w-36 items-center justify-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-sm font-semibold sm:rounded-lg">
               <CalendarDays className="size-4 text-primary" />
               <span>
                 {JALALI_MONTHS[jm - 1]} {toFa(jy)}
@@ -659,7 +706,7 @@ export function WorkingHoursClient({
               type="button"
               variant="outline"
               size="icon"
-              className="size-9"
+              className="size-9 rounded-md sm:rounded-lg"
               onClick={() => navigateToMonth(jy, jm + 1)}
               title="ماه بعد"
             >
@@ -668,15 +715,14 @@ export function WorkingHoursClient({
           </div>
         </div>
 
-        {/* پنل تنظیم گروهی برای کل ماه (بالای تقویم) */}
-        <Card>
+        <Card className="rounded-lg sm:rounded-xl">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Sparkles className="size-4 text-primary" />
               تنظیم گروهی برای کل ماه ({JALALI_MONTHS[jm - 1]} {toFa(jy)})
             </CardTitle>
             <CardDescription className="text-xs">
-              روزهای کاری هفته را تیک بزنید، ساعات کاری (صبح، بعدازظهر، یکپارچه، شبانه‌روزی یا بازه‌های دلخواه با +) را تعیین کنید و روزهای تعطیل کلینیک را مشخص نمایید
+              روزهای کاری هفته را تیک بزنید، ساعات کاری (صبح، بعد از ظهر، یکپارچه، ۲۴ ساعته یا بازه‌های دلخواه با +) را تعیین کنید و روزهای تعطیل کلینیک را مشخص نمایید
             </CardDescription>
           </CardHeader>
 
@@ -692,7 +738,7 @@ export function WorkingHoursClient({
                         <label
                           key={`work-${wd}`}
                           className={cn(
-                            "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors",
+                            "flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs transition-colors sm:rounded-lg",
                             checked
                               ? "border-primary bg-primary/10 font-semibold text-primary"
                               : "bg-background hover:bg-muted/50"
@@ -720,7 +766,7 @@ export function WorkingHoursClient({
                         <label
                           key={`hol-${wd}`}
                           className={cn(
-                            "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors",
+                            "flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs transition-colors sm:rounded-lg",
                             checked
                               ? "border-destructive bg-destructive/15 font-semibold text-destructive"
                               : "bg-background hover:bg-muted/50"
@@ -755,7 +801,7 @@ export function WorkingHoursClient({
                   <div>
                     <FieldLabel>مدل و بازه‌های ساعات کاری</FieldLabel>
                     <FieldDescription className="text-[11px]">
-                      می‌توانید از حالت‌های صبح، بعدازظهر، یکپارچه، شبانه‌روزی استفاده کنید یا با «+» بازه‌های متعدد اضافه نمایید
+                      می‌توانید از حالت‌های صبح، بعد از ظهر، یکپارچه، ۲۴ ساعته استفاده کنید یا با «+» بازه‌های متعدد اضافه نمایید
                     </FieldDescription>
                   </div>
 
@@ -778,14 +824,16 @@ export function WorkingHoursClient({
                 <div className="mt-2 space-y-2.5">
                   {bulkShifts.map((shift, idx) => {
                     const isAllDay = shift.category === "ALL_DAY"
+                    const meta = getShiftModelMeta(shift.category)
                     const currentModelLabel = getShiftModelLabel(
                       shift.category,
                       shift.label
                     )
+                    const ShiftIcon = meta.icon
                     return (
                       <div
                         key={shift.id}
-                        className="flex flex-col gap-2.5 rounded-xl border bg-muted/20 p-3 sm:flex-row sm:items-center"
+                        className="flex flex-col gap-2.5 rounded-lg border bg-muted/20 p-3 sm:flex-row sm:items-center sm:rounded-xl"
                       >
                         <span className="shrink-0 text-xs font-medium text-muted-foreground sm:w-16">
                           بازه {toFa(idx + 1)}:
@@ -802,14 +850,32 @@ export function WorkingHoursClient({
                             }
                           >
                             <SelectTrigger className="h-9 bg-background text-xs">
-                              <SelectValue>{currentModelLabel}</SelectValue>
+                              <SelectValue>
+                                <span className="inline-flex items-center gap-1.5">
+                                  <ShiftIcon
+                                    className={cn("size-3.5", meta.textClass)}
+                                  />
+                                  <span>{currentModelLabel}</span>
+                                </span>
+                              </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
-                              {SHIFT_MODEL_OPTIONS.map((opt) => (
-                                <SelectItem key={opt.value} value={opt.value}>
-                                  {opt.label}
-                                </SelectItem>
-                              ))}
+                              {SHIFT_MODEL_OPTIONS.map((opt) => {
+                                const OptIcon = opt.icon
+                                return (
+                                  <SelectItem key={opt.value} value={opt.value}>
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <OptIcon
+                                        className={cn(
+                                          "size-3.5",
+                                          opt.textClass
+                                        )}
+                                      />
+                                      <span>{opt.label}</span>
+                                    </span>
+                                  </SelectItem>
+                                )
+                              })}
                             </SelectContent>
                           </Select>
                         </div>
@@ -896,8 +962,7 @@ export function WorkingHoursClient({
           </CardContent>
         </Card>
 
-        {/* راهنمای رنگ‌بندی و وضعیت روزها */}
-        <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-card px-4 py-3 text-xs">
+        <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-card px-4 py-3 text-xs sm:rounded-xl">
           <span className="font-semibold text-foreground">راهنمای تقویم:</span>
           <div className="flex items-center gap-1.5">
             <span className="font-bold text-destructive">{toFa(15)}</span>
@@ -906,7 +971,7 @@ export function WorkingHoursClient({
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="inline-block size-3.5 rounded border border-destructive bg-destructive/20" />
+            <span className="inline-block size-3.5 rounded-sm border border-destructive bg-destructive/20 sm:rounded" />
             <span className="text-muted-foreground">
               تعطیل خود کلینیک (کل باکس روز قرمز)
             </span>
@@ -919,137 +984,163 @@ export function WorkingHoursClient({
           </div>
         </div>
 
-        {/* تقویم ماهانه کامل در یک صفحه */}
-        <Card className="overflow-hidden">
+        {/* تقویم ماهانه با اسکرول عرضی ظریف در موبایل */}
+        <Card className="overflow-hidden rounded-lg sm:rounded-xl">
           <CardContent className="p-2 sm:p-4">
-            <div className="grid grid-cols-7 gap-1.5 pb-2 text-center sm:gap-2">
-              {JALALI_WEEKDAYS.map((weekday, idx) => (
-                <div
-                  key={weekday}
-                  className={cn(
-                    "rounded-lg bg-muted/70 py-2 text-xs font-bold",
-                    idx === 6 && "text-destructive"
-                  )}
-                >
-                  {weekday}
-                </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
-              {monthGridCells.map((cell) => {
-                if (!cell.jd || !cell.dateIso || !cell.gDate) {
-                  return (
+            <div className="overflow-x-auto pb-2 [scrollbar-color:hsl(var(--border))_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-track]:bg-transparent">
+              <div className="min-w-[680px] md:min-w-0">
+                <div className="grid grid-cols-7 gap-1.5 pb-2 text-center sm:gap-2">
+                  {JALALI_WEEKDAYS.map((weekday, idx) => (
                     <div
-                      key={cell.key}
-                      className="min-h-24 rounded-xl border border-dashed bg-muted/20 sm:min-h-28"
-                    />
-                  )
-                }
+                      key={weekday}
+                      className={cn(
+                        "rounded-md bg-muted/70 py-2 text-xs font-bold sm:rounded-lg",
+                        idx === 6 && "text-destructive"
+                      )}
+                    >
+                      {weekday}
+                    </div>
+                  ))}
+                </div>
 
-                const dayRecord = recordsByIso[cell.dateIso]
-                const officialList = holidaysByIso[cell.dateIso] || []
-                const isOfficialHoliday =
-                  officialList.length > 0 || cell.weekdayIndex === 6
-                const isClinicHoliday = Boolean(dayRecord?.isClinicHoliday)
-                const shifts = !isClinicHoliday ? dayRecord?.shifts || [] : []
+                <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+                  {monthGridCells.map((cell) => {
+                    if (!cell.jd || !cell.dateIso || !cell.gDate) {
+                      return (
+                        <div
+                          key={cell.key}
+                          className="min-h-24 rounded-md border border-dashed bg-muted/20 sm:min-h-28 sm:rounded-xl"
+                        />
+                      )
+                    }
 
-                const holidayTooltipText = [
-                  ...officialList.map((h) => h.title),
-                  cell.weekdayIndex === 6 ? "جمعه" : null,
-                  isClinicHoliday
-                    ? dayRecord?.holidayNote || "تعطیل کلینیک"
-                    : null,
-                ]
-                  .filter(Boolean)
-                  .join(" • ")
+                    const dayRecord = recordsByIso[cell.dateIso]
+                    const officialList = holidaysByIso[cell.dateIso] || []
+                    const isOfficialHoliday =
+                      officialList.length > 0 || cell.weekdayIndex === 6
+                    const isClinicHoliday = Boolean(dayRecord?.isClinicHoliday)
+                    const shifts = !isClinicHoliday
+                      ? dayRecord?.shifts || []
+                      : []
 
-                return (
-                  <button
-                    key={cell.key}
-                    type="button"
-                    onClick={() => openDayModal(cell)}
-                    className={cn(
-                      "flex min-h-24 flex-col justify-between rounded-xl border p-2 text-right transition-all sm:min-h-28 sm:p-2.5",
+                    const holidayTooltipText = [
+                      ...officialList.map((h) => h.title),
+                      cell.weekdayIndex === 6 ? "جمعه" : null,
                       isClinicHoliday
-                        ? "border-destructive bg-destructive/15 text-destructive hover:bg-destructive/20"
-                        : shifts.length > 0
-                        ? "border-primary/30 bg-card hover:border-primary hover:shadow-xs"
-                        : "bg-card/70 hover:border-muted-foreground/40 hover:bg-muted/30"
-                    )}
-                  >
-                    <div className="flex w-full items-start justify-between gap-1">
-                      {holidayTooltipText ? (
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <span
-                                className={cn(
-                                  "text-sm font-extrabold sm:text-base",
-                                  isClinicHoliday || isOfficialHoliday
-                                    ? "text-destructive"
-                                    : "text-foreground"
-                                )}
+                        ? dayRecord?.holidayNote || "تعطیل کلینیک"
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" • ")
+
+                    return (
+                      <button
+                        key={cell.key}
+                        type="button"
+                        onClick={() => openDayModal(cell)}
+                        className={cn(
+                          "flex min-h-28 flex-col justify-between rounded-md border p-2 text-right transition-all sm:min-h-28 sm:rounded-xl sm:p-2.5",
+                          isClinicHoliday
+                            ? "border-destructive bg-destructive/15 text-destructive hover:bg-destructive/20"
+                            : shifts.length > 0
+                            ? "border-border/80 bg-card hover:border-primary hover:shadow-xs"
+                            : "bg-card/70 hover:border-muted-foreground/40 hover:bg-muted/30"
+                        )}
+                      >
+                        <div className="flex w-full items-start justify-between gap-1">
+                          {holidayTooltipText ? (
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <span
+                                    className={cn(
+                                      "text-sm font-extrabold sm:text-base",
+                                      isClinicHoliday || isOfficialHoliday
+                                        ? "text-destructive"
+                                        : "text-foreground"
+                                    )}
+                                  >
+                                    {toFa(cell.jd)}
+                                  </span>
+                                }
+                              />
+                              <TooltipContent
+                                side="top"
+                                className="max-w-56 text-xs"
                               >
-                                {toFa(cell.jd)}
-                              </span>
-                            }
-                          />
-                          <TooltipContent side="top" className="max-w-56 text-xs">
-                            {holidayTooltipText}
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <span className="text-sm font-bold text-foreground sm:text-base">
-                          {toFa(cell.jd)}
-                        </span>
-                      )}
-
-                      {isClinicHoliday && (
-                        <Badge
-                          variant="destructive"
-                          className="h-5 px-1.5 text-[10px]"
-                        >
-                          تعطیل مرکز
-                        </Badge>
-                      )}
-                    </div>
-
-                    <div className="mt-1.5 w-full space-y-1">
-                      {isClinicHoliday ? (
-                        <p className="line-clamp-2 text-[11px] font-medium text-destructive">
-                          {dayRecord?.holidayNote || "تعطیل کلینیک"}
-                        </p>
-                      ) : shifts.length > 0 ? (
-                        shifts.map((s) => (
-                          <div
-                            key={s.id}
-                            className="truncate rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary sm:text-[11px]"
-                          >
-                            <span className="font-semibold">
-                              {getShiftModelLabel(s.category, s.label)}:{" "}
+                                {holidayTooltipText}
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            <span className="text-sm font-bold text-foreground sm:text-base">
+                              {toFa(cell.jd)}
                             </span>
-                            <span dir="ltr" className="font-mono">
-                              {s.category === "ALL_DAY"
-                                ? "۲۴ ساعته"
-                                : `${toFa(s.startTime)} - ${toFa(s.endTime)}`}
+                          )}
+
+                          {isClinicHoliday && (
+                            <Badge
+                              variant="destructive"
+                              className="h-5 px-1.5 text-[10px]"
+                            >
+                              تعطیل مرکز
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="mt-1.5 w-full space-y-1.5">
+                          {isClinicHoliday ? (
+                            <p className="line-clamp-2 text-[11px] font-medium text-destructive">
+                              {dayRecord?.holidayNote || "تعطیل کلینیک"}
+                            </p>
+                          ) : shifts.length > 0 ? (
+                            shifts.map((s) => {
+                              const meta = getShiftModelMeta(s.category)
+                              const ShiftIcon = meta.icon
+                              const shiftTitle = getShiftModelLabel(
+                                s.category,
+                                s.label
+                              )
+                              const compactRange = formatCompactShiftRange(
+                                s.category,
+                                s.startTime,
+                                s.endTime
+                              )
+                              return (
+                                <div
+                                  key={s.id}
+                                  className={cn(
+                                    "flex flex-col items-start gap-0.5 rounded border px-1.5 py-1 text-[10px] font-medium md:flex-row md:items-center md:justify-between md:gap-1 md:rounded-md md:py-0.5 md:text-[11px]",
+                                    meta.pillClass
+                                  )}
+                                >
+                                  <span className="inline-flex items-center gap-1 font-bold">
+                                    <ShiftIcon className="size-3 shrink-0" />
+                                    <span>{shiftTitle}:</span>
+                                  </span>
+                                  <span
+                                    dir="ltr"
+                                    className="font-mono text-[10px] font-semibold md:truncate md:text-[11px]"
+                                  >
+                                    {compactRange}
+                                  </span>
+                                </div>
+                              )
+                            })
+                          ) : (
+                            <span className="block text-[10px] text-muted-foreground">
+                              بدون ساعت ثبت‌شده
                             </span>
-                          </div>
-                        ))
-                      ) : (
-                        <span className="block text-[10px] text-muted-foreground">
-                          بدون ساعت ثبت‌شده
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                )
-              })}
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* مودال تنظیم/استثنای یک روز خاص با کلیک روی باکس روز */}
         <ResponsiveDialog
           open={Boolean(editingDay)}
           onOpenChange={(open) => !open && setEditingDay(null)}
@@ -1141,14 +1232,16 @@ export function WorkingHoursClient({
                         <div className="mt-2 space-y-2.5">
                           {dayShifts.map((shift, idx) => {
                             const isAllDay = shift.category === "ALL_DAY"
+                            const meta = getShiftModelMeta(shift.category)
                             const currentModelLabel = getShiftModelLabel(
                               shift.category,
                               shift.label
                             )
+                            const ShiftIcon = meta.icon
                             return (
                               <div
                                 key={shift.id}
-                                className="space-y-2.5 rounded-xl border bg-muted/20 p-3"
+                                className="space-y-2.5 rounded-lg border bg-muted/20 p-3 sm:rounded-xl"
                               >
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-xs font-semibold">
@@ -1182,18 +1275,37 @@ export function WorkingHoursClient({
                                 >
                                   <SelectTrigger className="h-9 bg-background text-xs">
                                     <SelectValue>
-                                      {currentModelLabel}
+                                      <span className="inline-flex items-center gap-1.5">
+                                        <ShiftIcon
+                                          className={cn(
+                                            "size-3.5",
+                                            meta.textClass
+                                          )}
+                                        />
+                                        <span>{currentModelLabel}</span>
+                                      </span>
                                     </SelectValue>
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {SHIFT_MODEL_OPTIONS.map((opt) => (
-                                      <SelectItem
-                                        key={opt.value}
-                                        value={opt.value}
-                                      >
-                                        {opt.label}
-                                      </SelectItem>
-                                    ))}
+                                    {SHIFT_MODEL_OPTIONS.map((opt) => {
+                                      const OptIcon = opt.icon
+                                      return (
+                                        <SelectItem
+                                          key={opt.value}
+                                          value={opt.value}
+                                        >
+                                          <span className="inline-flex items-center gap-1.5">
+                                            <OptIcon
+                                              className={cn(
+                                                "size-3.5",
+                                                opt.textClass
+                                              )}
+                                            />
+                                            <span>{opt.label}</span>
+                                          </span>
+                                        </SelectItem>
+                                      )
+                                    })}
                                   </SelectContent>
                                 </Select>
 
