@@ -15,6 +15,7 @@ import {
   Toolbox,
   User,
   Users,
+  Wallet,
 } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -150,6 +151,57 @@ const COLLAPSIBLE_GROUPS: NavGroupItem[] = [
           "patients.visit_report",
           "finance.visit_report",
         ],
+      },
+    ],
+  },
+  {
+    title: "صندوق و حسابداری",
+    icon: Wallet,
+    requiredAnyPermissions: [
+      "finance.accounting",
+      "finance.visit_report",
+      "patients.visit_report",
+    ],
+    items: [
+      {
+        title: "خدمات",
+        href: "/clinic-dashboard/accounting/services",
+        requiredAnyPermissions: ["finance.accounting", "finance.visit_report"],
+      },
+      {
+        title: "دریافتی",
+        href: "/clinic-dashboard/accounting/receivables",
+        requiredAnyPermissions: ["finance.accounting"],
+      },
+      {
+        title: "مطالبات",
+        href: "/clinic-dashboard/accounting/claims",
+        requiredAnyPermissions: ["finance.accounting"],
+      },
+      {
+        title: "کیف پول",
+        href: "/clinic-dashboard/accounting/wallet",
+        requiredAnyPermissions: ["finance.accounting"],
+      },
+      {
+        title: "پرداختی‌ها",
+        href: "/clinic-dashboard/accounting/payouts",
+        requiredAnyPermissions: ["finance.accounting"],
+      },
+      {
+        title: "بدهی‌ها",
+        href: "/clinic-dashboard/accounting/debts",
+        requiredAnyPermissions: ["finance.accounting"],
+      },
+      {
+        title: "محاسبه کمیسیون",
+        href: "/clinic-dashboard/accounting/commission",
+        requiredAnyPermissions: ["finance.accounting"],
+      },
+      {
+        title: "تنظیمات حسابداری",
+        href: "/clinic-dashboard/accounting/settings",
+        requiredAnyPermissions: ["finance.accounting", "management.settings"],
       },
     ],
   },

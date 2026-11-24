@@ -71,6 +71,11 @@ enum AppointmentStatus {
   NO_SHOW     // عدم حضور مراجع
 }
 
+enum AccountingEntryType {
+  PAYOUT // پرداختی به ذی‌نفع
+  DEBT   // بدهی به ذی‌نفع
+}
+
 // ==========================================
 // 1. هویت، احراز هویت و دسترسی‌های سراسری
 // ==========================================
@@ -146,6 +151,7 @@ model Clinic {
   currentPlan   PlanTier  @default(FREE)
   planExpiresAt DateTime?
   smsBalance    Int       @default(50)
+  vatPercent    Float     @default(0)
 
   createdAt DateTime @default(now())
 
@@ -163,6 +169,9 @@ model Clinic {
   terminals           PaymentTerminal[]
   creditProviders     ClinicCreditProvider[]
   invoices            Invoice[]
+  beneficiaries       AccountingBeneficiary[]
+  descriptionItems    AccountingDescriptionItem[]
+  ledgerEntries       AccountingLedgerEntry[]
   exportLogs          DataExportLog[]
   workingDays         ClinicWorkingDay[]
 
@@ -318,6 +327,7 @@ model ClinicUser {
   assistedServices    ProvidedService[]          @relation("ServiceAssistants")
   referredServices    ProvidedService[]          @relation("ServiceReferrer")
   referredClients     Client[]                   @relation("StaffClientReferrer")
+  ledgerEntries       AccountingLedgerEntry[]
   exclusiveBatches    ProductBatch[]
   stockOuts           InventoryStockOut[]
   exportLogs          DataExportLog[]
@@ -358,8 +368,9 @@ model Client {
 
   appointments       Appointment[]
   providedServices   ProvidedService[]
-  referredServices   ProvidedService[]   @relation("ServiceClientReferrer")
+  referredServices   ProvidedService[]       @relation("ServiceClientReferrer")
   invoices           Invoice[]
+  ledgerEntries      AccountingLedgerEntry[]
   smsLogs            SmsLog[]
   attachments        ClientAttachment[]
   walletTransactions WalletTransaction[]
@@ -551,12 +562,13 @@ model TicketMessage {
 }
 
 // ==========================================
-// 6. کاتالوگ خدمات کلینیک (ساختار دو سطحی + زمان‌بندی سرویس و تایم آزاد میانی)
+// 6. کاتالوگ خدمات کلینیک (ساختار دو سطحی + زمان‌بندی سرویس و تایم آزاد میانی + مالیات)
 // ==========================================
 model Service {
-  id       String @id @default(uuid())
-  clinicId String
-  title    String
+  id         String  @id @default(uuid())
+  clinicId   String
+  title      String
+  taxEnabled Boolean @default(false)
 
   // زمان‌بندی پیش‌فرض سرویس (تک‌مرحله‌ای یا چندمرحله‌ای با تایم آزاد میانی مثل PRP)
   timingMode        ServiceTimingMode @default(SINGLE_STAGE)
@@ -576,6 +588,7 @@ model Service {
   allowedSpaces          ClinicSpace[]                   @relation("SpaceAllowedServices")
   staffSchedules         ClinicStaffSchedule[]           @relation("ScheduleAllowedServices")
   staffServiceTimings    ClinicStaffServiceTiming[]
+  ledgerEntries          AccountingLedgerEntry[]
   appointments           Appointment[]
 }
 
@@ -608,14 +621,14 @@ model SubService {
 // 7. نوبت‌دهی و رزرواسیون (دستی و اتوماتیک)
 // ==========================================
 model Appointment {
-  id          String       @id @default(uuid())
-  clinicId    String
-  clientId    String
-  serviceId   String
+  id           String  @id @default(uuid())
+  clinicId     String
+  clientId     String
+  serviceId    String
   subServiceId String?
-  therapistId String?      // پزشک یا اپراتور انجام‌دهنده
-  spaceId     String?      // اتاق / یونیت / بیمارستان رزرو‌شده
-  createdById String?      // پرسنل ثبت‌کننده نوبت
+  therapistId  String? // پزشک یا اپراتور انجام‌دهنده
+  spaceId      String? // اتاق / یونیت / بیمارستان رزرو‌شده
+  createdById  String? // پرسنل ثبت‌کننده نوبت
 
   bookingSource AppointmentBookingSource @default(MANUAL)
   status        AppointmentStatus        @default(CONFIRMED)
@@ -762,6 +775,7 @@ model Invoice {
   discountReason    String? @db.Text
   extraChargeAmount Int     @default(0)
   extraChargeReason String? @db.Text
+  taxAmount         Int     @default(0)
   creditFeeAmount   Int     @default(0)
   totalAmount       Int
 
@@ -845,7 +859,7 @@ model UsedConsumable {
 }
 
 // ==========================================
-// 10. مالی و پرداخت‌ها
+// 10. مالی، پرداخت‌ها و صندوق و حسابداری
 // ==========================================
 model ClinicBankAccount {
   id            String  @id @default(uuid())
@@ -910,6 +924,57 @@ model Payment {
   invoice              Invoice               @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   terminal             PaymentTerminal?      @relation(fields: [terminalId], references: [id])
   creditProviderConfig ClinicCreditProvider? @relation(fields: [creditProviderId], references: [id], onDelete: SetNull)
+}
+
+model AccountingBeneficiary {
+  id        String   @id @default(uuid())
+  clinicId  String
+  fullName  String
+  phone     String?
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+
+  clinic        Clinic                  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  ledgerEntries AccountingLedgerEntry[]
+
+  @@index([clinicId])
+}
+
+model AccountingDescriptionItem {
+  id        String   @id @default(uuid())
+  clinicId  String
+  scope     String   // PAYOUT | RECEIVE | DEBT
+  title     String
+  createdAt DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, scope])
+}
+
+model AccountingLedgerEntry {
+  id              String              @id @default(uuid())
+  clinicId        String
+  entryType       AccountingEntryType
+  beneficiaryId   String?
+  serviceId       String?
+  therapistId     String?
+  clientId        String?
+  createdById     String?
+  paymentMethod   String?
+  descriptionText String?
+  amount          Int
+  notes           String?             @db.Text
+  entryDate       DateTime            @default(now())
+  createdAt       DateTime            @default(now())
+
+  clinic        Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  beneficiary   AccountingBeneficiary? @relation(fields: [beneficiaryId], references: [id], onDelete: SetNull)
+  service       Service?               @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  therapist     ClinicUser?            @relation(fields: [therapistId], references: [id], onDelete: SetNull)
+  client        Client?                @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([clinicId, entryType, entryDate])
 }
 
 // ==========================================
