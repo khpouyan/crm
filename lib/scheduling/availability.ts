@@ -139,6 +139,33 @@ export function minutesToTime(totalMinutes: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+function getTehranNowDateAndMinutes(): {
+  todayUtcMidnightMs: number;
+  nowMinutes: number;
+} {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tehran",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+
+  const y = Number(parts.find((p) => p.type === "year")?.value || "1970");
+  const m = Number(parts.find((p) => p.type === "month")?.value || "01");
+  const d = Number(parts.find((p) => p.type === "day")?.value || "01");
+  const h = Number(parts.find((p) => p.type === "hour")?.value || "00");
+  const min = Number(parts.find((p) => p.type === "minute")?.value || "00");
+
+  return {
+    todayUtcMidnightMs: Date.UTC(y, m - 1, d, 0, 0, 0, 0),
+    nowMinutes: h * 60 + min,
+  };
+}
+
 /**
  * تبدیل ورودی تاریخ به تاریخ UTC midnight روز تقویمی + برچسب شمسی خوانا
  */
@@ -499,10 +526,7 @@ function getAppointmentOccupiedWindows(appt: {
   ];
 }
 
-function addIssue(
-  issues: ValidationIssue[],
-  issue: ValidationIssue
-) {
+function addIssue(issues: ValidationIssue[], issue: ValidationIssue) {
   issues.push(issue);
 }
 
@@ -657,7 +681,12 @@ export async function evaluateAppointmentSlot(
         const st = s?.startTime ? normalizeTimeString(s.startTime) : null;
         const en = s?.endTime ? normalizeTimeString(s.endTime) : null;
         if (!st || !en || st >= en) return null;
-        return { startMin: timeToMinutes(st), endMin: timeToMinutes(en), st, en };
+        return {
+          startMin: timeToMinutes(st),
+          endMin: timeToMinutes(en),
+          st,
+          en,
+        };
       })
       .filter((x): x is NonNullable<typeof x> => Boolean(x));
 
@@ -708,7 +737,6 @@ export async function evaluateAppointmentSlot(
         });
       }
 
-      // اولویت با شیفت‌های ثبت‌شده برای تاریخ مشخص (specificDate)؛ در صورت نبودن، شیفت هفتگی همان weekday
       const specificDaySchedules = therapist.staffSchedules.filter(
         (sch) => sch.specificDate !== null
       );
@@ -786,7 +814,6 @@ export async function evaluateAppointmentSlot(
         }
       }
 
-      // بررسی تداخل زمانی با سایر نوبت‌های فعال همان پزشک/پرسنل (با در نظر گرفتن تایم آزاد میانی در SPLIT_STAGE)
       const therapistAppts = existingAppointments.filter(
         (a) => a.therapistId === therapist.id
       );
@@ -907,8 +934,6 @@ export async function evaluateAppointmentSlot(
 
   const blockingIssues = issues.filter((i) => i.blocking);
 
-  // رزرو اتوماتیک (AUTO) هیچ خطای مسدودکننده‌ای را دور نمی‌زند
-  // رزرو دستی (MANUAL) در صورت وجود خطای مسدودکننده و فعال بودن allowManualOverride می‌تواند با ثبت دلیل ادامه یابد
   const isValid =
     blockingIssues.length === 0 ||
     (input.bookingSource === AppointmentBookingSource.MANUAL &&
@@ -930,6 +955,7 @@ export async function evaluateAppointmentSlot(
 
 /**
  * یافتن اسلات‌های معتبر و آزاد در یک روز مشخص برای نوبت‌دهی اتوماتیک یا پیشنهاد سریع
+ * زمان‌های گذشته نسبت به ساعت سیستم در روز جاری یا روزهای گذشته نمایش داده نمی‌شوند.
  */
 export async function findAvailableSlotsForDate(params: {
   clinicId: string;
@@ -953,6 +979,20 @@ export async function findAvailableSlotsForDate(params: {
       blockingReasons: ["تاریخ واردشده برای جستجوی نوبت معتبر نیست."],
     };
   }
+
+  const { todayUtcMidnightMs, nowMinutes } = getTehranNowDateAndMinutes();
+  const targetUtcMs = resolvedDate.utcMidnight.getTime();
+
+  if (targetUtcMs < todayUtcMidnightMs) {
+    return {
+      slots: [],
+      blockingReasons: [
+        `تاریخ ${resolvedDate.jalaliDisplay} سپری شده است و امکان نمایش زمان‌های خالی برای روزهای گذشته وجود ندارد.`,
+      ],
+    };
+  }
+
+  const isToday = targetUtcMs === todayUtcMidnightMs;
 
   const workingDay = await prisma.clinicWorkingDay.findUnique({
     where: {
@@ -997,8 +1037,11 @@ export async function findAvailableSlotsForDate(params: {
 
     const startMin = timeToMinutes(st);
     const endMin = timeToMinutes(en);
+    const effectiveStartMin = isToday
+      ? Math.max(startMin, nowMinutes)
+      : startMin;
 
-    for (let cursor = startMin; cursor < endMin; cursor += step) {
+    for (let cursor = effectiveStartMin; cursor < endMin; cursor += step) {
       const candidateTime = minutesToTime(cursor);
       const evalRes = await evaluateAppointmentSlot({
         clinicId: params.clinicId,
