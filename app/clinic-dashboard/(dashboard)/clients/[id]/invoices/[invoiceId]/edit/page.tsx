@@ -186,7 +186,6 @@ export default async function EditClientInvoicePage({
     }),
   ]);
 
-  // بازسازی آکاردیون‌های خدمت از روی ProvidedServices فاکتور
   const blocksByServiceId = new Map<string, DraftServiceAccordionBlock>();
   for (const ps of invoice.providedServices) {
     const sId = ps.subService.service.id;
@@ -252,10 +251,15 @@ export default async function EditClientInvoicePage({
     refId = firstPs.referrerClientId;
   }
 
+  const firstPayment = invoice.payments[0];
+  const storedPaidAt =
+    firstPayment?.paidAt ?? firstPayment?.createdAt ?? invoice.createdAt;
+
   const initialEditData: InitialInvoiceEditData = {
     invoiceId: invoice.id,
     invoiceNumber: invoice.invoiceNumber,
     performedAt: (firstPs?.performedAt || invoice.createdAt).toISOString(),
+    paidAt: storedPaidAt.toISOString(),
     therapistId: firstPs?.therapistId || "NONE",
     assistantId: firstPs?.assistants[0]?.id || "NONE",
     referrerType: refType,

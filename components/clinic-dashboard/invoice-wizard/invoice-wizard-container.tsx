@@ -26,6 +26,7 @@ export interface InitialInvoiceEditData {
   invoiceId: string;
   invoiceNumber: number | null;
   performedAt: string;
+  paidAt?: string;
   therapistId: string;
   assistantId: string;
   referrerType: "NONE" | "STAFF" | "CLIENT";
@@ -73,6 +74,14 @@ function getCurrentTimeHHMM() {
   ).padStart(2, "0")}`;
 }
 
+function formatDateToHHMM(isoOrDate: string | Date) {
+  const dt = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate);
+  if (Number.isNaN(dt.getTime())) return getCurrentTimeHHMM();
+  return `${String(dt.getHours()).padStart(2, "0")}:${String(
+    dt.getMinutes()
+  ).padStart(2, "0")}`;
+}
+
 export function InvoiceWizardContainer({
   clinicName,
   operatorName,
@@ -100,10 +109,7 @@ export function InvoiceWizardContainer({
   );
   const [performedTime, setPerformedTime] = useState<string>(() => {
     if (initialEditData) {
-      const dt = new Date(initialEditData.performedAt);
-      return `${String(dt.getHours()).padStart(2, "0")}:${String(
-        dt.getMinutes()
-      ).padStart(2, "0")}`;
+      return formatDateToHHMM(initialEditData.performedAt);
     }
     return getCurrentTimeHHMM();
   });
@@ -132,11 +138,15 @@ export function InvoiceWizardContainer({
     () => serviceBlocks[0]?.uid || ""
   );
 
-  // مرحله ۲: تاریخ/ساعت تراکنش پرداخت و مبالغ مالی
-  const [paymentDate, setPaymentDate] = useState<Date | null>(() => new Date());
-  const [paymentTime, setPaymentTime] = useState<string>(() =>
-    getCurrentTimeHHMM()
+  // مرحله ۲: در حالت ادیت، تاریخ و ساعت تراکنش پرداخت از دیتابیس خوانده و ثابت نگه‌داشته می‌شود
+  const initialPaidAtIso = initialEditData?.paidAt || initialEditData?.performedAt;
+  const [paymentDate, setPaymentDate] = useState<Date | null>(() =>
+    initialPaidAtIso ? new Date(initialPaidAtIso) : new Date()
   );
+  const [paymentTime, setPaymentTime] = useState<string>(() =>
+    initialPaidAtIso ? formatDateToHHMM(initialPaidAtIso) : getCurrentTimeHHMM()
+  );
+
   const [discountAmount, setDiscountAmount] = useState<number>(
     initialEditData?.discountAmount || 0
   );
@@ -183,7 +193,6 @@ export function InvoiceWizardContainer({
     initialEditData?.invoiceNumber ?? null
   );
 
-  // محاسبه زنده تمام اعداد با موتور مشترک
   const calculation = useMemo(() => {
     const flatServices = serviceBlocks.flatMap((block) =>
       block.selectedSubServices.map((sub, idx) => ({
@@ -233,7 +242,6 @@ export function InvoiceWizardContainer({
 
   function handleMoveToStep2() {
     if (!initialEditData) {
-      // تنظیم خودکار مبلغ پرداخت اولیه در صورت صفر بودن
       setPayments((prev) => {
         if (prev.length === 1 && prev[0].amount === 0) {
           return [{ ...prev[0], amount: calculation.baseTotalBeforeCreditFee }];
@@ -254,11 +262,17 @@ export function InvoiceWizardContainer({
     const [pHH, pMM] = (performedTime || "12:00").split(":").map(Number);
     if (!Number.isNaN(pHH)) perfDt.setHours(pHH, Number.isNaN(pMM) ? 0 : pMM, 0, 0);
 
-    const payDt = paymentDate ? new Date(paymentDate) : new Date();
-    const [tHH, tMM] = (paymentTime || "12:00").split(":").map(Number);
+    // در حالت ادیت، اگر تاریخ یا ساعتی در فرم تغییر نکرده باشد، همان زمان اصلیِ دیتابیس حفظ می‌شود
+    const fallbackPaidDate = initialPaidAtIso
+      ? new Date(initialPaidAtIso)
+      : new Date();
+    const payDt = paymentDate ? new Date(paymentDate) : fallbackPaidDate;
+    const effectivePaymentTime =
+      paymentTime ||
+      (initialPaidAtIso ? formatDateToHHMM(initialPaidAtIso) : getCurrentTimeHHMM());
+    const [tHH, tMM] = effectivePaymentTime.split(":").map(Number);
     if (!Number.isNaN(tHH)) payDt.setHours(tHH, Number.isNaN(tMM) ? 0 : tMM, 0, 0);
 
-    // تبدیل آکاردیون‌ها به آیتم‌های سرویس قابل ذخیره
     const serviceItems = serviceBlocks.flatMap((block) =>
       block.selectedSubServices.map((sub, idx) => ({
         serviceId: block.serviceId,
