@@ -255,7 +255,7 @@ export function SubServiceFormDialog({
         tabIndex={-1}
         aria-hidden="true"
       />
-      <ResponsiveDialogPopup className="sm:max-w-xl">
+      <ResponsiveDialogPopup className="w-full max-w-none overflow-hidden rounded-t-2xl sm:max-w-xl sm:rounded-2xl">
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>
             {editingSubService ? "ویرایش زیرسرویس" : "افزودن زیرسرویس جدید"}
@@ -579,7 +579,7 @@ export function SubServiceFormDialog({
             </div>
           </ResponsiveDialogPanel>
 
-          <ResponsiveDialogFooter>
+          <ResponsiveDialogFooter className="sm:rounded-b-2xl">
             <Button type="submit" disabled={isPending}>
               {isPending && <Loader2 className="ml-2 size-4 animate-spin" />}
               {editingSubService ? "ذخیره تغییرات" : "ثبت زیرسرویس"}

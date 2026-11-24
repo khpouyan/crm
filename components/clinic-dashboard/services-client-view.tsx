@@ -14,6 +14,7 @@ import {
   Layers,
   Clock,
   Split,
+  MoreVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Empty,
   EmptyHeader,
@@ -314,96 +322,162 @@ export function ServicesClientView({
                   "fa-IR"
                 )} دقیقه)`;
 
+            const hasServiceMenuActions =
+              permissions.canEdit || permissions.canDelete;
+
             return (
               <AccordionItem
                 key={service.id}
                 value={service.id}
                 className="rounded-xl border bg-card px-4 shadow-sm"
               >
-                <div className="flex items-center justify-between gap-2">
-                  <AccordionTrigger className="flex-1 py-4 hover:no-underline">
-                    <div className="flex flex-wrap items-center gap-2 text-right">
+                <div className="flex items-start justify-between gap-2 sm:items-center">
+                  <AccordionTrigger className="min-w-0 flex-1 py-4 hover:no-underline">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2 text-right">
                       <span className="text-base font-bold">
                         {service.title}
                       </span>
-                      <Badge variant="secondary" className="gap-1 font-normal">
+                      <Badge
+                        variant="secondary"
+                        className="shrink-0 gap-1 font-normal"
+                      >
                         <Layers className="size-3" />
                         {service.subServices.length.toLocaleString("fa-IR")}{" "}
                         زیرسرویس
                       </Badge>
                       <Badge
                         variant={isSplit ? "default" : "outline"}
-                        className="gap-1 text-xs font-normal"
+                        className="max-w-full shrink-0 gap-1 truncate text-xs font-normal"
                       >
                         {isSplit ? (
-                          <Split className="size-3" />
+                          <Split className="size-3 shrink-0" />
                         ) : (
-                          <Clock className="size-3" />
+                          <Clock className="size-3 shrink-0" />
                         )}
-                        {timingLabel}
+                        <span className="truncate">{timingLabel}</span>
                       </Badge>
                       {service.defaultServiceProducts?.map((dp) => (
                         <Badge
                           key={dp.id}
                           variant="outline"
-                          className="gap-1 border-primary/30 bg-primary/5 text-xs font-normal text-primary"
+                          className="max-w-[220px] gap-1 truncate border-primary/30 bg-primary/5 text-xs font-normal text-primary sm:max-w-xs"
                         >
-                          <Package className="size-3" />
-                          {dp.clinicProduct.name} (
-                          {dp.quantity.toLocaleString("fa-IR")}{" "}
-                          {dp.clinicProduct.unit})
+                          <Package className="size-3 shrink-0" />
+                          <span className="truncate">
+                            {dp.clinicProduct.name} (
+                            {dp.quantity.toLocaleString("fa-IR")}{" "}
+                            {dp.clinicProduct.unit})
+                          </span>
                         </Badge>
                       ))}
                       {service.assignedStaff.length > 0 && (
-                        <Badge variant="outline" className="gap-1 font-normal">
-                          <Users className="size-3" />
-                          {service.assignedStaff
-                            .map((st) => st.user.fullName || st.user.phone)
-                            .join("، ")}
+                        <Badge
+                          variant="outline"
+                          className="max-w-[200px] gap-1 truncate font-normal sm:max-w-xs"
+                        >
+                          <Users className="size-3 shrink-0" />
+                          <span className="truncate">
+                            {service.assignedStaff
+                              .map((st) => st.user.fullName || st.user.phone)
+                              .join("، ")}
+                          </span>
                         </Badge>
                       )}
                     </div>
                   </AccordionTrigger>
 
-                  <div className="flex shrink-0 items-center gap-1">
+                  <div className="flex shrink-0 items-center gap-1 pt-3.5 sm:pt-0">
                     {permissions.canCreate && (
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleOpenNewSubService(service)}
-                        className="h-8 gap-1 text-xs"
+                        className="h-8 shrink-0 gap-1 text-xs"
                       >
                         <Plus className="size-3.5" />
                         زیرسرویس
                       </Button>
                     )}
-                    {permissions.canEdit && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleEditService(service)}
-                        className="size-8"
-                        title="ویرایش خدمت"
-                      >
-                        <Pencil className="size-3.5" />
-                      </Button>
-                    )}
-                    {permissions.canDelete && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() =>
-                          setDeleteTarget({
-                            type: "service",
-                            id: service.id,
-                            title: service.title,
-                          })
-                        }
-                        className="size-8 text-destructive hover:text-destructive"
-                        title="حذف خدمت"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
+
+                    {/* دسکتاپ: آیکون‌های مستقیم ویرایش و حذف */}
+                    <div className="hidden items-center gap-1 sm:flex">
+                      {permissions.canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEditService(service)}
+                          className="size-8 shrink-0"
+                          title="ویرایش خدمت"
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
+                      )}
+                      {permissions.canDelete && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            setDeleteTarget({
+                              type: "service",
+                              id: service.id,
+                              title: service.title,
+                            })
+                          }
+                          className="size-8 shrink-0 text-destructive hover:text-destructive"
+                          title="حذف خدمت"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* موبایل: منوی سه‌نقطه برای جلوگیری از بیرون‌زدگی و فشردگی */}
+                    {hasServiceMenuActions && (
+                      <div className="sm:hidden">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 shrink-0"
+                                aria-label="عملیات خدمت"
+                              />
+                            }
+                          >
+                            <MoreVertical className="size-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" dir="rtl">
+                            {permissions.canEdit && (
+                              <DropdownMenuItem
+                                onClick={() => handleEditService(service)}
+                              >
+                                <Pencil className="ml-2 size-3.5" />
+                                ویرایش خدمت
+                              </DropdownMenuItem>
+                            )}
+                            {permissions.canEdit && permissions.canDelete && (
+                              <DropdownMenuSeparator />
+                            )}
+                            {permissions.canDelete && (
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() =>
+                                  setDeleteTarget({
+                                    type: "service",
+                                    id: service.id,
+                                    title: service.title,
+                                  })
+                                }
+                              >
+                                <Trash2 className="ml-2 size-3.5" />
+                                حذف خدمت
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -423,7 +497,7 @@ export function ServicesClientView({
                       )}
                     </div>
                   ) : (
-                    <div className="overflow-hidden rounded-lg border">
+                    <div className="overflow-x-auto rounded-lg border">
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/40">
@@ -441,7 +515,7 @@ export function ServicesClientView({
                               مصرفی دیفالت
                             </TableHead>
                             {(permissions.canEdit || permissions.canDelete) && (
-                              <TableHead className="w-24 text-left">
+                              <TableHead className="w-16 text-left sm:w-24">
                                 عملیات
                               </TableHead>
                             )}
@@ -532,7 +606,8 @@ export function ServicesClientView({
                                 {(permissions.canEdit ||
                                   permissions.canDelete) && (
                                   <TableCell className="text-left">
-                                    <div className="flex items-center justify-end gap-1">
+                                    {/* دسکتاپ */}
+                                    <div className="hidden items-center justify-end gap-1 sm:flex">
                                       {permissions.canEdit && (
                                         <Button
                                           variant="ghost"
@@ -561,6 +636,59 @@ export function ServicesClientView({
                                           <Trash2 className="size-3.5" />
                                         </Button>
                                       )}
+                                    </div>
+
+                                    {/* موبایل */}
+                                    <div className="flex justify-end sm:hidden">
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger
+                                          render={
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              className="size-8"
+                                              aria-label="عملیات زیرسرویس"
+                                            />
+                                          }
+                                        >
+                                          <MoreVertical className="size-4" />
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent
+                                          align="start"
+                                          dir="rtl"
+                                        >
+                                          {permissions.canEdit && (
+                                            <DropdownMenuItem
+                                              onClick={() =>
+                                                handleEditSubService(service, sub)
+                                              }
+                                            >
+                                              <Pencil className="ml-2 size-3.5" />
+                                              ویرایش زیرسرویس
+                                            </DropdownMenuItem>
+                                          )}
+                                          {permissions.canEdit &&
+                                            permissions.canDelete && (
+                                              <DropdownMenuSeparator />
+                                            )}
+                                          {permissions.canDelete && (
+                                            <DropdownMenuItem
+                                              className="text-destructive focus:text-destructive"
+                                              onClick={() =>
+                                                setDeleteTarget({
+                                                  type: "subService",
+                                                  id: sub.id,
+                                                  title: sub.title,
+                                                })
+                                              }
+                                            >
+                                              <Trash2 className="ml-2 size-3.5" />
+                                              حذف زیرسرویس
+                                            </DropdownMenuItem>
+                                          )}
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
                                     </div>
                                   </TableCell>
                                 )}

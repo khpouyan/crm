@@ -3,7 +3,18 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { ServiceTimingMode } from "@prisma/client"
-import { Check, Clock, Loader2, Package, Plus, Sparkles, Trash2, Users } from "lucide-react"
+import {
+  Check,
+  ChevronDown,
+  Clock,
+  Loader2,
+  Package,
+  Plus,
+  SlidersHorizontal,
+  Sparkles,
+  Trash2,
+  Users,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -90,6 +101,10 @@ export function ServiceFormDialog({
     []
   )
 
+  // وضعیت باز/بسته بودن بخش‌های جمع‌شونده (پیش‌فرض بسته)
+  const [isTimingOpen, setIsTimingOpen] = useState(false)
+  const [isStaffOpen, setIsStaffOpen] = useState(false)
+
   // تنظیمات پیش‌فرض زمان‌بندی سرویس
   const [timingMode, setTimingMode] = useState<ServiceTimingMode>(
     ServiceTimingMode.SINGLE_STAGE
@@ -115,6 +130,8 @@ export function ServiceFormDialog({
           quantity: String(dp.quantity),
         })) ?? []
       )
+      setIsTimingOpen(false)
+      setIsStaffOpen(false)
       setTimingMode(editingService?.timingMode ?? ServiceTimingMode.SINGLE_STAGE)
       setPrepBeforeMinutes(String(editingService?.prepBeforeMinutes ?? 0))
       setDurationMinutes(String(editingService?.durationMinutes ?? 30))
@@ -224,19 +241,19 @@ export function ServiceFormDialog({
         tabIndex={-1}
         aria-hidden="true"
       />
-      <ResponsiveDialogPopup className="sm:max-w-xl">
+      <ResponsiveDialogPopup className="w-full max-w-none overflow-hidden rounded-t-2xl sm:max-w-xl sm:rounded-2xl">
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>
             {editingService ? "ویرایش خدمت" : "افزودن خدمت جدید"}
           </ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
-            عنوان، زمان‌بندی پیش‌فرض (تک‌مرحله‌ای یا چندمرحله‌ای با تایم آزاد میانی مثل PRP)، مصرفی مشترک و پرسنل مجاز را تعیین کنید.
+            عنوان، زمان‌بندی پیش‌فرض، مصرفی مشترک و پرسنل مجاز را تعیین کنید.
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
 
         <form onSubmit={handleSubmit}>
-          <ResponsiveDialogPanel className="no-scrollbar max-h-[70vh] overflow-y-auto">
-            <div className="px-5">
+          <ResponsiveDialogPanel className="no-scrollbar max-h-[55dvh] overflow-y-auto sm:max-h-[70vh]">
+            <div className="px-5 pb-2">
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor="service-title">عنوان خدمت *</FieldLabel>
@@ -245,190 +262,231 @@ export function ServiceFormDialog({
                     placeholder="مثلاً: PRP، تزریق بوتاکس، لیزر موهای زائد..."
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    autoFocus
                   />
                 </Field>
 
                 {/* بخش زمان‌بندی پیش‌فرض سرویس */}
-                <div className="space-y-3 rounded-xl border bg-muted/20 p-3.5">
-                  <div className="flex items-center gap-1.5 text-sm font-semibold">
-                    <Clock className="size-4 text-primary" />
-                    زمان‌بندی پیش‌فرض سرویس و تایم آزاد میانی
-                  </div>
-
-                  <Field>
-                    <FieldLabel>نوع ساختار زمانی سرویس</FieldLabel>
-                    <Select
-                      value={timingMode}
-                      onValueChange={(val) =>
-                        setTimingMode(
-                          (val as ServiceTimingMode) ||
-                            ServiceTimingMode.SINGLE_STAGE
-                        )
-                      }
+                <div className="rounded-xl border bg-muted/20 p-3.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-sm font-semibold">
+                      <Clock className="size-4 text-primary" />
+                      <span>زمان‌بندی پیش‌فرض</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1.5 text-xs"
+                      onClick={() => setIsTimingOpen((prev) => !prev)}
+                      aria-expanded={isTimingOpen}
                     >
-                      <SelectTrigger className="bg-background">
-                        <SelectValue>
-                          {timingMode === ServiceTimingMode.SPLIT_STAGE
-                            ? "چندمرحله‌ای با تایم آزاد میانی (مثل PRP)"
-                            : "تک‌مرحله‌ای استاندارد"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={ServiceTimingMode.SINGLE_STAGE}>
-                          تک‌مرحله‌ای استاندارد
-                        </SelectItem>
-                        <SelectItem value={ServiceTimingMode.SPLIT_STAGE}>
-                          چندمرحله‌ای با تایم آزاد میانی (مثل PRP)
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel htmlFor="srv-prep-before">
-                        حضور مراجع قبل از شروع (دقیقه)
-                      </FieldLabel>
-                      <Input
-                        id="srv-prep-before"
-                        type="number"
-                        min={0}
-                        max={240}
-                        dir="ltr"
-                        className="bg-background"
-                        value={prepBeforeMinutes}
-                        onChange={(e) => setPrepBeforeMinutes(e.target.value)}
+                      <SlidersHorizontal className="size-3.5 text-primary" />
+                      <span>
+                        {isTimingOpen ? "بستن زمان‌بندی" : "تنظیم زمان‌بندی"}
+                      </span>
+                      <ChevronDown
+                        className={`size-3.5 transition-transform ${
+                          isTimingOpen ? "rotate-180" : ""
+                        }`}
                       />
-                      <FieldDescription className="text-[11px]">
-                        مثلاً بی‌حسی یا پذیرش پیش از انجام
-                      </FieldDescription>
-                    </Field>
-
-                    <Field>
-                      <FieldLabel htmlFor="srv-rest-after">
-                        زمان استراحت / پاکسازی بعد از کار (دقیقه)
-                      </FieldLabel>
-                      <Input
-                        id="srv-rest-after"
-                        type="number"
-                        min={0}
-                        max={180}
-                        dir="ltr"
-                        className="bg-background"
-                        value={restAfterMinutes}
-                        onChange={(e) => setRestAfterMinutes(e.target.value)}
-                      />
-                    </Field>
+                    </Button>
                   </div>
 
-                  {timingMode === ServiceTimingMode.SINGLE_STAGE ? (
-                    <Field>
-                      <FieldLabel htmlFor="srv-duration">
-                        مدت انجام سرویس (دقیقه)
-                      </FieldLabel>
-                      <Input
-                        id="srv-duration"
-                        type="number"
-                        min={5}
-                        max={480}
-                        dir="ltr"
-                        className="bg-background"
-                        value={durationMinutes}
-                        onChange={(e) => setDurationMinutes(e.target.value)}
-                      />
-                    </Field>
-                  ) : (
-                    <div className="space-y-2.5 rounded-lg border border-primary/25 bg-primary/5 p-3">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
-                        <Sparkles className="size-3.5" />
-                        مراحل سرویس چندمرحله‌ای (مثلاً PRP)
-                      </div>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        <Field>
-                          <FieldLabel htmlFor="srv-stage1">
-                            مرحله ۱ (دقیقه)
-                          </FieldLabel>
-                          <Input
-                            id="srv-stage1"
-                            type="number"
-                            min={5}
-                            max={240}
-                            dir="ltr"
-                            className="bg-background"
-                            value={stage1Minutes}
-                            onChange={(e) => setStage1Minutes(e.target.value)}
-                          />
-                          <FieldDescription className="text-[10px]">
-                            مثلاً خون‌گیری
-                          </FieldDescription>
-                        </Field>
+                  {isTimingOpen && (
+                    <div className="mt-3 space-y-3 border-t pt-3">
+                      <Field>
+                        <FieldLabel>نوع ساختار زمانی سرویس</FieldLabel>
+                        <Select
+                          value={timingMode}
+                          onValueChange={(val) =>
+                            setTimingMode(
+                              (val as ServiceTimingMode) ||
+                                ServiceTimingMode.SINGLE_STAGE
+                            )
+                          }
+                        >
+                          <SelectTrigger className="bg-background">
+                            <SelectValue>
+                              {timingMode === ServiceTimingMode.SPLIT_STAGE
+                                ? "چندمرحله‌ای با تایم آزاد میانی (مثل PRP)"
+                                : "تک‌مرحله‌ای استاندارد"}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={ServiceTimingMode.SINGLE_STAGE}>
+                              تک‌مرحله‌ای استاندارد
+                            </SelectItem>
+                            <SelectItem value={ServiceTimingMode.SPLIT_STAGE}>
+                              چندمرحله‌ای با تایم آزاد میانی (مثل PRP)
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </Field>
 
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <Field>
-                          <FieldLabel htmlFor="srv-free-gap">
-                            تایم آزاد میانی (دقیقه)
+                          <FieldLabel htmlFor="srv-prep-before">
+                            حضور مراجع قبل از شروع (دقیقه)
                           </FieldLabel>
                           <Input
-                            id="srv-free-gap"
+                            id="srv-prep-before"
                             type="number"
                             min={0}
-                            max={360}
+                            max={240}
                             dir="ltr"
                             className="bg-background"
-                            value={freeGapMinutes}
-                            onChange={(e) => setFreeGapMinutes(e.target.value)}
+                            value={prepBeforeMinutes}
+                            onChange={(e) =>
+                              setPrepBeforeMinutes(e.target.value)
+                            }
                           />
-                          <FieldDescription className="text-[10px]">
-                            رزرو مراجع دیگر در این زمان
+                          <FieldDescription className="text-[11px]">
+                            مثلاً بی‌حسی یا پذیرش پیش از انجام
                           </FieldDescription>
                         </Field>
 
                         <Field>
-                          <FieldLabel htmlFor="srv-stage2">
-                            مرحله ۲ (دقیقه)
+                          <FieldLabel htmlFor="srv-rest-after">
+                            زمان استراحت / پاکسازی بعد از کار (دقیقه)
                           </FieldLabel>
                           <Input
-                            id="srv-stage2"
+                            id="srv-rest-after"
                             type="number"
-                            min={5}
-                            max={240}
+                            min={0}
+                            max={180}
                             dir="ltr"
                             className="bg-background"
-                            value={stage2Minutes}
-                            onChange={(e) => setStage2Minutes(e.target.value)}
+                            value={restAfterMinutes}
+                            onChange={(e) =>
+                              setRestAfterMinutes(e.target.value)
+                            }
                           />
-                          <FieldDescription className="text-[10px]">
-                            مثلاً تزریق نهایی
-                          </FieldDescription>
                         </Field>
                       </div>
+
+                      {timingMode === ServiceTimingMode.SINGLE_STAGE ? (
+                        <Field>
+                          <FieldLabel htmlFor="srv-duration">
+                            مدت انجام سرویس (دقیقه)
+                          </FieldLabel>
+                          <Input
+                            id="srv-duration"
+                            type="number"
+                            min={5}
+                            max={480}
+                            dir="ltr"
+                            className="bg-background"
+                            value={durationMinutes}
+                            onChange={(e) => setDurationMinutes(e.target.value)}
+                          />
+                        </Field>
+                      ) : (
+                        <div className="space-y-2.5 rounded-lg border border-primary/25 bg-primary/5 p-3">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                            <Sparkles className="size-3.5" />
+                            مراحل سرویس چندمرحله‌ای (مثلاً PRP)
+                          </div>
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <Field>
+                              <FieldLabel htmlFor="srv-stage1">
+                                مرحله ۱ (دقیقه)
+                              </FieldLabel>
+                              <Input
+                                id="srv-stage1"
+                                type="number"
+                                min={5}
+                                max={240}
+                                dir="ltr"
+                                className="bg-background"
+                                value={stage1Minutes}
+                                onChange={(e) =>
+                                  setStage1Minutes(e.target.value)
+                                }
+                              />
+                              <FieldDescription className="text-[10px]">
+                                مثلاً خون‌گیری
+                              </FieldDescription>
+                            </Field>
+
+                            <Field>
+                              <FieldLabel htmlFor="srv-free-gap">
+                                تایم آزاد میانی (دقیقه)
+                              </FieldLabel>
+                              <Input
+                                id="srv-free-gap"
+                                type="number"
+                                min={0}
+                                max={360}
+                                dir="ltr"
+                                className="bg-background"
+                                value={freeGapMinutes}
+                                onChange={(e) =>
+                                  setFreeGapMinutes(e.target.value)
+                                }
+                              />
+                              <FieldDescription className="text-[10px]">
+                                رزرو مراجع دیگر در این زمان
+                              </FieldDescription>
+                            </Field>
+
+                            <Field>
+                              <FieldLabel htmlFor="srv-stage2">
+                                مرحله ۲ (دقیقه)
+                              </FieldLabel>
+                              <Input
+                                id="srv-stage2"
+                                type="number"
+                                min={5}
+                                max={240}
+                                dir="ltr"
+                                className="bg-background"
+                                value={stage2Minutes}
+                                onChange={(e) =>
+                                  setStage2Minutes(e.target.value)
+                                }
+                              />
+                              <FieldDescription className="text-[10px]">
+                                مثلاً تزریق نهایی
+                              </FieldDescription>
+                            </Field>
+                          </div>
+                        </div>
+                      )}
+
+                      <Field orientation="horizontal">
+                        <Checkbox
+                          id="srv-requires-privacy"
+                          checked={requiresPrivacy}
+                          onCheckedChange={(v) => setRequiresPrivacy(Boolean(v))}
+                        />
+                        <div className="space-y-0.5">
+                          <FieldLabel
+                            htmlFor="srv-requires-privacy"
+                            className="cursor-pointer font-semibold"
+                          >
+                            نیازمند فضای خالی / رعایت پرایوسی مراجع
+                          </FieldLabel>
+                        </div>
+                      </Field>
                     </div>
                   )}
-
-                  <Field orientation="horizontal">
-                    <Checkbox
-                      id="srv-requires-privacy"
-                      checked={requiresPrivacy}
-                      onCheckedChange={(v) => setRequiresPrivacy(Boolean(v))}
-                    />
-                    <div className="space-y-0.5">
-                      <FieldLabel
-                        htmlFor="srv-requires-privacy"
-                        className="cursor-pointer font-semibold"
-                      >
-                        نیازمند فضای خالی / رعایت پرایوسی مراجع
-                      </FieldLabel>
-                    </div>
-                  </Field>
                 </div>
 
-                {/* بخش کالاهای مصرفی پیش‌فرض در سطح خدمت اصلی */}
-                <Field>
-                  <div className="flex items-center justify-between">
-                    <FieldLabel className="flex items-center gap-1.5">
+                {/* بخش کالاهای مصرفی پیش‌فرض */}
+                <div className="rounded-xl border bg-muted/20 p-3.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-sm font-semibold">
                       <Package className="size-4 text-primary" />
-                      مصرفی دیفالت کل خدمت (اختیاری)
-                    </FieldLabel>
+                      <span>مصرفی دیفالت کل خدمت (اختیاری)</span>
+                      {defaultProducts.length > 0 && (
+                        <Badge
+                          variant="secondary"
+                          className="h-5 px-1.5 text-[10px]"
+                        >
+                          {defaultProducts.length} قلم
+                        </Badge>
+                      )}
+                    </div>
                     <Button
                       type="button"
                       variant="outline"
@@ -440,12 +498,13 @@ export function ServiceFormDialog({
                       افزودن کالا
                     </Button>
                   </div>
-                  <FieldDescription className="text-[11px]">
+
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
                     این اقلام هنگام ثبت فاکتور فقط یک‌بار برای کل خدمت اضافه می‌شوند و با انتخاب چند زیرسرویس تکرار نمی‌شوند.
-                  </FieldDescription>
+                  </p>
 
                   {defaultProducts.length > 0 && (
-                    <div className="mt-2 space-y-2">
+                    <div className="mt-3 space-y-2 border-t pt-3">
                       {defaultProducts.map((row) => {
                         const selectedProd = clinicProducts.find(
                           (cp) => cp.id === row.clinicProductId
@@ -453,7 +512,7 @@ export function ServiceFormDialog({
                         return (
                           <div
                             key={row.uid}
-                            className="flex items-center gap-2 rounded-lg border bg-muted/25 p-2"
+                            className="flex items-center gap-2 rounded-lg border bg-background p-2"
                           >
                             <div className="flex-1">
                               <SearchableSelect
@@ -518,69 +577,101 @@ export function ServiceFormDialog({
                       })}
                     </div>
                   )}
-                </Field>
+                </div>
 
                 {/* بخش پرسنل مجاز */}
-                <Field>
-                  <FieldLabel className="flex items-center gap-1.5">
-                    <Users className="size-4 text-muted-foreground" />
-                    پرسنل دارای دسترسی اختصاصی به این خدمت
-                  </FieldLabel>
-                  <FieldDescription className="text-[11px]">
-                    افرادی که در مدیریت پرسنل روی «همه خدمات» تنظیم شده‌اند، به صورت خودکار به این خدمت دسترسی دارند.
-                  </FieldDescription>
-
-                  <div className="mt-1 max-h-48 divide-y overflow-y-auto rounded-lg border">
-                    {activeStaff.length === 0 ? (
-                      <p className="p-3 text-center text-xs text-muted-foreground">
-                        پرسنل فعالی ثبت نشده است.
-                      </p>
-                    ) : (
-                      activeStaff.map((staff) => {
-                        const checked = selectedStaffIds.includes(staff.id)
-                        return (
-                          <label
-                            key={staff.id}
-                            className="flex cursor-pointer items-center justify-between gap-2 p-2.5 transition-colors hover:bg-muted/50"
-                          >
-                            <div className="flex min-w-0 items-center gap-2.5">
-                              <Checkbox
-                                checked={checked}
-                                onCheckedChange={() => toggleStaff(staff.id)}
-                              />
-                              <div className="min-w-0 text-sm">
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  <span className="truncate font-medium">
-                                    {staff.user.fullName || staff.user.phone}
-                                  </span>
-                                  {staff.hasAllServicesAccess && (
-                                    <Badge
-                                      variant="secondary"
-                                      className="h-4 px-1.5 text-[10px] font-normal"
-                                    >
-                                      دسترسی همه خدمات
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {staff.role.name}
-                                </div>
-                              </div>
-                            </div>
-                            {checked && (
-                              <Check className="size-4 shrink-0 text-primary" />
-                            )}
-                          </label>
-                        )
-                      })
-                    )}
+                <div className="rounded-xl border bg-muted/20 p-3.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-sm font-semibold">
+                      <Users className="size-4 text-muted-foreground" />
+                      <span>پرسنل مجاز</span>
+                      {selectedStaffIds.length > 0 && (
+                        <Badge
+                          variant="secondary"
+                          className="h-5 px-1.5 text-[10px]"
+                        >
+                          {selectedStaffIds.length} انتخاب‌شده
+                        </Badge>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1.5 text-xs"
+                      onClick={() => setIsStaffOpen((prev) => !prev)}
+                      aria-expanded={isStaffOpen}
+                    >
+                      <span>
+                        {isStaffOpen ? "بستن پرسنل" : "تنظیم پرسنل"}
+                      </span>
+                      <ChevronDown
+                        className={`size-3.5 transition-transform ${
+                          isStaffOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </Button>
                   </div>
-                </Field>
+
+                  {isStaffOpen && (
+                    <div className="mt-3 space-y-2 border-t pt-3">
+                      <FieldDescription className="text-[11px]">
+                        افرادی که در مدیریت پرسنل روی «همه خدمات» تنظیم شده‌اند، به صورت خودکار به این خدمت دسترسی دارند.
+                      </FieldDescription>
+
+                      <div className="no-scrollbar max-h-48 divide-y overflow-y-auto rounded-lg border bg-background">
+                        {activeStaff.length === 0 ? (
+                          <p className="p-3 text-center text-xs text-muted-foreground">
+                            پرسنل فعالی ثبت نشده است.
+                          </p>
+                        ) : (
+                          activeStaff.map((staff) => {
+                            const checked = selectedStaffIds.includes(staff.id)
+                            return (
+                              <label
+                                key={staff.id}
+                                className="flex cursor-pointer items-center justify-between gap-2 p-2.5 transition-colors hover:bg-muted/50"
+                              >
+                                <div className="flex min-w-0 items-center gap-2.5">
+                                  <Checkbox
+                                    checked={checked}
+                                    onCheckedChange={() => toggleStaff(staff.id)}
+                                  />
+                                  <div className="min-w-0 text-sm">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <span className="truncate font-medium">
+                                        {staff.user.fullName || staff.user.phone}
+                                      </span>
+                                      {staff.hasAllServicesAccess && (
+                                        <Badge
+                                          variant="secondary"
+                                          className="h-4 px-1.5 text-[10px] font-normal"
+                                        >
+                                          دسترسی همه خدمات
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {staff.role.name}
+                                    </div>
+                                  </div>
+                                </div>
+                                {checked && (
+                                  <Check className="size-4 shrink-0 text-primary" />
+                                )}
+                              </label>
+                            )
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </FieldGroup>
             </div>
           </ResponsiveDialogPanel>
 
-          <ResponsiveDialogFooter>
+          <ResponsiveDialogFooter className="sm:rounded-b-2xl">
             <Button type="submit" disabled={isPending}>
               {isPending && <Loader2 className="ml-2 size-4 animate-spin" />}
               {editingService ? "ذخیره تغییرات" : "ایجاد خدمت"}
