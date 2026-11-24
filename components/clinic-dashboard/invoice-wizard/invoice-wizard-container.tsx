@@ -35,6 +35,7 @@ export interface InitialInvoiceEditData {
   discountReason: string;
   extraChargeAmount: number;
   extraChargeReason: string;
+  applyTax?: boolean;
   depositServiceId: string;
   depositAmount: number;
   remainingMode: "DEBT" | "INSTALLMENT";
@@ -46,6 +47,7 @@ export interface InitialInvoiceEditData {
 interface InvoiceWizardContainerProps {
   clinicName: string;
   operatorName: string;
+  vatPercent?: number;
   client: {
     id: string;
     fullName: string;
@@ -85,6 +87,7 @@ function formatDateToHHMM(isoOrDate: string | Date) {
 export function InvoiceWizardContainer({
   clinicName,
   operatorName,
+  vatPercent = 0,
   client,
   catalogServices,
   products,
@@ -103,7 +106,6 @@ export function InvoiceWizardContainer({
 
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(initialStep);
 
-  // مرحله ۱: اطلاعات مشترک مراجعه
   const [performedDate, setPerformedDate] = useState<Date | null>(() =>
     initialEditData ? new Date(initialEditData.performedAt) : new Date()
   );
@@ -126,7 +128,6 @@ export function InvoiceWizardContainer({
     initialEditData?.referrerId || "NONE"
   );
 
-  // آکاردیون‌های خدمات
   const [serviceBlocks, setServiceBlocks] = useState<
     DraftServiceAccordionBlock[]
   >(() =>
@@ -138,7 +139,6 @@ export function InvoiceWizardContainer({
     () => serviceBlocks[0]?.uid || ""
   );
 
-  // مرحله ۲: در حالت ادیت، تاریخ و ساعت تراکنش پرداخت از دیتابیس خوانده و ثابت نگه‌داشته می‌شود
   const initialPaidAtIso = initialEditData?.paidAt || initialEditData?.performedAt;
   const [paymentDate, setPaymentDate] = useState<Date | null>(() =>
     initialPaidAtIso ? new Date(initialPaidAtIso) : new Date()
@@ -158,6 +158,9 @@ export function InvoiceWizardContainer({
   );
   const [extraChargeReason, setExtraChargeReason] = useState<string>(
     initialEditData?.extraChargeReason || ""
+  );
+  const [applyTax, setApplyTax] = useState<boolean>(
+    Boolean(initialEditData?.applyTax)
   );
   const [depositServiceId, setDepositServiceId] = useState<string>(
     initialEditData?.depositServiceId || "NONE"
@@ -194,9 +197,11 @@ export function InvoiceWizardContainer({
   );
 
   const calculation = useMemo(() => {
-    const flatServices = serviceBlocks.flatMap((block) =>
-      block.selectedSubServices.map((sub, idx) => ({
+    const flatServices = serviceBlocks.flatMap((block) => {
+      const catSrv = catalogServices.find((s) => s.id === block.serviceId);
+      return block.selectedSubServices.map((sub, idx) => ({
         finalPrice: sub.finalPrice,
+        taxEnabled: Boolean(catSrv?.taxEnabled),
         consumables:
           idx === 0
             ? block.consumables.map((c) => ({
@@ -204,8 +209,8 @@ export function InvoiceWizardContainer({
                 sellingPrice: c.sellingPrice,
               }))
             : [],
-      }))
-    );
+      }));
+    });
 
     return calculateInvoiceFinancials({
       services: flatServices,
@@ -214,6 +219,8 @@ export function InvoiceWizardContainer({
       depositAmount,
       depositServiceSelected:
         Boolean(depositServiceId) && depositServiceId !== "NONE",
+      vatPercent,
+      applyTax,
       payments: payments.map((p) => ({
         paymentMethod: p.paymentMethod,
         amount: p.amount,
@@ -228,10 +235,13 @@ export function InvoiceWizardContainer({
     });
   }, [
     serviceBlocks,
+    catalogServices,
     discountAmount,
     extraChargeAmount,
     depositAmount,
     depositServiceId,
+    vatPercent,
+    applyTax,
     payments,
     remainingMode,
     installments,
@@ -262,7 +272,6 @@ export function InvoiceWizardContainer({
     const [pHH, pMM] = (performedTime || "12:00").split(":").map(Number);
     if (!Number.isNaN(pHH)) perfDt.setHours(pHH, Number.isNaN(pMM) ? 0 : pMM, 0, 0);
 
-    // در حالت ادیت، اگر تاریخ یا ساعتی در فرم تغییر نکرده باشد، همان زمان اصلیِ دیتابیس حفظ می‌شود
     const fallbackPaidDate = initialPaidAtIso
       ? new Date(initialPaidAtIso)
       : new Date();
@@ -319,6 +328,8 @@ export function InvoiceWizardContainer({
         discountReason,
         extraChargeAmount: Number(extraChargeAmount) || 0,
         extraChargeReason,
+        applyTax,
+        taxAmount: calculation.taxAmount,
         depositAmount: validDeposit,
         depositServiceTitle,
         paidAt: payDt.toISOString(),
@@ -431,6 +442,10 @@ export function InvoiceWizardContainer({
           onExtraChargeAmountChange={setExtraChargeAmount}
           extraChargeReason={extraChargeReason}
           onExtraChargeReasonChange={setExtraChargeReason}
+          vatPercent={vatPercent}
+          hasTaxableServices={calculation.hasTaxableServices}
+          applyTax={applyTax}
+          onApplyTaxChange={setApplyTax}
           depositServiceId={depositServiceId}
           onDepositServiceIdChange={setDepositServiceId}
           depositAmount={depositAmount}

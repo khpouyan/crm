@@ -12,9 +12,6 @@ import { normalizeIranPhone, isValidIranPhone } from "@/lib/iranian-mobile";
 import { normalizePersianDigits } from "@/lib/normalize-persian-digits";
 import { calculateInvoiceFinancials } from "@/lib/finance/invoice-calculator";
 
-// ==========================================
-// 1. ایجاد یا بازیابی پرونده مراجعه‌کننده
-// ==========================================
 export interface CreateClientInput {
   fullName: string;
   nickname?: string | null;
@@ -70,7 +67,6 @@ export async function createClientAction(input: CreateClientInput) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // بررسی تکراری بودن شماره تماس یا کد ملی صرفاً در پرونده‌های (Client) همین کلینیک
       if (!input.noPhone && normalizedPhone) {
         const duplicatePhoneClient = await tx.client.findFirst({
           where: {
@@ -175,7 +171,7 @@ export async function createClientAction(input: CreateClientInput) {
         throw new Error("پرونده این مراجعه‌کننده قبلاً در کلینیک ثبت شده است.");
       }
 
-      const client = await tx.client.create({
+      return tx.client.create({
         data: {
           userId: user.id,
           clinicId: ctx.clinicId,
@@ -195,8 +191,6 @@ export async function createClientAction(input: CreateClientInput) {
           notes: input.notes?.trim() || null,
         },
       });
-
-      return client;
     });
 
     revalidatePath("/clinic-dashboard/clients");
@@ -208,9 +202,6 @@ export async function createClientAction(input: CreateClientInput) {
   }
 }
 
-// ==========================================
-// 2. به‌روزرسانی برچسب یا یادداشت پرونده
-// ==========================================
 export async function updateClientMetaAction(
   clientId: string,
   data: { tag?: string | null; notes?: string | null }
@@ -234,9 +225,6 @@ export async function updateClientMetaAction(
   return { success: true };
 }
 
-// ==========================================
-// 3. تابع کمکی بازگرداندن مصرفی‌ها به انبار
-// ==========================================
 async function restoreConsumablesToInventory(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   consumables: {
@@ -277,9 +265,6 @@ async function restoreConsumablesToInventory(
   }
 }
 
-// ==========================================
-// 4. ثبت یا ویرایش کامل فاکتور و سرویس‌های زیرمجموعه (یکپارچه با ویزارد)
-// ==========================================
 export interface ServiceConsumableItemInput {
   clinicProductId: string;
   preferredBatchId?: string | null;
@@ -323,6 +308,8 @@ export interface SaveWizardInvoiceInput {
   discountReason?: string;
   extraChargeAmount: number;
   extraChargeReason?: string;
+  applyTax?: boolean;
+  taxAmount?: number;
   depositAmount: number;
   depositServiceTitle?: string;
   paidAt: string;
@@ -361,15 +348,30 @@ export async function saveMultiServiceInvoiceAction(
 
   try {
     const saved = await prisma.$transaction(async (tx) => {
-      const client = await tx.client.findFirst({
-        where: { id: input.clientId, clinicId: ctx.clinicId },
-      });
+      const [client, clinic] = await Promise.all([
+        tx.client.findFirst({
+          where: { id: input.clientId, clinicId: ctx.clinicId },
+        }),
+        tx.clinic.findUnique({
+          where: { id: ctx.clinicId },
+          select: { vatPercent: true },
+        }),
+      ]);
       if (!client) throw new Error("پرونده مراجع یافت نشد.");
+
+      const catalogServices = await tx.service.findMany({
+        where: {
+          clinicId: ctx.clinicId,
+          id: { in: Array.from(new Set(input.services.map((s) => s.serviceId))) },
+        },
+        select: { id: true, taxEnabled: true },
+      });
+      const taxEnabledMap = new Map(catalogServices.map((s) => [s.id, s.taxEnabled]));
 
       let effectiveWalletBalance = client.walletBalance;
       let existingInvoiceNumber: number | null = null;
+      let existingPaidAt: Date | null = null;
 
-      // در حالت ویرایش: بازگردانی آثار مالی، کیف پول و انبار فاکتور قبلی
       if (input.invoiceId) {
         const oldInvoice = await tx.invoice.findFirst({
           where: {
@@ -379,12 +381,16 @@ export async function saveMultiServiceInvoiceAction(
           },
           include: {
             providedServices: { include: { usedConsumables: true } },
-            payments: true,
+            payments: { orderBy: { createdAt: "asc" } },
           },
         });
         if (!oldInvoice) throw new Error("فاکتور مورد نظر جهت ویرایش یافت نشد.");
 
         existingInvoiceNumber = oldInvoice.invoiceNumber;
+        existingPaidAt =
+          oldInvoice.payments[0]?.paidAt ??
+          oldInvoice.payments[0]?.createdAt ??
+          oldInvoice.createdAt;
 
         for (const oldSrv of oldInvoice.providedServices) {
           await restoreConsumablesToInventory(tx, oldSrv.usedConsumables);
@@ -426,6 +432,7 @@ export async function saveMultiServiceInvoiceAction(
       const calc = calculateInvoiceFinancials({
         services: input.services.map((s) => ({
           finalPrice: s.finalPrice,
+          taxEnabled: Boolean(taxEnabledMap.get(s.serviceId)),
           consumables: s.consumables.map((c) => ({
             quantity: c.quantity,
             sellingPrice: c.sellingPrice,
@@ -435,6 +442,8 @@ export async function saveMultiServiceInvoiceAction(
         extraChargeAmount: input.extraChargeAmount,
         depositAmount: input.depositAmount,
         depositServiceSelected: Boolean(input.depositServiceTitle?.trim()),
+        vatPercent: clinic?.vatPercent ?? 0,
+        applyTax: Boolean(input.applyTax),
         payments: input.payments,
         remainingMode:
           input.remainingMode === "PAID" ? "DEBT" : input.remainingMode,
@@ -467,6 +476,7 @@ export async function saveMultiServiceInvoiceAction(
               discountReason: input.discountReason?.trim() || null,
               extraChargeAmount: calc.extraChargeAmount,
               extraChargeReason: input.extraChargeReason?.trim() || null,
+              taxAmount: calc.taxAmount,
               depositAmount: calc.depositAmount,
               depositServiceTitle:
                 calc.depositAmount > 0
@@ -488,6 +498,7 @@ export async function saveMultiServiceInvoiceAction(
               discountReason: input.discountReason?.trim() || null,
               extraChargeAmount: calc.extraChargeAmount,
               extraChargeReason: input.extraChargeReason?.trim() || null,
+              taxAmount: calc.taxAmount,
               depositAmount: calc.depositAmount,
               depositServiceTitle:
                 calc.depositAmount > 0
@@ -500,7 +511,6 @@ export async function saveMultiServiceInvoiceAction(
             },
           });
 
-      // ثبت سرویس‌ها و کسر از بچ‌های انبار
       for (const srv of input.services) {
         let therapistNameSnapshot: string | null = null;
         if (srv.therapistId) {
@@ -567,7 +577,6 @@ export async function saveMultiServiceInvoiceAction(
             rem -= take;
           }
 
-          // در صورت کسری موجودی انبار: محاسبه بهای تمام‌شده بر اساس آخرین قیمت خرید ثبت‌شده کالا
           if (rem > 0) {
             const latestBatchForCost = await tx.productBatch.findFirst({
               where: {
@@ -626,8 +635,12 @@ export async function saveMultiServiceInvoiceAction(
         });
       }
 
-      // ثبت پرداخت‌ها با تاریخ و ساعت تراکنش
-      const paidAtDate = new Date(input.paidAt || new Date());
+      const parsedInputPaidAt = input.paidAt ? new Date(input.paidAt) : null;
+      const paidAtDate =
+        parsedInputPaidAt && !Number.isNaN(parsedInputPaidAt.getTime())
+          ? parsedInputPaidAt
+          : existingPaidAt ?? new Date();
+
       for (let i = 0; i < input.payments.length; i++) {
         const pay = input.payments[i];
         if ((Number(pay.amount) || 0) <= 0) continue;
@@ -658,7 +671,6 @@ export async function saveMultiServiceInvoiceAction(
         });
       }
 
-      // کسر پرداخت از کیف پول
       if (calc.walletUsedTotal > 0) {
         await tx.client.update({
           where: { id: client.id },
@@ -676,7 +688,6 @@ export async function saveMultiServiceInvoiceAction(
         });
       }
 
-      // واریز بیعانه سرویس آینده به کیف پول
       if (calc.depositAmount > 0) {
         await tx.client.update({
           where: { id: client.id },
@@ -694,7 +705,6 @@ export async function saveMultiServiceInvoiceAction(
         });
       }
 
-      // ثبت اقساط در صورت وجود مانده قسطی
       if (calc.remaining > 0 && input.remainingMode === "INSTALLMENT") {
         await tx.invoiceInstallment.createMany({
           data: input.installments.map((ins, idx) => ({
@@ -731,9 +741,6 @@ export async function saveMultiServiceInvoiceAction(
   }
 }
 
-// ==========================================
-// 5. حذف کامل یک فاکتور به همراه تمام سرویس‌های آن + بازگشت انبار + اصلاح کامل کیف پول
-// ==========================================
 export async function deleteFullInvoiceAction(
   clientId: string,
   invoiceId: string
@@ -761,12 +768,10 @@ export async function deleteFullInvoiceAction(
 
       if (!invoice) throw new Error("فاکتور مورد نظر یافت نشد.");
 
-      // ۱. بازگشت کالاهای مصرفی تمام سرویس‌های فاکتور به انبار
       for (const srv of invoice.providedServices) {
         await restoreConsumablesToInventory(tx, srv.usedConsumables);
       }
 
-      // ۲. بازگشت مبالغ پرداخت‌شده از کیف پول به حساب مراجع
       const walletPaid = invoice.payments
         .filter((p) => p.paymentMethod === "WALLET")
         .reduce((sum, p) => sum + p.amount, 0);
@@ -788,7 +793,6 @@ export async function deleteFullInvoiceAction(
         });
       }
 
-      // ۳. کسر بیعانه‌ای که در این فاکتور به کیف پول واریز شده بود
       const depositToRevert = invoice.depositAmount || 0;
       if (depositToRevert > 0) {
         await tx.client.update({
@@ -807,7 +811,6 @@ export async function deleteFullInvoiceAction(
         });
       }
 
-      // ۴. حذف کامل فاکتور و تمام سرویس‌های زیرمجموعه
       await tx.invoice.delete({
         where: { id: invoice.id },
       });
@@ -828,9 +831,6 @@ export async function deleteFullInvoiceAction(
   }
 }
 
-// ==========================================
-// 6. شارژ یا استرداد کیف پول مراجع
-// ==========================================
 export async function createWalletTransactionAction(input: {
   clientId: string;
   type: "DEPOSIT" | "REFUND";
@@ -895,9 +895,6 @@ export async function createWalletTransactionAction(input: {
   }
 }
 
-// ==========================================
-// 7. پرداخت قسط یا تسویه بدهی فاکتور
-// ==========================================
 export async function settleInvoiceOrInstallmentAction(input: {
   clientId: string;
   invoiceId: string;
@@ -1011,9 +1008,6 @@ export async function settleInvoiceOrInstallmentAction(input: {
   }
 }
 
-// ==========================================
-// 8. ذخیره اطلاعات تکمیلی و ویرایش مشخصات پرونده
-// ==========================================
 export interface UpdateClientAdditionalInfoInput {
   clientId: string;
   fullName: string;
@@ -1109,9 +1103,6 @@ export async function updateClientAdditionalInfoAction(
   }
 }
 
-// ==========================================
-// 9. ذخیره پرونده پزشکی مراجع
-// ==========================================
 export interface UpdateClientMedicalRecordInput {
   clientId: string;
   medicalRecord: {
@@ -1155,9 +1146,6 @@ export async function updateClientMedicalRecordAction(
   return { success: true };
 }
 
-// ==========================================
-// 10. افزودن و حذف ضمیمه پرونده
-// ==========================================
 export async function addClientAttachmentAction(input: {
   clientId: string;
   title: string;
@@ -1216,9 +1204,6 @@ export async function deleteClientAttachmentAction(
   return { success: true };
 }
 
-// ==========================================
-// 11. ارسال پیامک فوری به مراجع و ثبت در SmsLog
-// ==========================================
 export async function sendClientQuickSmsAction(input: {
   clientId: string;
   title?: string;
@@ -1278,9 +1263,6 @@ export async function sendClientQuickSmsAction(input: {
   return { success: true };
 }
 
-// ==========================================
-// 12. ویرایش اطلاعات پایه پرونده از لیست پرونده‌ها
-// ==========================================
 export interface QuickUpdateClientInput {
   clientId: string;
   fullName: string;
@@ -1395,9 +1377,6 @@ export async function quickUpdateClientAction(input: QuickUpdateClientInput) {
   }
 }
 
-// ==========================================
-// 13. حذف پرونده مراجع + بازگشت خودکار انبار و حذف فاکتورها
-// ==========================================
 export async function deleteClientAction(clientId: string) {
   const ctx = await getCurrentClinicContext();
   if (!ctx) return { success: false, error: "نشست کاربری معتبر نیست." };

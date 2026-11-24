@@ -1,7 +1,7 @@
 // components/clinic-dashboard/invoice-wizard/step2-payments.tsx
 "use client"
 
-import { useState, useMemo , useEffect} from "react"
+import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 import {
   Plus,
@@ -16,6 +16,7 @@ import {
   BookmarkCheck,
   DollarSign,
   Clock,
+  Receipt,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -23,8 +24,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldGroup, FieldLabel, FieldDescription } from "@/components/ui/field"
 import {
   Select,
   SelectContent,
@@ -39,16 +41,15 @@ import {
   ResponsiveTimePicker,
   ResponsiveTimePickerContent,
   ResponsiveTimePickerTrigger,
-  formatTimePickerValue,
 } from "@/components/ui/time-picker"
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
-} from "@/components/ui/input-group";
-import { normalizePersianDigits } from "@/lib/normalize-persian-digits";
-import { toPersianDigits } from "@/lib/persian-date";
+} from "@/components/ui/input-group"
+import { normalizePersianDigits } from "@/lib/normalize-persian-digits"
+import { toPersianDigits } from "@/lib/persian-date"
 import type {
   DraftInstallmentRow,
   DraftPaymentRow,
@@ -77,6 +78,11 @@ interface Step2PaymentsProps {
   onExtraChargeAmountChange: (v: number) => void
   extraChargeReason: string
   onExtraChargeReasonChange: (v: string) => void
+
+  vatPercent: number
+  hasTaxableServices: boolean
+  applyTax: boolean
+  onApplyTaxChange: (v: boolean) => void
 
   depositServiceId: string
   onDepositServiceIdChange: (id: string) => void
@@ -126,6 +132,10 @@ export function Step2Payments({
   onExtraChargeAmountChange,
   extraChargeReason,
   onExtraChargeReasonChange,
+  vatPercent,
+  hasTaxableServices,
+  applyTax,
+  onApplyTaxChange,
   depositServiceId,
   onDepositServiceIdChange,
   depositAmount,
@@ -158,47 +168,47 @@ export function Step2Payments({
     return opts
   }, [catalogServices])
 
-  const [timePickerOpen, setTimePickerOpen] = useState(false);
+  const [timePickerOpen, setTimePickerOpen] = useState(false)
   const [paymentTimeText, setPaymentTimeText] = useState(() =>
     toPersianDigits(paymentTime || "12:00")
-  );
+  )
 
   useEffect(() => {
-    setPaymentTimeText(toPersianDigits(paymentTime || "12:00"));
-  }, [paymentTime]);
+    setPaymentTimeText(toPersianDigits(paymentTime || "12:00"))
+  }, [paymentTime])
 
   const parsedPaymentTime = useMemo(() => {
-    const [hh, mm] = (paymentTime || "00:00").split(":").map(Number);
+    const [hh, mm] = (paymentTime || "00:00").split(":").map(Number)
     return {
       hour: Number.isFinite(hh) ? hh : 0,
       minute: Number.isFinite(mm) ? mm : 0,
-    };
-  }, [paymentTime]);
+    }
+  }, [paymentTime])
 
   function commitTypedPaymentTime(rawInput: string) {
-    const clean = normalizePersianDigits(rawInput).replace(/[^\d:]/g, "");
-    let hh = 0;
-    let mm = 0;
+    const clean = normalizePersianDigits(rawInput).replace(/[^\d:]/g, "")
+    let hh = 0
+    let mm = 0
 
     if (clean.includes(":")) {
-      const [hStr, mStr] = clean.split(":");
-      hh = parseInt(hStr || "0", 10);
-      mm = parseInt(mStr || "0", 10);
+      const [hStr, mStr] = clean.split(":")
+      hh = parseInt(hStr || "0", 10)
+      mm = parseInt(mStr || "0", 10)
     } else if (clean.length <= 2) {
-      hh = parseInt(clean || "0", 10);
-      mm = 0;
+      hh = parseInt(clean || "0", 10)
+      mm = 0
     } else {
-      const padded = clean.padStart(4, "0").slice(0, 4);
-      hh = parseInt(padded.slice(0, 2), 10);
-      mm = parseInt(padded.slice(2, 4), 10);
+      const padded = clean.padStart(4, "0").slice(0, 4)
+      hh = parseInt(padded.slice(0, 2), 10)
+      mm = parseInt(padded.slice(2, 4), 10)
     }
 
-    hh = Number.isFinite(hh) ? Math.min(23, Math.max(0, hh)) : 0;
-    mm = Number.isFinite(mm) ? Math.min(59, Math.max(0, mm)) : 0;
+    hh = Number.isFinite(hh) ? Math.min(23, Math.max(0, hh)) : 0
+    mm = Number.isFinite(mm) ? Math.min(59, Math.max(0, mm)) : 0
 
-    const formatted = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-    onPaymentTimeChange(formatted);
-    setPaymentTimeText(toPersianDigits(formatted));
+    const formatted = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`
+    onPaymentTimeChange(formatted)
+    setPaymentTimeText(toPersianDigits(formatted))
   }
 
   const creditProviderOptions: SelectOption[] = useMemo(
@@ -215,6 +225,34 @@ export function Step2Payments({
     ],
     [creditProviders]
   )
+
+  function handleToggleTax(nextChecked: boolean) {
+    const prevTax = applyTax ? calculation.taxAmount : 0
+    const estimatedNextTax =
+      nextChecked && vatPercent > 0
+        ? Math.round(
+            (Math.max(0, calculation.subTotal - calculation.discountAmount + calculation.extraChargeAmount) *
+              vatPercent) /
+              100
+          )
+        : 0
+
+    const delta = nextChecked ? estimatedNextTax - prevTax : -prevTax
+    onApplyTaxChange(nextChecked)
+
+    if (delta !== 0) {
+      onPaymentsChange((prev) => {
+        if (prev.length === 0) return prev
+        const targetIndex = prev.findIndex((p) => p.paymentMethod !== "CREDIT")
+        const idxToUpdate = targetIndex >= 0 ? targetIndex : 0
+        return prev.map((row, idx) =>
+          idx === idxToUpdate
+            ? { ...row, amount: Math.max(0, (Number(row.amount) || 0) + delta) }
+            : row
+        )
+      })
+    }
+  }
 
   function handleSplitInstallmentsEqually(count: number) {
     const safeCount = Math.max(1, Math.min(24, count))
@@ -289,7 +327,6 @@ export function Step2Payments({
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 pb-16 sm:p-6">
-      {/* نوار بازگشت به مرحله قبل */}
       <div className="flex justify-start">
         <Button
           type="button"
@@ -303,7 +340,6 @@ export function Step2Payments({
         </Button>
       </div>
 
-      {/* کارت بالای صفحه مبلغ نهایی مطابق اسکرین‌شات مرحله پرداخت */}
       <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border bg-gradient-to-l from-primary/10 via-card to-card p-5 shadow-2xs sm:flex-row">
         <div className="flex items-center gap-3.5">
           <div className="flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
@@ -322,7 +358,15 @@ export function Step2Payments({
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-4 text-xs">
+        <div className="flex flex-wrap gap-3 text-xs">
+          {calculation.taxAmount > 0 && (
+            <div className="rounded-xl border bg-background px-3.5 py-2">
+              <span className="text-muted-foreground">مالیات: </span>
+              <strong className="text-primary">
+                {calculation.taxAmount.toLocaleString("fa-IR")} تومان
+              </strong>
+            </div>
+          )}
           <div className="rounded-xl border bg-background px-3.5 py-2">
             <span className="text-muted-foreground">پرداخت‌شده: </span>
             <strong className="text-emerald-600">
@@ -338,7 +382,7 @@ export function Step2Payments({
         </div>
       </div>
 
-      {/* تخفیف، اضافه پرداخت و تاریخ/ساعت ثبت تراکنش پرداخت */}
+      {/* تخفیف، اضافه پرداخت، مالیات اختیاری و تاریخ/ساعت ثبت تراکنش پرداخت */}
       <div className="rounded-2xl border bg-card p-5 shadow-2xs">
         <FieldGroup>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -367,8 +411,8 @@ export function Step2Payments({
                     onBlur={(e) => commitTypedPaymentTime(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
-                        e.preventDefault();
-                        commitTypedPaymentTime(paymentTimeText);
+                        e.preventDefault()
+                        commitTypedPaymentTime(paymentTimeText)
                       }
                     }}
                     className="text-right tabular-nums"
@@ -392,9 +436,9 @@ export function Step2Payments({
                 <ResponsiveTimePickerContent
                   value={parsedPaymentTime}
                   onValueChange={(next) => {
-                    const formatted = `${String(next.hour).padStart(2, "0")}:${String(next.minute).padStart(2, "0")}`;
-                    onPaymentTimeChange(formatted);
-                    setPaymentTimeText(toPersianDigits(formatted));
+                    const formatted = `${String(next.hour).padStart(2, "0")}:${String(next.minute).padStart(2, "0")}`
+                    onPaymentTimeChange(formatted)
+                    setPaymentTimeText(toPersianDigits(formatted))
                   }}
                   hourFormat="24"
                   digits="fa"
@@ -440,10 +484,42 @@ export function Step2Payments({
               )}
             </Field>
           </div>
+
+          {vatPercent > 0 && hasTaxableServices && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/5 px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <Receipt className="size-4 text-primary" />
+                <div>
+                  <Label
+                    htmlFor="apply-invoice-tax"
+                    className="cursor-pointer text-xs font-bold text-foreground"
+                  >
+                    اعمال مالیات بر ارزش افزوده ({vatPercent.toLocaleString("fa-IR")}٪) روی فاکتور
+                  </Label>
+                  <FieldDescription className="text-[11px]">
+                    با فعال کردن این گزینه، مبلغ مالیات به فاکتور و روش پرداخت اضافه می‌شود
+                  </FieldDescription>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {applyTax && (
+                  <span className="text-xs font-bold text-primary">
+                    {calculation.taxAmount.toLocaleString("fa-IR")} تومان
+                  </span>
+                )}
+                <Switch
+                  id="apply-invoice-tax"
+                  checked={applyTax}
+                  onCheckedChange={(v) => handleToggleTax(Boolean(v))}
+                />
+              </div>
+            </div>
+          )}
         </FieldGroup>
       </div>
 
-      {/* بخش بیعانه سرویس آینده (شارژ کیف پول همراه با فاکتور) */}
+      {/* بخش بیعانه سرویس آینده */}
       <div className="space-y-3 rounded-2xl border border-primary/25 bg-primary/5 p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm font-bold text-primary">
@@ -879,7 +955,6 @@ export function Step2Payments({
         </Button>
       </div>
 
-      {/* بخش مانده حساب و اقساط */}
       {calculation.remaining > 0 && (
         <div className="space-y-4 rounded-2xl border bg-card p-5 shadow-2xs">
           <div className="flex items-center justify-between">
@@ -1097,7 +1172,6 @@ export function Step2Payments({
         </div>
       )}
 
-      {/* نمایش خطای اعتبارسنجی فاکتور قبل از ثبت نهایی */}
       {calculation.validationError && (
         <div
           role="alert"
@@ -1113,7 +1187,6 @@ export function Step2Payments({
         </div>
       )}
 
-      {/* دکمه‌های پایین صفحه */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Button
           type="button"

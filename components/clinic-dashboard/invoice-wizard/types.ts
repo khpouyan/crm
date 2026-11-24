@@ -21,6 +21,7 @@ export interface WizardCatalogSubService {
 export interface WizardCatalogService {
   id: string;
   title: string;
+  taxEnabled?: boolean;
   defaultServiceProducts: {
     clinicProductId: string;
     productName: string;
@@ -67,7 +68,6 @@ export interface SelectOption {
   label: string;
 }
 
-// ساختار هر آیتم زیرسرویس انتخاب‌شده داخل یک آکاردیون خدمت
 export interface DraftSubServiceSelection {
   subServiceId: string;
   subServiceTitle: string;
@@ -86,11 +86,10 @@ export interface DraftConsumable {
   isDefault: boolean;
 }
 
-// هر آکاردیون خدمت اصلی در مرحله ۱
 export interface DraftServiceAccordionBlock {
   uid: string;
   serviceId: string;
-  allowMultiSubServices: boolean; // حالت پیش‌فرض رادیو باتن است و با زدن گزینه «انتخاب چندتایی» چک‌باکسی می‌شود
+  allowMultiSubServices: boolean;
   selectedSubServices: DraftSubServiceSelection[];
   expandedSubServiceId: string;
   consumables: DraftConsumable[];

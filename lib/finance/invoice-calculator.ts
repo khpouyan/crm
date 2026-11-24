@@ -9,6 +9,7 @@ export interface CreditProviderRule {
 
 export interface CalcServiceLine {
   finalPrice: number;
+  taxEnabled?: boolean;
   consumables: {
     quantity: number;
     sellingPrice: number;
@@ -32,6 +33,8 @@ export interface InvoiceCalculationInput {
   extraChargeAmount: number;
   depositAmount: number;
   depositServiceSelected: boolean;
+  vatPercent?: number;
+  applyTax?: boolean;
   payments: CalcPaymentLine[];
   remainingMode: "DEBT" | "INSTALLMENT";
   installments: CalcInstallmentLine[];
@@ -55,6 +58,9 @@ export interface InvoiceCalculationResult {
   discountAmount: number;
   extraChargeAmount: number;
   depositAmount: number;
+  taxPercent: number;
+  hasTaxableServices: boolean;
+  taxAmount: number;
   baseTotalBeforeCreditFee: number;
   creditFeeTotal: number;
   finalTotal: number;
@@ -73,15 +79,25 @@ export function calculateInvoiceFinancials(
 ): InvoiceCalculationResult {
   let servicesSum = 0;
   let consumablesSellSum = 0;
+  let taxableBaseSum = 0;
+  let hasTaxableServices = false;
 
   for (const srv of input.services) {
-    servicesSum += Math.max(0, Math.round(Number(srv.finalPrice) || 0));
+    const srvPrice = Math.max(0, Math.round(Number(srv.finalPrice) || 0));
+    let lineConsSum = 0;
     for (const cons of srv.consumables) {
       const q = Number(cons.quantity) || 0;
       const sp = Number(cons.sellingPrice) || 0;
       if (q > 0 && sp > 0) {
-        consumablesSellSum += Math.round(q * sp);
+        lineConsSum += Math.round(q * sp);
       }
+    }
+    servicesSum += srvPrice;
+    consumablesSellSum += lineConsSum;
+
+    if (srv.taxEnabled) {
+      hasTaxableServices = true;
+      taxableBaseSum += srvPrice + lineConsSum;
     }
   }
 
@@ -90,9 +106,21 @@ export function calculateInvoiceFinancials(
   const extraChargeAmount = Math.max(0, Math.round(Number(input.extraChargeAmount) || 0));
   const depositAmount = Math.max(0, Math.round(Number(input.depositAmount) || 0));
 
+  const vatPercent = Math.max(0, Math.min(100, Number(input.vatPercent) || 0));
+  const shouldApplyTax =
+    Boolean(input.applyTax) && vatPercent > 0 && taxableBaseSum > 0;
+
+  let taxAmount = 0;
+  if (shouldApplyTax) {
+    const netItemsBase = Math.max(0, subTotal - discountAmount + extraChargeAmount);
+    const ratio = subTotal > 0 ? taxableBaseSum / subTotal : 0;
+    const effectiveTaxable = Math.max(0, netItemsBase * ratio);
+    taxAmount = Math.round((effectiveTaxable * vatPercent) / 100);
+  }
+
   const baseTotalBeforeCreditFee = Math.max(
     0,
-    subTotal - discountAmount + extraChargeAmount + depositAmount
+    subTotal - discountAmount + extraChargeAmount + depositAmount + taxAmount
   );
 
   let creditFeeTotal = 0;
@@ -156,7 +184,6 @@ export function calculateInvoiceFinancials(
     }
   }
 
-  // اعتبارسنجی دقیق و شفاف
   let validationError: string | null = null;
 
   if (input.services.length === 0) {
@@ -201,6 +228,9 @@ export function calculateInvoiceFinancials(
     discountAmount,
     extraChargeAmount,
     depositAmount,
+    taxPercent: vatPercent,
+    hasTaxableServices,
+    taxAmount,
     baseTotalBeforeCreditFee,
     creditFeeTotal,
     finalTotal,

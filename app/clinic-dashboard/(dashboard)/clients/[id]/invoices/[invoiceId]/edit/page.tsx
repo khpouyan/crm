@@ -59,7 +59,7 @@ export default async function EditClientInvoicePage({
     }),
     prisma.clinic.findUnique({
       where: { id: ctx.clinicId },
-      select: { name: true },
+      select: { name: true, vatPercent: true },
     }),
     prisma.clinicUser.findUnique({
       where: { id: ctx.clinicUserId },
@@ -268,6 +268,7 @@ export default async function EditClientInvoicePage({
     discountReason: invoice.discountReason || "",
     extraChargeAmount: invoice.extraChargeAmount,
     extraChargeReason: invoice.extraChargeReason || "",
+    applyTax: (invoice.taxAmount || 0) > 0,
     depositServiceId: resolvedDepositSubId,
     depositAmount: invoice.depositAmount,
     remainingMode:
@@ -313,6 +314,7 @@ export default async function EditClientInvoicePage({
     <InvoiceWizardContainer
       clinicName={clinic.name}
       operatorName={operator?.user?.fullName || operator?.jobTitle || "اپراتور"}
+      vatPercent={clinic.vatPercent ?? 0}
       client={{
         id: client.id,
         fullName: client.user.fullName || "مراجعه‌کننده",
@@ -324,6 +326,7 @@ export default async function EditClientInvoicePage({
       catalogServices={catalogServices.map((s) => ({
         id: s.id,
         title: s.title,
+        taxEnabled: s.taxEnabled,
         defaultServiceProducts: s.defaultServiceProducts.map((dp) => ({
           clinicProductId: dp.clinicProductId,
           productName: dp.clinicProduct.name,

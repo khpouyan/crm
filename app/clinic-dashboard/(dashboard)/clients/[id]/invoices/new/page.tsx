@@ -49,7 +49,7 @@ export default async function NewClientInvoicePage({
     }),
     prisma.clinic.findUnique({
       where: { id: ctx.clinicId },
-      select: { name: true },
+      select: { name: true, vatPercent: true },
     }),
     prisma.clinicUser.findUnique({
       where: { id: ctx.clinicUserId },
@@ -153,6 +153,7 @@ export default async function NewClientInvoicePage({
     <InvoiceWizardContainer
       clinicName={clinic.name}
       operatorName={operator?.user?.fullName || operator?.jobTitle || "اپراتور"}
+      vatPercent={clinic.vatPercent ?? 0}
       client={{
         id: client.id,
         fullName: client.user.fullName || "مراجعه‌کننده",
@@ -164,6 +165,7 @@ export default async function NewClientInvoicePage({
       catalogServices={catalogServices.map((s) => ({
         id: s.id,
         title: s.title,
+        taxEnabled: s.taxEnabled,
         defaultServiceProducts: s.defaultServiceProducts.map((dp) => ({
           clinicProductId: dp.clinicProductId,
           productName: dp.clinicProduct.name,

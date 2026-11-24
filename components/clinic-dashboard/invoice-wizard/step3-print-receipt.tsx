@@ -114,7 +114,6 @@ export function Step3PrintReceipt({
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 pb-16 sm:p-6">
-      {/* استایل اختصاصی چاپ برای حذف کامل سایدبار، هدر داشبورد و دکمه‌ها و اعمال حاشیه استاندارد هنگام پرینت */}
       <style jsx global>{`
         @media print {
           @page {
@@ -151,7 +150,6 @@ export function Step3PrintReceipt({
         }
       `}</style>
 
-      {/* نوار دکمه‌های عملیات بالا (مخفی هنگام چاپ) */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card p-4 shadow-2xs print:hidden">
         <div className="flex items-center gap-2 text-emerald-600">
           <CheckCircle2 className="size-5" />
@@ -193,7 +191,6 @@ export function Step3PrintReceipt({
         </div>
       </div>
 
-      {/* بخش انتخاب بخش‌های قابل پرینت (مخفی هنگام چاپ) */}
       <div className="space-y-3 rounded-2xl border bg-card p-5 shadow-2xs print:hidden">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold">انتخاب بخش‌های پرینت</h3>
@@ -223,7 +220,6 @@ export function Step3PrintReceipt({
         </div>
       </div>
 
-      {/* پیش‌نمایش قابل چاپ (تنها بخشی که در PDF/چاپ ظاهر می‌شود) */}
       <div
         id="printable-receipt-area"
         dir="rtl"
@@ -239,7 +235,6 @@ export function Step3PrintReceipt({
         </div>
 
         <div className="space-y-6">
-          {/* اطلاعات مراجعه‌کننده */}
           {flags.clientInfo && (
             <div className="space-y-2">
               <h4 className="border-r-2 border-primary pr-2 text-xs font-bold text-slate-700">
@@ -274,7 +269,6 @@ export function Step3PrintReceipt({
             </div>
           )}
 
-          {/* اطلاعات سرویس و ریز خدمات */}
           {flags.serviceInfo && (
             <div className="space-y-2">
               <h4 className="border-r-2 border-primary pr-2 text-xs font-bold text-slate-700">
@@ -299,7 +293,7 @@ export function Step3PrintReceipt({
                     {serviceBlocks.map((block) => {
                       const srv = catalogServices.find(
                         (s) => s.id === block.serviceId
-                      );
+                      )
                       return block.selectedSubServices.map((sub) => (
                         <tr key={`${block.uid}-${sub.subServiceId}`}>
                           <td className="p-2.5 font-semibold">
@@ -328,7 +322,7 @@ export function Step3PrintReceipt({
                             {sub.finalPrice.toLocaleString("fa-IR")}
                           </td>
                         </tr>
-                      ));
+                      ))
                     })}
                   </tbody>
                 </table>
@@ -336,7 +330,6 @@ export function Step3PrintReceipt({
             </div>
           )}
 
-          {/* کالاهای مصرفی */}
           {flags.consumables &&
             serviceBlocks.some((b) => b.consumables.length > 0) && (
               <div className="space-y-2">
@@ -378,13 +371,12 @@ export function Step3PrintReceipt({
               </div>
             )}
 
-          {/* خلاصه مالی */}
           {flags.financialSummary && (
             <div className="space-y-2">
               <h4 className="border-r-2 border-primary pr-2 text-xs font-bold text-slate-700">
                 خلاصه مالی فاکتور
               </h4>
-              <div className="grid grid-cols-2 gap-2 rounded-xl border bg-slate-50 p-3 text-xs sm:grid-cols-5">
+              <div className="grid grid-cols-2 gap-2 rounded-xl border bg-slate-50 p-3 text-xs sm:grid-cols-6">
                 <div>
                   <span className="text-slate-500">جمع خدمات و کالا: </span>
                   <strong>{calculation.subTotal.toLocaleString("fa-IR")}</strong>
@@ -410,6 +402,10 @@ export function Step3PrintReceipt({
                   </div>
                 )}
                 <div>
+                  <span className="text-slate-500">مالیات: </span>
+                  <strong>{calculation.taxAmount.toLocaleString("fa-IR")}</strong>
+                </div>
+                <div>
                   <span className="text-slate-500">مبلغ کل: </span>
                   <strong className="text-primary">
                     {calculation.finalTotal.toLocaleString("fa-IR")} تومان
@@ -425,7 +421,6 @@ export function Step3PrintReceipt({
             </div>
           )}
 
-          {/* شیوه پرداخت */}
           {flags.payments && payments.some((p) => p.amount > 0) && (
             <div className="space-y-2">
               <h4 className="border-r-2 border-primary pr-2 text-xs font-bold text-slate-700">
@@ -446,18 +441,18 @@ export function Step3PrintReceipt({
                     {payments
                       .filter((p) => p.amount > 0)
                       .map((p, idx) => {
-                        const creditRow = calculation.creditBreakdown[idx];
+                        const creditRow = calculation.creditBreakdown[idx]
                         const posLabel =
                           p.paymentMethod === "POS"
                             ? terminals.find((t) => t.value === p.terminalId)
                                 ?.label
-                            : null;
+                            : null
                         const cpLabel =
                           p.paymentMethod === "CREDIT"
                             ? creditProviders.find(
                                 (c) => c.id === p.creditProviderId
                               )?.title || p.customCreditProvider
-                            : null;
+                            : null
 
                         return (
                           <tr key={p.uid}>
@@ -480,7 +475,7 @@ export function Step3PrintReceipt({
                               {p.trackingCode || "—"}
                             </td>
                           </tr>
-                        );
+                        )
                       })}
                   </tbody>
                 </table>
@@ -488,7 +483,6 @@ export function Step3PrintReceipt({
             </div>
           )}
 
-          {/* اقساط و چک‌ها */}
           {flags.installments &&
             calculation.remaining > 0 &&
             remainingMode === "INSTALLMENT" &&
@@ -536,7 +530,6 @@ export function Step3PrintReceipt({
               </div>
             )}
 
-          {/* توضیحات */}
           {flags.description &&
             serviceBlocks.some((b) => b.description.trim()) && (
               <div className="space-y-1.5">
