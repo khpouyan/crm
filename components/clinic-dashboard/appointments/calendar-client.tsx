@@ -355,7 +355,6 @@ export function CalendarClient({
   >(initialView)
   const [filtersOpen, setFiltersOpen] = React.useState(true)
 
-  // ویزارد هم به‌صورت مودال و هم به‌صورت نمایش در صفحه زیر فیلترها
   const [inlineWizardOpen, setInlineWizardOpen] = React.useState(false)
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [wizardStep, setWizardStep] = React.useState<1 | 2 | 3>(1)
@@ -380,9 +379,7 @@ export function CalendarClient({
 
   const [bookingSource, setBookingSource] =
     React.useState<AppointmentBookingSource>(AppointmentBookingSource.MANUAL)
-  const [formClientId, setFormClientId] = React.useState<string>(
-    initialClients[0]?.id || ""
-  )
+  const [formClientId, setFormClientId] = React.useState<string>("")
   const [quickCreateRowOpen, setQuickCreateRowOpen] = React.useState(false)
 
   const [formServiceId, setFormServiceId] = React.useState<string>(
@@ -561,7 +558,7 @@ export function CalendarClient({
     setEditingAppt(null)
     setWizardStep(1)
     setBookingSource(AppointmentBookingSource.MANUAL)
-    setFormClientId(clientList[0]?.id || "")
+    setFormClientId("")
     setQuickCreateRowOpen(false)
     setFormServiceId(defaultSrv?.id || "")
     setFormSubServiceId(defaultSrv?.subServices[0]?.id || "NONE")
