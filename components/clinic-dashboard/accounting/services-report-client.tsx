@@ -10,10 +10,8 @@ import {
   Receipt,
   AlertCircle,
   CheckCircle2,
-  RotateCcw,
   Sparkles,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
@@ -35,6 +33,7 @@ import {
 import {
   AccountingStatCard,
   CollapsibleFilterPanel,
+  QuickDateRangeBar,
   formatJalaliShort,
   formatTimeShort,
   formatToman,
@@ -79,7 +78,11 @@ interface SelectItemOption {
 
 interface ServicesReportClientProps {
   rows: ServiceReportRow[];
-  services: { id: string; title: string; subServices: { id: string; title: string }[] }[];
+  services: {
+    id: string;
+    title: string;
+    subServices: { id: string; title: string }[];
+  }[];
   therapists: SelectItemOption[];
   operators: SelectItemOption[];
   clients: SelectItemOption[];
@@ -179,9 +182,10 @@ export function AccountingServicesClient({
     );
   }, [filtered]);
 
-  function resetFilters() {
-    setFromDate(null);
-    setToDate(null);
+  function resetFiltersToToday() {
+    const today = getTodayDate();
+    setFromDate(today);
+    setToDate(today);
     setServiceId("ALL");
     setSubServiceId("ALL");
     setTherapistId("ALL");
@@ -196,54 +200,65 @@ export function AccountingServicesClient({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold">خدمات</h1>
           <p className="mt-1 text-xs text-muted-foreground">
-            گزارش جامع مبلغ کل خدمات ارائه‌شده (پیش‌فرض تاریخ امروز) — با کلیک روی هر ردیف وارد پرونده مراجع می‌شوید
+            گزارش جامع مبلغ کل خدمات ارائه‌شده — با کلیک روی هر ردیف وارد پرونده مراجع می‌شوید
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            const today = getTodayDate();
-            setFromDate(today);
-            setToDate(today);
+        <QuickDateRangeBar
+          onSelectRange={(f, t) => {
+            setFromDate(f);
+            setToDate(t);
           }}
-        >
-          <RotateCcw className="ml-1 size-3.5" />
-          امروز
-        </Button>
+        />
       </div>
 
-      <CollapsibleFilterPanel onReset={resetFilters} resetLabel="نمایش همه تاریخ‌ها">
+      <CollapsibleFilterPanel
+        resetLabel="بازنشانی به امروز"
+        onReset={resetFiltersToToday}
+      >
         <FieldGroup>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Field>
               <FieldLabel className="text-xs">از تاریخ</FieldLabel>
-              <DatePicker calendarType="shamsi" value={fromDate} onValueChange={setFromDate} />
+              <DatePicker
+                calendarType="shamsi"
+                value={fromDate}
+                onValueChange={setFromDate}
+              />
             </Field>
             <Field>
               <FieldLabel className="text-xs">تا تاریخ</FieldLabel>
-              <DatePicker calendarType="shamsi" value={toDate} onValueChange={setToDate} />
+              <DatePicker
+                calendarType="shamsi"
+                value={toDate}
+                onValueChange={setToDate}
+              />
             </Field>
             <Field>
               <FieldLabel className="text-xs">خدمات</FieldLabel>
               <Select
                 value={serviceId}
-                items={[{ value: "ALL", label: "همه خدمات" }, ...services.map((s) => ({ value: s.id, label: s.title }))]}
+                items={[
+                  { value: "ALL", label: "همه خدمات" },
+                  ...services.map((s) => ({ value: s.id, label: s.title })),
+                ]}
                 onValueChange={(v) => {
                   setServiceId(v || "ALL");
                   setSubServiceId("ALL");
                 }}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">همه خدمات</SelectItem>
                   {services.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.title}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -262,11 +277,15 @@ export function AccountingServicesClient({
                 ]}
                 onValueChange={(v) => setSubServiceId(v || "ALL")}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">همه ریز خدمات‌ها</SelectItem>
                   {selectedServiceObj?.subServices.map((ss) => (
-                    <SelectItem key={ss.id} value={ss.id}>{ss.title}</SelectItem>
+                    <SelectItem key={ss.id} value={ss.id}>
+                      {ss.title}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -281,11 +300,15 @@ export function AccountingServicesClient({
                 items={[{ value: "ALL", label: "همه درمانگران" }, ...therapists]}
                 onValueChange={(v) => setTherapistId(v || "ALL")}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">همه درمانگران</SelectItem>
                   {therapists.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -297,11 +320,15 @@ export function AccountingServicesClient({
                 items={[{ value: "ALL", label: "همه مراجعین" }, ...clients]}
                 onValueChange={(v) => setClientId(v || "ALL")}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">همه مراجعین</SelectItem>
                   {clients.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                    <SelectItem key={c.value} value={c.value}>
+                      {c.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -313,11 +340,15 @@ export function AccountingServicesClient({
                 items={[{ value: "ALL", label: "همه کاربران" }, ...operators]}
                 onValueChange={(v) => setOperatorId(v || "ALL")}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">همه کاربران</SelectItem>
                   {operators.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -336,7 +367,9 @@ export function AccountingServicesClient({
                 ]}
                 onValueChange={(v) => setPaymentMethod(v || "ALL")}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">همه</SelectItem>
                   <SelectItem value="POS">کارت‌خوان</SelectItem>
@@ -351,41 +384,86 @@ export function AccountingServicesClient({
 
           <div className="flex flex-wrap items-center gap-4 pt-1 text-xs">
             <label className="flex cursor-pointer items-center gap-2">
-              <Checkbox checked={onlyDebt} onCheckedChange={(v) => setOnlyDebt(Boolean(v))} />
+              <Checkbox
+                checked={onlyDebt}
+                onCheckedChange={(v) => setOnlyDebt(Boolean(v))}
+              />
               <span>دارای بدهی</span>
             </label>
             <label className="flex cursor-pointer items-center gap-2">
-              <Checkbox checked={onlyDiscount} onCheckedChange={(v) => setOnlyDiscount(Boolean(v))} />
+              <Checkbox
+                checked={onlyDiscount}
+                onCheckedChange={(v) => setOnlyDiscount(Boolean(v))}
+              />
               <span>دارای تخفیف</span>
             </label>
             <label className="flex cursor-pointer items-center gap-2">
-              <Checkbox checked={onlyExtra} onCheckedChange={(v) => setOnlyExtra(Boolean(v))} />
+              <Checkbox
+                checked={onlyExtra}
+                onCheckedChange={(v) => setOnlyExtra(Boolean(v))}
+              />
               <span>دارای اضافه پرداخت</span>
             </label>
             <label className="flex cursor-pointer items-center gap-2">
-              <Checkbox checked={onlyTax} onCheckedChange={(v) => setOnlyTax(Boolean(v))} />
+              <Checkbox
+                checked={onlyTax}
+                onCheckedChange={(v) => setOnlyTax(Boolean(v))}
+              />
               <span>دارای مالیات</span>
             </label>
           </div>
         </FieldGroup>
       </CollapsibleFilterPanel>
 
-      {/* کارت‌های جمع مبالغ (۲ ستون در موبایل) */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <AccountingStatCard title="جمع مبلغ سرویس" amount={totals.serviceSum} icon={<DollarSign className="size-4" />} tone="blue" />
-        <AccountingStatCard title="جمع مبلغ تخفیف" amount={totals.discountSum} icon={<Percent className="size-4" />} tone="emerald" />
-        <AccountingStatCard title="جمع مبلغ اضافه پرداخت" amount={totals.extraSum} icon={<PlusCircle className="size-4" />} tone="purple" />
-        <AccountingStatCard title="جمع مبلغ مالیات" amount={totals.taxSum} icon={<Receipt className="size-4" />} tone="amber" />
-        <AccountingStatCard title="جمع اعتباری" amount={totals.creditSum} icon={<Sparkles className="size-4" />} tone="blue" />
-        <AccountingStatCard title="جمع مبلغ مانده حساب" amount={totals.remainingSum} icon={<AlertCircle className="size-4" />} tone="rose" />
-        <AccountingStatCard title="جمع مبلغ پرداختی" amount={totals.paidSum} icon={<CheckCircle2 className="size-4" />} tone="emerald" />
+        <AccountingStatCard
+          title="جمع مبلغ سرویس"
+          amount={totals.serviceSum}
+          icon={<DollarSign className="size-4" />}
+          tone="blue"
+        />
+        <AccountingStatCard
+          title="جمع مبلغ تخفیف"
+          amount={totals.discountSum}
+          icon={<Percent className="size-4" />}
+          tone="emerald"
+        />
+        <AccountingStatCard
+          title="جمع مبلغ اضافه پرداخت"
+          amount={totals.extraSum}
+          icon={<PlusCircle className="size-4" />}
+          tone="purple"
+        />
+        <AccountingStatCard
+          title="جمع مبلغ مالیات"
+          amount={totals.taxSum}
+          icon={<Receipt className="size-4" />}
+          tone="amber"
+        />
+        <AccountingStatCard
+          title="جمع اعتباری"
+          amount={totals.creditSum}
+          icon={<Sparkles className="size-4" />}
+          tone="blue"
+        />
+        <AccountingStatCard
+          title="جمع مبلغ مانده حساب"
+          amount={totals.remainingSum}
+          icon={<AlertCircle className="size-4" />}
+          tone="rose"
+        />
+        <AccountingStatCard
+          title="جمع مبلغ پرداختی"
+          amount={totals.paidSum}
+          icon={<CheckCircle2 className="size-4" />}
+          tone="emerald"
+        />
       </div>
 
       <div className="text-xs text-muted-foreground">
         تعداد رکوردها: <strong>{filtered.length.toLocaleString("fa-IR")}</strong>
       </div>
 
-      {/* جدول کامل ۲۲ ستونه */}
       <div className="overflow-x-auto rounded-xl border bg-card shadow-2xs">
         <Table>
           <TableHeader>
@@ -394,7 +472,9 @@ export function AccountingServicesClient({
               <TableHead className="text-right">تاریخ</TableHead>
               <TableHead className="text-right">ساعت</TableHead>
               <TableHead className="text-right">کاربر سیستم</TableHead>
-              <TableHead className="text-right">نام و نام خانوادگی مراجعه کننده</TableHead>
+              <TableHead className="text-right">
+                نام و نام خانوادگی مراجعه کننده
+              </TableHead>
               <TableHead className="text-right">شماره تماس</TableHead>
               <TableHead className="text-right">شماره پرونده</TableHead>
               <TableHead className="text-right">کد ملی</TableHead>
@@ -417,7 +497,10 @@ export function AccountingServicesClient({
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={22} className="py-12 text-center text-sm text-muted-foreground">
+                <TableCell
+                  colSpan={22}
+                  className="py-12 text-center text-sm text-muted-foreground"
+                >
                   داده‌ای وجود ندارد
                 </TableCell>
               </TableRow>
@@ -425,33 +508,55 @@ export function AccountingServicesClient({
               filtered.map((row, idx) => (
                 <TableRow
                   key={row.id}
-                  onClick={() => router.push(`/clinic-dashboard/clients/${row.clientId}`)}
+                  onClick={() =>
+                    router.push(`/clinic-dashboard/clients/${row.clientId}`)
+                  }
                   className="cursor-pointer whitespace-nowrap text-xs hover:bg-primary/5"
                 >
                   <TableCell>{(idx + 1).toLocaleString("fa-IR")}</TableCell>
                   <TableCell>{formatJalaliShort(row.performedAtIso)}</TableCell>
                   <TableCell>{formatTimeShort(row.performedAtIso)}</TableCell>
                   <TableCell>{row.operatorName}</TableCell>
-                  <TableCell className="font-semibold text-primary">{row.clientName}</TableCell>
+                  <TableCell className="font-semibold text-primary">
+                    {row.clientName}
+                  </TableCell>
                   <TableCell dir="ltr">{row.clientPhone}</TableCell>
-                  <TableCell>{row.fileNumber ? row.fileNumber.toLocaleString("fa-IR") : "—"}</TableCell>
+                  <TableCell>
+                    {row.fileNumber
+                      ? row.fileNumber.toLocaleString("fa-IR")
+                      : "—"}
+                  </TableCell>
                   <TableCell dir="ltr">{row.nationalId}</TableCell>
                   <TableCell>{row.serviceTitle}</TableCell>
                   <TableCell>{row.subServiceTitle}</TableCell>
                   <TableCell>{row.therapistName}</TableCell>
                   <TableCell>{row.assistantNames}</TableCell>
-                  <TableCell className="font-bold">{formatToman(row.serviceAmount)}</TableCell>
+                  <TableCell className="font-bold">
+                    {formatToman(row.serviceAmount)}
+                  </TableCell>
                   <TableCell>{formatToman(row.discountAmount)}</TableCell>
                   <TableCell>{formatToman(row.extraChargeAmount)}</TableCell>
                   <TableCell>{formatToman(row.taxAmount)}</TableCell>
-                  <TableCell className="font-bold">{formatToman(row.invoiceTotal)}</TableCell>
-                  <TableCell>{formatJalaliShort(row.invoiceCreatedAtIso)}</TableCell>
-                  <TableCell className="text-emerald-600">{formatToman(row.paidAmount)}</TableCell>
+                  <TableCell className="font-bold">
+                    {formatToman(row.invoiceTotal)}
+                  </TableCell>
+                  <TableCell>
+                    {formatJalaliShort(row.invoiceCreatedAtIso)}
+                  </TableCell>
+                  <TableCell className="text-emerald-600">
+                    {formatToman(row.paidAmount)}
+                  </TableCell>
                   <TableCell dir="ltr">{row.paymentRef}</TableCell>
-                  <TableCell className={row.remainingAmount > 0 ? "font-bold text-rose-600" : ""}>
+                  <TableCell
+                    className={
+                      row.remainingAmount > 0 ? "font-bold text-rose-600" : ""
+                    }
+                  >
                     {formatToman(row.remainingAmount)}
                   </TableCell>
-                  <TableCell className="max-w-48 truncate">{row.description}</TableCell>
+                  <TableCell className="max-w-48 truncate">
+                    {row.description}
+                  </TableCell>
                 </TableRow>
               ))
             )}

@@ -4,7 +4,7 @@
 import * as React from "react";
 import { ChevronDown, ChevronUp, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { formatJalali } from "@/lib/jalali";
+import { formatJalali, toGregorian, toJalali } from "@/lib/jalali";
 import { toPersianDigits } from "@/lib/persian-date";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +28,122 @@ export function formatToman(amount: number): string {
 
 export function getTodayDate(): Date {
   return new Date();
+}
+
+export function getYesterdayRange(): { from: Date; to: Date } {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return { from: new Date(d), to: new Date(d) };
+}
+
+export function getLastWeekRange(): { from: Date; to: Date } {
+  const now = new Date();
+  const jalaliToday = toJalali(now);
+  const gToday = toGregorian(jalaliToday.jy, jalaliToday.jm, jalaliToday.jd);
+  const dayOfWeekSat0 = (gToday.getDay() + 1) % 7;
+
+  const currentWeekStart = new Date(gToday);
+  currentWeekStart.setDate(currentWeekStart.getDate() - dayOfWeekSat0);
+
+  const prevWeekStart = new Date(currentWeekStart);
+  prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+  const prevWeekEnd = new Date(prevWeekStart);
+  prevWeekEnd.setDate(prevWeekEnd.getDate() + 6);
+
+  return { from: prevWeekStart, to: prevWeekEnd };
+}
+
+function getJalaliMonthDaysCount(jy: number, jm: number): number {
+  if (jm <= 6) return 31;
+  if (jm <= 11) return 30;
+  const g30 = toGregorian(jy, 12, 30);
+  const j30 = toJalali(g30);
+  return j30.jy === jy && j30.jm === 12 && j30.jd === 30 ? 30 : 29;
+}
+
+export function getJalaliMonthRange(monthOffset = 0): { from: Date; to: Date } {
+  const cur = toJalali(new Date());
+  const totalMonths = cur.jy * 12 + (cur.jm - 1) + monthOffset;
+  const targetYear = Math.floor(totalMonths / 12);
+  const targetMonth = (totalMonths % 12) + 1;
+  const lastDay = getJalaliMonthDaysCount(targetYear, targetMonth);
+
+  const startGregorian = toGregorian(targetYear, targetMonth, 1);
+  const endGregorian = toGregorian(targetYear, targetMonth, lastDay);
+
+  return { from: startGregorian, to: endGregorian };
+}
+
+interface QuickDateRangeBarProps {
+  onSelectRange: (from: Date, to: Date) => void;
+}
+
+export function QuickDateRangeBar({ onSelectRange }: QuickDateRangeBarProps) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-8 text-xs"
+        onClick={() => {
+          const today = getTodayDate();
+          onSelectRange(today, today);
+        }}
+      >
+        امروز
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-8 text-xs"
+        onClick={() => {
+          const r = getYesterdayRange();
+          onSelectRange(r.from, r.to);
+        }}
+      >
+        دیروز
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-8 text-xs"
+        onClick={() => {
+          const r = getLastWeekRange();
+          onSelectRange(r.from, r.to);
+        }}
+      >
+        هفته قبل
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-8 text-xs"
+        onClick={() => {
+          const r = getJalaliMonthRange(0);
+          onSelectRange(r.from, r.to);
+        }}
+      >
+        کل ماه
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-8 text-xs"
+        onClick={() => {
+          const r = getJalaliMonthRange(-1);
+          onSelectRange(r.from, r.to);
+        }}
+      >
+        ماه قبل
+      </Button>
+    </div>
+  );
 }
 
 interface StatCardProps {
@@ -116,10 +232,15 @@ export function CollapsibleFilterPanel({
   resetLabel = "پاک کردن فیلترها",
   children,
 }: CollapsibleFilterPanelProps) {
-  const [isOpen, setIsOpen] = React.useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.innerWidth >= 768;
-  });
+  const [isOpen, setIsOpen] = React.useState<boolean>(false);
+
+  React.useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    setIsOpen(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsOpen(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   return (
     <div className="rounded-xl border bg-card shadow-2xs">
@@ -138,12 +259,18 @@ export function CollapsibleFilterPanel({
         <div className="flex items-center gap-1.5 text-sm font-bold">
           <Filter className="size-4 text-primary" />
           <span>فیلترها</span>
-          <span className="text-[11px] font-normal text-muted-foreground md:hidden">
+          <span
+            suppressHydrationWarning
+            className="text-[11px] font-normal text-muted-foreground md:hidden"
+          >
             ({isOpen ? "بستن" : "برای باز شدن کلیک کنید"})
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="flex items-center gap-1.5"
+          onClick={(e) => e.stopPropagation()}
+        >
           <Button type="button" variant="ghost" size="sm" onClick={onReset}>
             {resetLabel}
           </Button>

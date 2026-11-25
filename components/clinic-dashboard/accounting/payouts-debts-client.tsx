@@ -3,12 +3,7 @@
 
 import { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Plus,
-  Trash2,
-  RotateCcw,
-  Wallet,
-} from "lucide-react";
+import { Plus, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +45,7 @@ import {
 import {
   AccountingStatCard,
   CollapsibleFilterPanel,
+  QuickDateRangeBar,
   formatJalaliShort,
   formatTimeShort,
   formatToman,
@@ -235,28 +231,34 @@ export function PayoutsDebtsClient({
     });
   }
 
+  function resetFiltersToToday() {
+    const today = getTodayDate();
+    setFromDate(today);
+    setToDate(today);
+    setServiceId("ALL");
+    setTherapistId("ALL");
+    setClientId("ALL");
+    setBeneficiaryId("ALL");
+    setOperatorId("ALL");
+    setPaymentMethod("ALL");
+    setDescriptionFilter("ALL");
+  }
+
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold">{title}</h1>
           <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const today = getTodayDate();
-              setFromDate(today);
-              setToDate(today);
+        <div className="flex flex-wrap items-center gap-2">
+          <QuickDateRangeBar
+            onSelectRange={(f, t) => {
+              setFromDate(f);
+              setToDate(t);
             }}
-          >
-            <RotateCcw className="ml-1 size-3.5" />
-            امروز
-          </Button>
+          />
           <Button type="button" onClick={() => setModalOpen(true)}>
             <Plus className="ml-1.5 size-4" />
             ثبت {mode === "PAYOUT" ? "پرداختی جدید" : "بدهی جدید"}
@@ -265,28 +267,26 @@ export function PayoutsDebtsClient({
       </div>
 
       <CollapsibleFilterPanel
-        resetLabel="نمایش همه تاریخ‌ها"
-        onReset={() => {
-          setFromDate(null);
-          setToDate(null);
-          setServiceId("ALL");
-          setTherapistId("ALL");
-          setClientId("ALL");
-          setBeneficiaryId("ALL");
-          setOperatorId("ALL");
-          setPaymentMethod("ALL");
-          setDescriptionFilter("ALL");
-        }}
+        resetLabel="بازنشانی به امروز"
+        onReset={resetFiltersToToday}
       >
         <FieldGroup>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <Field>
               <FieldLabel className="text-xs">از تاریخ</FieldLabel>
-              <DatePicker calendarType="shamsi" value={fromDate} onValueChange={setFromDate} />
+              <DatePicker
+                calendarType="shamsi"
+                value={fromDate}
+                onValueChange={setFromDate}
+              />
             </Field>
             <Field>
               <FieldLabel className="text-xs">تا تاریخ</FieldLabel>
-              <DatePicker calendarType="shamsi" value={toDate} onValueChange={setToDate} />
+              <DatePicker
+                calendarType="shamsi"
+                value={toDate}
+                onValueChange={setToDate}
+              />
             </Field>
             <Field>
               <FieldLabel className="text-xs">خدمات</FieldLabel>
@@ -295,11 +295,15 @@ export function PayoutsDebtsClient({
                 items={[{ value: "ALL", label: "همه خدمات" }, ...services]}
                 onValueChange={(v) => setServiceId(v || "ALL")}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">همه خدمات</SelectItem>
                   {services.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -311,11 +315,15 @@ export function PayoutsDebtsClient({
                 items={[{ value: "ALL", label: "همه درمانگران" }, ...therapists]}
                 onValueChange={(v) => setTherapistId(v || "ALL")}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">همه درمانگران</SelectItem>
                   {therapists.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -327,11 +335,15 @@ export function PayoutsDebtsClient({
                 items={[{ value: "ALL", label: "همه مراجعین" }, ...clients]}
                 onValueChange={(v) => setClientId(v || "ALL")}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">همه مراجعین</SelectItem>
                   {clients.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                    <SelectItem key={c.value} value={c.value}>
+                      {c.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -343,14 +355,21 @@ export function PayoutsDebtsClient({
               <FieldLabel className="text-xs">ذی‌نفع</FieldLabel>
               <Select
                 value={beneficiaryId}
-                items={[{ value: "ALL", label: "همه ذی‌نفعان" }, ...beneficiaries]}
+                items={[
+                  { value: "ALL", label: "همه ذی‌نفعان" },
+                  ...beneficiaries,
+                ]}
                 onValueChange={(v) => setBeneficiaryId(v || "ALL")}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">همه ذی‌نفعان</SelectItem>
                   {beneficiaries.map((b) => (
-                    <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
+                    <SelectItem key={b.value} value={b.value}>
+                      {b.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -361,15 +380,22 @@ export function PayoutsDebtsClient({
                 value={descriptionFilter}
                 items={[
                   { value: "ALL", label: "همه شرح‌ها" },
-                  ...descriptions.map((d) => ({ value: d.title, label: d.title })),
+                  ...descriptions.map((d) => ({
+                    value: d.title,
+                    label: d.title,
+                  })),
                 ]}
                 onValueChange={(v) => setDescriptionFilter(v || "ALL")}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">همه شرح‌ها</SelectItem>
                   {descriptions.map((d) => (
-                    <SelectItem key={d.id} value={d.title}>{d.title}</SelectItem>
+                    <SelectItem key={d.id} value={d.title}>
+                      {d.title}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -381,11 +407,15 @@ export function PayoutsDebtsClient({
                 items={[{ value: "ALL", label: "همه کاربران" }, ...operators]}
                 onValueChange={(v) => setOperatorId(v || "ALL")}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">همه کاربران</SelectItem>
                   {operators.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -403,7 +433,9 @@ export function PayoutsDebtsClient({
                   ]}
                   onValueChange={(v) => setPaymentMethod(v || "ALL")}
                 >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ALL">همه</SelectItem>
                     <SelectItem value="CASH">نقدی</SelectItem>
@@ -444,7 +476,10 @@ export function PayoutsDebtsClient({
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-12 text-center text-sm text-muted-foreground">
+                <TableCell
+                  colSpan={9}
+                  className="py-12 text-center text-sm text-muted-foreground"
+                >
                   داده‌ای وجود ندارد
                 </TableCell>
               </TableRow>
@@ -465,9 +500,13 @@ export function PayoutsDebtsClient({
                   <TableCell>{formatJalaliShort(r.entryDateIso)}</TableCell>
                   <TableCell>{formatTimeShort(r.entryDateIso)}</TableCell>
                   <TableCell>{r.operatorName}</TableCell>
-                  <TableCell className="font-semibold">{r.beneficiaryName}</TableCell>
+                  <TableCell className="font-semibold">
+                    {r.beneficiaryName}
+                  </TableCell>
                   <TableCell>{r.descriptionText}</TableCell>
-                  <TableCell className="font-bold">{formatToman(r.amount)}</TableCell>
+                  <TableCell className="font-bold">
+                    {formatToman(r.amount)}
+                  </TableCell>
                   <TableCell className="max-w-48 truncate">{r.notes}</TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Button
@@ -493,7 +532,11 @@ export function PayoutsDebtsClient({
         onOpenChange={setModalOpen}
         drawerPosition="bottom"
       >
-        <ResponsiveDialogTrigger className="sr-only" tabIndex={-1} aria-hidden="true" />
+        <ResponsiveDialogTrigger
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden="true"
+        />
         <ResponsiveDialogContent className="sm:max-w-lg">
           <ResponsiveDialogHeader>
             <ResponsiveDialogTitle>
@@ -512,14 +555,21 @@ export function PayoutsDebtsClient({
                     <FieldLabel>ذی‌نفع</FieldLabel>
                     <Select
                       value={formBeneficiaryId}
-                      items={[{ value: "NONE", label: "انتخاب ذی‌نفع..." }, ...beneficiaries]}
+                      items={[
+                        { value: "NONE", label: "انتخاب ذی‌نفع..." },
+                        ...beneficiaries,
+                      ]}
                       onValueChange={(v) => setFormBeneficiaryId(v || "NONE")}
                     >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="NONE">انتخاب ذی‌نفع...</SelectItem>
                         {beneficiaries.map((b) => (
-                          <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
+                          <SelectItem key={b.value} value={b.value}>
+                            {b.label}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -562,7 +612,11 @@ export function PayoutsDebtsClient({
 
                   <Field>
                     <FieldLabel>تاریخ ثبت</FieldLabel>
-                    <DatePicker calendarType="shamsi" value={formDate} onValueChange={setFormDate} />
+                    <DatePicker
+                      calendarType="shamsi"
+                      value={formDate}
+                      onValueChange={setFormDate}
+                    />
                   </Field>
 
                   {mode === "PAYOUT" && (
@@ -577,11 +631,15 @@ export function PayoutsDebtsClient({
                         ]}
                         onValueChange={(v) => setFormPaymentMethod(v || "CASH")}
                       >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="CASH">نقدی</SelectItem>
                           <SelectItem value="POS">کارت‌خوان</SelectItem>
-                          <SelectItem value="CARD_TO_CARD">کارت به کارت</SelectItem>
+                          <SelectItem value="CARD_TO_CARD">
+                            کارت به کارت
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                     </Field>
@@ -601,11 +659,19 @@ export function PayoutsDebtsClient({
 
             <ResponsiveDialogFooter>
               <ResponsiveDialogDesktopOnly>
-                <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setModalOpen(false)}
+                >
                   انصراف
                 </Button>
               </ResponsiveDialogDesktopOnly>
-              <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
+              <Button
+                type="submit"
+                disabled={isPending}
+                className="w-full sm:w-auto"
+              >
                 {isPending ? "در حال ثبت..." : "ثبت"}
               </Button>
             </ResponsiveDialogFooter>

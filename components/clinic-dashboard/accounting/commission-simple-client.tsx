@@ -30,6 +30,7 @@ import { normalizePersianDigits } from "@/lib/normalize-persian-digits";
 import {
   AccountingStatCard,
   CollapsibleFilterPanel,
+  QuickDateRangeBar,
   formatJalaliShort,
   formatToman,
   getTodayDate,
@@ -70,9 +71,9 @@ export function CommissionSimpleClient({
   const [percentInput, setPercentInput] = useState("");
   const [serviceId, setServiceId] = useState("ALL");
   const [personId, setPersonId] = useState("ALL");
-  const [deductMode, setDeductMode] = useState<
-    "NONE" | "PURCHASE" | "SELL"
-  >("NONE");
+  const [deductMode, setDeductMode] = useState<"NONE" | "PURCHASE" | "SELL">(
+    "NONE"
+  );
   const [calculated, setCalculated] = useState(false);
 
   const parsedPercent = useMemo(() => {
@@ -137,37 +138,56 @@ export function CommissionSimpleClient({
     setCalculated(true);
   }
 
+  function resetFiltersToToday() {
+    const today = getTodayDate();
+    setFromDate(today);
+    setToDate(today);
+    setPercentInput("");
+    setServiceId("ALL");
+    setPersonId("ALL");
+    setDeductMode("NONE");
+    setCalculated(false);
+  }
+
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold">محاسبه کمیسیون</h1>
-        <p className="mt-1 text-xs text-muted-foreground">
-          محاسبه ساده کمیسیون بر اساس بازه تاریخ (پیش‌فرض امروز)، درصد، خدمت، پرسنل/معرف و کسر قیمت کالا
-        </p>
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-bold">محاسبه کمیسیون</h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            محاسبه ساده کمیسیون بر اساس بازه تاریخ، درصد، خدمت، پرسنل/معرف و کسر قیمت کالا
+          </p>
+        </div>
+        <QuickDateRangeBar
+          onSelectRange={(f, t) => {
+            setFromDate(f);
+            setToDate(t);
+          }}
+        />
       </div>
 
       <CollapsibleFilterPanel
-        resetLabel="پاک کردن فیلترها"
-        onReset={() => {
-          setFromDate(null);
-          setToDate(null);
-          setPercentInput("");
-          setServiceId("ALL");
-          setPersonId("ALL");
-          setDeductMode("NONE");
-          setCalculated(false);
-        }}
+        resetLabel="بازنشانی به امروز"
+        onReset={resetFiltersToToday}
       >
         <form onSubmit={handleCalculate} className="space-y-4">
           <FieldGroup>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Field>
                 <FieldLabel className="text-xs">از تاریخ *</FieldLabel>
-                <DatePicker calendarType="shamsi" value={fromDate} onValueChange={setFromDate} />
+                <DatePicker
+                  calendarType="shamsi"
+                  value={fromDate}
+                  onValueChange={setFromDate}
+                />
               </Field>
               <Field>
                 <FieldLabel className="text-xs">تا تاریخ *</FieldLabel>
-                <DatePicker calendarType="shamsi" value={toDate} onValueChange={setToDate} />
+                <DatePicker
+                  calendarType="shamsi"
+                  value={toDate}
+                  onValueChange={setToDate}
+                />
               </Field>
               <Field>
                 <FieldLabel className="text-xs">درصد کمیسیون *</FieldLabel>
@@ -190,11 +210,15 @@ export function CommissionSimpleClient({
                   items={[{ value: "ALL", label: "همه خدمات" }, ...services]}
                   onValueChange={(v) => setServiceId(v || "ALL")}
                 >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ALL">همه خدمات</SelectItem>
                     {services.map((s) => (
-                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -209,11 +233,15 @@ export function CommissionSimpleClient({
                   items={[{ value: "ALL", label: "همه" }, ...staffOptions]}
                   onValueChange={(v) => setPersonId(v || "ALL")}
                 >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ALL">همه</SelectItem>
                     {staffOptions.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -256,20 +284,7 @@ export function CommissionSimpleClient({
               <Calculator className="ml-1.5 size-4" />
               محاسبه کمیسیون
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                const today = getTodayDate();
-                setFromDate(today);
-                setToDate(today);
-                setPercentInput("");
-                setServiceId("ALL");
-                setPersonId("ALL");
-                setDeductMode("NONE");
-                setCalculated(false);
-              }}
-            >
+            <Button type="button" variant="outline" onClick={resetFiltersToToday}>
               <RotateCcw className="ml-1.5 size-4" />
               بازنشانی امروز
             </Button>
@@ -304,7 +319,10 @@ export function CommissionSimpleClient({
               <TableBody>
                 {rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                    <TableCell
+                      colSpan={7}
+                      className="py-10 text-center text-sm text-muted-foreground"
+                    >
                       موردی یافت نشد
                     </TableCell>
                   </TableRow>
@@ -312,12 +330,16 @@ export function CommissionSimpleClient({
                   rows.map((r, idx) => (
                     <TableRow
                       key={r.id}
-                      onClick={() => router.push(`/clinic-dashboard/clients/${r.clientId}`)}
+                      onClick={() =>
+                        router.push(`/clinic-dashboard/clients/${r.clientId}`)
+                      }
                       className="cursor-pointer whitespace-nowrap text-xs hover:bg-primary/5"
                     >
                       <TableCell>{(idx + 1).toLocaleString("fa-IR")}</TableCell>
                       <TableCell>{formatJalaliShort(r.performedAtIso)}</TableCell>
-                      <TableCell className="font-semibold text-primary">{r.clientName}</TableCell>
+                      <TableCell className="font-semibold text-primary">
+                        {r.clientName}
+                      </TableCell>
                       <TableCell>{r.personName}</TableCell>
                       <TableCell>{r.serviceTitle}</TableCell>
                       <TableCell>{formatToman(r.base)}</TableCell>

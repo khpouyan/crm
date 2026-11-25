@@ -11,66 +11,93 @@ export default async function ReceivablesPage() {
   const ctx = await getCurrentClinicContext();
   if (!ctx) return null;
 
-  const [invoices, services, therapists, staffUsers, clients, descriptions, terminals, bankAccounts] =
-    await Promise.all([
-      prisma.invoice.findMany({
-        where: { clinicId: ctx.clinicId },
-        include: {
-          client: {
-            include: { user: { select: { fullName: true, nationalId: true } } },
-          },
-          providedServices: {
-            include: {
-              subService: { include: { service: { select: { id: true, title: true } } } },
-              therapist: { include: { user: { select: { fullName: true } } } },
+  const [
+    invoices,
+    services,
+    therapists,
+    staffUsers,
+    clients,
+    descriptions,
+    terminals,
+    bankAccounts,
+    creditProviders,
+  ] = await Promise.all([
+    prisma.invoice.findMany({
+      where: { clinicId: ctx.clinicId },
+      include: {
+        client: {
+          include: { user: { select: { fullName: true, nationalId: true } } },
+        },
+        providedServices: {
+          include: {
+            subService: {
+              include: { service: { select: { id: true, title: true } } },
             },
+            therapist: { include: { user: { select: { fullName: true } } } },
           },
-          payments: {
-            include: {
-              terminal: {
-                include: { bankAccount: { select: { id: true, bankName: true, cardNumber: true } } },
+        },
+        payments: {
+          include: {
+            terminal: {
+              include: {
+                bankAccount: {
+                  select: { id: true, bankName: true, cardNumber: true },
+                },
               },
             },
+            creditProviderConfig: {
+              select: { id: true, title: true },
+            },
           },
-          installments: { where: { isCheck: true } },
         },
-        orderBy: { createdAt: "desc" },
-        take: 1000,
-      }),
-      prisma.service.findMany({
-        where: { clinicId: ctx.clinicId },
-        select: { id: true, title: true },
-        orderBy: { title: "asc" },
-      }),
-      prisma.clinicUser.findMany({
-        where: { clinicId: ctx.clinicId, deletedAt: null, canBeTherapist: true },
-        include: { user: { select: { fullName: true } } },
-      }),
-      prisma.clinicUser.findMany({
-        where: { clinicId: ctx.clinicId, deletedAt: null },
-        include: { user: { select: { fullName: true } } },
-      }),
-      prisma.client.findMany({
-        where: { clinicId: ctx.clinicId },
-        include: { user: { select: { fullName: true } } },
-        orderBy: { createdAt: "desc" },
-        take: 500,
-      }),
-      prisma.accountingDescriptionItem.findMany({
-        where: { clinicId: ctx.clinicId, scope: "RECEIVE" },
-        orderBy: { createdAt: "asc" },
-      }),
-      prisma.paymentTerminal.findMany({
-        where: { clinicId: ctx.clinicId },
-        select: { id: true, name: true },
-        orderBy: { name: "asc" },
-      }),
-      prisma.clinicBankAccount.findMany({
-        where: { clinicId: ctx.clinicId },
-        select: { id: true, bankName: true, cardNumber: true },
-        orderBy: { bankName: "asc" },
-      }),
-    ]);
+        installments: { where: { isCheck: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 1000,
+    }),
+    prisma.service.findMany({
+      where: { clinicId: ctx.clinicId },
+      select: { id: true, title: true },
+      orderBy: { title: "asc" },
+    }),
+    prisma.clinicUser.findMany({
+      where: {
+        clinicId: ctx.clinicId,
+        deletedAt: null,
+        canBeTherapist: true,
+      },
+      include: { user: { select: { fullName: true } } },
+    }),
+    prisma.clinicUser.findMany({
+      where: { clinicId: ctx.clinicId, deletedAt: null },
+      include: { user: { select: { fullName: true } } },
+    }),
+    prisma.client.findMany({
+      where: { clinicId: ctx.clinicId },
+      include: { user: { select: { fullName: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 500,
+    }),
+    prisma.accountingDescriptionItem.findMany({
+      where: { clinicId: ctx.clinicId, scope: "RECEIVE" },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.paymentTerminal.findMany({
+      where: { clinicId: ctx.clinicId },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.clinicBankAccount.findMany({
+      where: { clinicId: ctx.clinicId },
+      select: { id: true, bankName: true, cardNumber: true },
+      orderBy: { bankName: "asc" },
+    }),
+    prisma.clinicCreditProvider.findMany({
+      where: { clinicId: ctx.clinicId },
+      select: { id: true, title: true },
+      orderBy: { title: "asc" },
+    }),
+  ]);
 
   const creatorMap = new Map(
     staffUsers.map((u) => [u.id, u.user.fullName || u.jobTitle])
@@ -87,8 +114,24 @@ export default async function ReceivablesPage() {
     let credit = 0;
     let walletWithdraw = 0;
 
-    const posBreakdowns: Array<{ terminalId: string; terminalName: string; amount: number }> = [];
-    const cardBreakdowns: Array<{ cardKey: string; cardLabel: string; amount: number }> = [];
+    const posBreakdowns: Array<{
+      terminalId: string;
+      terminalName: string;
+      amount: number;
+    }> = [];
+    const cardBreakdowns: Array<{
+      cardKey: string;
+      cardLabel: string;
+      amount: number;
+    }> = [];
+    const creditBreakdowns: Array<{
+      creditKey: string;
+      creditLabel: string;
+      amount: number;
+    }> = [];
+    const posNamesSet = new Set<string>();
+    const cardNamesSet = new Set<string>();
+    const creditNamesSet = new Set<string>();
 
     for (const p of inv.payments) {
       if (p.paymentMethod === "CARD_TO_CARD") {
@@ -97,6 +140,8 @@ export default async function ReceivablesPage() {
         const cleanDigits = (bank?.cardNumber || "").replace(/\D/g, "");
         const last4 = cleanDigits ? cleanDigits.slice(-4) : "----";
         const cardName = bank?.bankName || "کارت بانکی";
+        const label = `${cardName} (${last4})`;
+        cardNamesSet.add(label);
         cardBreakdowns.push({
           cardKey: bank?.id || `${cardName}-${last4}`,
           cardLabel: `${cardName} (•••• ${last4})`,
@@ -105,15 +150,24 @@ export default async function ReceivablesPage() {
       } else if (p.paymentMethod === "POS") {
         pos += p.amount;
         const termName = p.terminal?.name || "کارت‌خوان";
+        posNamesSet.add(termName);
         posBreakdowns.push({
           terminalId: p.terminalId || termName,
           terminalName: termName,
           amount: p.amount,
         });
-      } else if (p.paymentMethod === "CASH") {
-        cash += p.amount;
       } else if (p.paymentMethod === "CREDIT") {
         credit += p.amount;
+        const providerTitle =
+          p.creditProviderConfig?.title || p.creditProvider || "سرویس اعتباری";
+        creditNamesSet.add(`${providerTitle} (${p.amount.toLocaleString("fa-IR")})`);
+        creditBreakdowns.push({
+          creditKey: p.creditProviderId || providerTitle,
+          creditLabel: providerTitle,
+          amount: p.amount,
+        });
+      } else if (p.paymentMethod === "CASH") {
+        cash += p.amount;
       } else if (p.paymentMethod === "WALLET") {
         walletWithdraw += p.amount;
       }
@@ -132,11 +186,16 @@ export default async function ReceivablesPage() {
         : "اپراتور",
       clientName: inv.client.user.fullName || "بدون نام",
       nationalId: inv.client.user.nationalId || "—",
-      descriptionLabel: inv.invoiceNumber ? `فاکتور #${inv.invoiceNumber}` : "فاکتور",
+      descriptionLabel: inv.invoiceNumber
+        ? `فاکتور #${inv.invoiceNumber}`
+        : "فاکتور",
       cardToCard,
+      cardNamesText: Array.from(cardNamesSet).join("، ") || "—",
       pos,
+      posNamesText: Array.from(posNamesSet).join("، ") || "—",
       cash,
       credit,
+      creditNamesText: Array.from(creditNamesSet).join("، ") || "—",
       walletWithdraw,
       walletDeposit: inv.depositAmount || 0,
       checkSum,
@@ -144,12 +203,17 @@ export default async function ReceivablesPage() {
       grandSum,
       posBreakdowns,
       cardBreakdowns,
+      creditBreakdowns,
       serviceId: firstSrv?.subService.service.id || "NONE",
       serviceTitle:
-        Array.from(new Set(inv.providedServices.map((s) => s.subService.service.title))).join("، ") || "—",
+        Array.from(
+          new Set(inv.providedServices.map((s) => s.subService.service.title))
+        ).join("، ") || "—",
       therapistId: firstSrv?.therapistId || "NONE",
       therapistName:
-        firstSrv?.therapist?.user.fullName || firstSrv?.therapistNameSnapshot || "—",
+        firstSrv?.therapist?.user.fullName ||
+        firstSrv?.therapistNameSnapshot ||
+        "—",
       notes: firstSrv?.description || "—",
       createdById: firstSrv?.createdById || "NONE",
       paymentMethods: inv.payments.map((p) => p.paymentMethod),
@@ -161,6 +225,7 @@ export default async function ReceivablesPage() {
       rows={rows}
       terminals={terminals}
       bankAccounts={bankAccounts}
+      creditProviders={creditProviders}
       services={services.map((s) => ({ value: s.id, label: s.title }))}
       therapists={therapists.map((t) => ({
         value: t.id,
