@@ -29,8 +29,10 @@ import {
 import { normalizePersianDigits } from "@/lib/normalize-persian-digits";
 import {
   AccountingStatCard,
+  CollapsibleFilterPanel,
   formatJalaliShort,
   formatToman,
+  getTodayDate,
 } from "./accounting-shared";
 
 export interface CommissionSourceItem {
@@ -63,8 +65,8 @@ export function CommissionSimpleClient({
   items: CommissionSourceItem[];
 }) {
   const router = useRouter();
-  const [fromDate, setFromDate] = useState<Date | null>(null);
-  const [toDate, setToDate] = useState<Date | null>(null);
+  const [fromDate, setFromDate] = useState<Date | null>(() => getTodayDate());
+  const [toDate, setToDate] = useState<Date | null>(() => getTodayDate());
   const [percentInput, setPercentInput] = useState("");
   const [serviceId, setServiceId] = useState("ALL");
   const [personId, setPersonId] = useState("ALL");
@@ -140,133 +142,144 @@ export function CommissionSimpleClient({
       <div>
         <h1 className="text-xl font-bold">محاسبه کمیسیون</h1>
         <p className="mt-1 text-xs text-muted-foreground">
-          محاسبه ساده کمیسیون بر اساس بازه تاریخ، درصد، خدمت، پرسنل/معرف و کسر قیمت کالا
+          محاسبه ساده کمیسیون بر اساس بازه تاریخ (پیش‌فرض امروز)، درصد، خدمت، پرسنل/معرف و کسر قیمت کالا
         </p>
       </div>
 
-      <form
-        onSubmit={handleCalculate}
-        className="space-y-4 rounded-xl border bg-card p-4 shadow-2xs"
+      <CollapsibleFilterPanel
+        resetLabel="پاک کردن فیلترها"
+        onReset={() => {
+          setFromDate(null);
+          setToDate(null);
+          setPercentInput("");
+          setServiceId("ALL");
+          setPersonId("ALL");
+          setDeductMode("NONE");
+          setCalculated(false);
+        }}
       >
-        <FieldGroup>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field>
-              <FieldLabel className="text-xs">از تاریخ *</FieldLabel>
-              <DatePicker calendarType="shamsi" value={fromDate} onValueChange={setFromDate} />
-            </Field>
-            <Field>
-              <FieldLabel className="text-xs">تا تاریخ *</FieldLabel>
-              <DatePicker calendarType="shamsi" value={toDate} onValueChange={setToDate} />
-            </Field>
-            <Field>
-              <FieldLabel className="text-xs">درصد کمیسیون *</FieldLabel>
-              <Input
-                dir="ltr"
-                placeholder="مثال: 15.5"
-                value={percentInput}
-                onChange={(e) => setPercentInput(e.target.value)}
-              />
-              {calculated && parsedPercent === null && (
-                <span className="text-[11px] text-destructive">
-                  درصد کمیسیون الزامی است
-                </span>
-              )}
-            </Field>
-            <Field>
-              <FieldLabel className="text-xs">خدمات</FieldLabel>
-              <Select
-                value={serviceId}
-                items={[{ value: "ALL", label: "همه خدمات" }, ...services]}
-                onValueChange={(v) => setServiceId(v || "ALL")}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">همه خدمات</SelectItem>
-                  {services.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
+        <form onSubmit={handleCalculate} className="space-y-4">
+          <FieldGroup>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Field>
+                <FieldLabel className="text-xs">از تاریخ *</FieldLabel>
+                <DatePicker calendarType="shamsi" value={fromDate} onValueChange={setFromDate} />
+              </Field>
+              <Field>
+                <FieldLabel className="text-xs">تا تاریخ *</FieldLabel>
+                <DatePicker calendarType="shamsi" value={toDate} onValueChange={setToDate} />
+              </Field>
+              <Field>
+                <FieldLabel className="text-xs">درصد کمیسیون *</FieldLabel>
+                <Input
+                  dir="ltr"
+                  placeholder="مثال: 15.5"
+                  value={percentInput}
+                  onChange={(e) => setPercentInput(e.target.value)}
+                />
+                {calculated && parsedPercent === null && (
+                  <span className="text-[11px] text-destructive">
+                    درصد کمیسیون الزامی است
+                  </span>
+                )}
+              </Field>
+              <Field>
+                <FieldLabel className="text-xs">خدمات</FieldLabel>
+                <Select
+                  value={serviceId}
+                  items={[{ value: "ALL", label: "همه خدمات" }, ...services]}
+                  onValueChange={(v) => setServiceId(v || "ALL")}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">همه خدمات</SelectItem>
+                    {services.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel className="text-xs">پرسنل / معرف</FieldLabel>
+                <Select
+                  value={personId}
+                  items={[{ value: "ALL", label: "همه" }, ...staffOptions]}
+                  onValueChange={(v) => setPersonId(v || "ALL")}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">همه</SelectItem>
+                    {staffOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field>
+                <FieldLabel className="text-xs">کسر قیمت</FieldLabel>
+                <RadioGroup
+                  value={deductMode}
+                  onValueChange={(v) =>
+                    setDeductMode((v as "NONE" | "PURCHASE" | "SELL") || "NONE")
+                  }
+                  className="flex flex-wrap gap-4 pt-1"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <RadioGroupItem value="NONE" id="ded-none" />
+                    <Label htmlFor="ded-none" className="cursor-pointer text-xs">
+                      هیچکدام
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <RadioGroupItem value="PURCHASE" id="ded-pur" />
+                    <Label htmlFor="ded-pur" className="cursor-pointer text-xs">
+                      کسر قیمت خرید محصول
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <RadioGroupItem value="SELL" id="ded-sell" />
+                    <Label htmlFor="ded-sell" className="cursor-pointer text-xs">
+                      کسر قیمت فروش محصول
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </Field>
+            </div>
+          </FieldGroup>
+
+          <div className="flex items-center gap-2 pt-1">
+            <Button type="submit">
+              <Calculator className="ml-1.5 size-4" />
+              محاسبه کمیسیون
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                const today = getTodayDate();
+                setFromDate(today);
+                setToDate(today);
+                setPercentInput("");
+                setServiceId("ALL");
+                setPersonId("ALL");
+                setDeductMode("NONE");
+                setCalculated(false);
+              }}
+            >
+              <RotateCcw className="ml-1.5 size-4" />
+              بازنشانی امروز
+            </Button>
           </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field>
-              <FieldLabel className="text-xs">پرسنل / معرف</FieldLabel>
-              <Select
-                value={personId}
-                items={[{ value: "ALL", label: "همه" }, ...staffOptions]}
-                onValueChange={(v) => setPersonId(v || "ALL")}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">همه</SelectItem>
-                  {staffOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-
-            <Field>
-              <FieldLabel className="text-xs">کسر قیمت</FieldLabel>
-              <RadioGroup
-                value={deductMode}
-                onValueChange={(v) =>
-                  setDeductMode((v as "NONE" | "PURCHASE" | "SELL") || "NONE")
-                }
-                className="flex flex-wrap gap-4 pt-1"
-              >
-                <div className="flex items-center gap-1.5">
-                  <RadioGroupItem value="NONE" id="ded-none" />
-                  <Label htmlFor="ded-none" className="cursor-pointer text-xs">
-                    هیچکدام
-                  </Label>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <RadioGroupItem value="PURCHASE" id="ded-pur" />
-                  <Label htmlFor="ded-pur" className="cursor-pointer text-xs">
-                    کسر قیمت خرید محصول
-                  </Label>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <RadioGroupItem value="SELL" id="ded-sell" />
-                  <Label htmlFor="ded-sell" className="cursor-pointer text-xs">
-                    کسر قیمت فروش محصول
-                  </Label>
-                </div>
-              </RadioGroup>
-            </Field>
-          </div>
-        </FieldGroup>
-
-        <div className="flex items-center gap-2 pt-1">
-          <Button type="submit">
-            <Calculator className="ml-1.5 size-4" />
-            محاسبه کمیسیون
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setFromDate(null);
-              setToDate(null);
-              setPercentInput("");
-              setServiceId("ALL");
-              setPersonId("ALL");
-              setDeductMode("NONE");
-              setCalculated(false);
-            }}
-          >
-            <RotateCcw className="ml-1.5 size-4" />
-            پاک کردن فیلترها
-          </Button>
-        </div>
-      </form>
+        </form>
+      </CollapsibleFilterPanel>
 
       {calculated && parsedPercent !== null && (
         <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-3">
             <AccountingStatCard
               title={`جمع کمیسیون (${parsedPercent.toLocaleString("fa-IR")}٪)`}
               amount={totalCommission}

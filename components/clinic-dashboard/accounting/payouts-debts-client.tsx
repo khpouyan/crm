@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   Plus,
   Trash2,
-  Filter,
   RotateCcw,
   Wallet,
 } from "lucide-react";
@@ -50,9 +49,11 @@ import {
 } from "@/app/clinic-dashboard/(dashboard)/accounting/actions";
 import {
   AccountingStatCard,
+  CollapsibleFilterPanel,
   formatJalaliShort,
   formatTimeShort,
   formatToman,
+  getTodayDate,
 } from "./accounting-shared";
 
 export interface LedgerEntryRow {
@@ -105,8 +106,8 @@ export function PayoutsDebtsClient({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const [fromDate, setFromDate] = useState<Date | null>(null);
-  const [toDate, setToDate] = useState<Date | null>(null);
+  const [fromDate, setFromDate] = useState<Date | null>(() => getTodayDate());
+  const [toDate, setToDate] = useState<Date | null>(() => getTodayDate());
   const [serviceId, setServiceId] = useState("ALL");
   const [therapistId, setTherapistId] = useState("ALL");
   const [clientId, setClientId] = useState("ALL");
@@ -118,7 +119,6 @@ export function PayoutsDebtsClient({
   const [descriptions, setDescriptions] = useState(initialDescriptions);
   const [newDescInput, setNewDescInput] = useState("");
 
-  // مودال ثبت پرداختی / بدهی جدید
   const [modalOpen, setModalOpen] = useState(false);
   const [formBeneficiaryId, setFormBeneficiaryId] = useState(
     beneficiaries[0]?.value || "NONE"
@@ -128,7 +128,7 @@ export function PayoutsDebtsClient({
   );
   const [formAmount, setFormAmount] = useState<number>(0);
   const [formPaymentMethod, setFormPaymentMethod] = useState("CASH");
-  const [formDate, setFormDate] = useState<Date | null>(new Date());
+  const [formDate, setFormDate] = useState<Date | null>(() => getTodayDate());
   const [formNotes, setFormNotes] = useState("");
 
   const filtered = useMemo(() => {
@@ -243,40 +243,41 @@ export function PayoutsDebtsClient({
           <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
         </div>
 
-        <Button type="button" onClick={() => setModalOpen(true)}>
-          <Plus className="ml-1.5 size-4" />
-          ثبت {mode === "PAYOUT" ? "پرداختی جدید" : "بدهی جدید"}
-        </Button>
-      </div>
-
-      {/* فیلترها */}
-      <div className="rounded-xl border bg-card p-4 shadow-2xs">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-sm font-bold">
-            <Filter className="size-4 text-primary" />
-            فیلترها
-          </div>
+        <div className="flex items-center gap-2">
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={() => {
-              setFromDate(null);
-              setToDate(null);
-              setServiceId("ALL");
-              setTherapistId("ALL");
-              setClientId("ALL");
-              setBeneficiaryId("ALL");
-              setOperatorId("ALL");
-              setPaymentMethod("ALL");
-              setDescriptionFilter("ALL");
+              const today = getTodayDate();
+              setFromDate(today);
+              setToDate(today);
             }}
           >
             <RotateCcw className="ml-1 size-3.5" />
-            پاک کردن فیلترها
+            امروز
+          </Button>
+          <Button type="button" onClick={() => setModalOpen(true)}>
+            <Plus className="ml-1.5 size-4" />
+            ثبت {mode === "PAYOUT" ? "پرداختی جدید" : "بدهی جدید"}
           </Button>
         </div>
+      </div>
 
+      <CollapsibleFilterPanel
+        resetLabel="نمایش همه تاریخ‌ها"
+        onReset={() => {
+          setFromDate(null);
+          setToDate(null);
+          setServiceId("ALL");
+          setTherapistId("ALL");
+          setClientId("ALL");
+          setBeneficiaryId("ALL");
+          setOperatorId("ALL");
+          setPaymentMethod("ALL");
+          setDescriptionFilter("ALL");
+        }}
+      >
         <FieldGroup>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <Field>
@@ -414,9 +415,9 @@ export function PayoutsDebtsClient({
             )}
           </div>
         </FieldGroup>
-      </div>
+      </CollapsibleFilterPanel>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3">
         <AccountingStatCard
           title={mode === "PAYOUT" ? "مجموع پرداختی" : "مجموع بدهی"}
           amount={totalAmount}
@@ -487,7 +488,6 @@ export function PayoutsDebtsClient({
         </Table>
       </div>
 
-      {/* مودال ثبت پرداختی یا بدهی به ذی‌نفع */}
       <ResponsiveDialog
         open={modalOpen}
         onOpenChange={setModalOpen}

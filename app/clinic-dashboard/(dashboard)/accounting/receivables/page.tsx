@@ -11,7 +11,7 @@ export default async function ReceivablesPage() {
   const ctx = await getCurrentClinicContext();
   if (!ctx) return null;
 
-  const [invoices, services, therapists, staffUsers, clients, descriptions] =
+  const [invoices, services, therapists, staffUsers, clients, descriptions, terminals, bankAccounts] =
     await Promise.all([
       prisma.invoice.findMany({
         where: { clinicId: ctx.clinicId },
@@ -25,7 +25,13 @@ export default async function ReceivablesPage() {
               therapist: { include: { user: { select: { fullName: true } } } },
             },
           },
-          payments: true,
+          payments: {
+            include: {
+              terminal: {
+                include: { bankAccount: { select: { id: true, bankName: true, cardNumber: true } } },
+              },
+            },
+          },
           installments: { where: { isCheck: true } },
         },
         orderBy: { createdAt: "desc" },
@@ -54,6 +60,16 @@ export default async function ReceivablesPage() {
         where: { clinicId: ctx.clinicId, scope: "RECEIVE" },
         orderBy: { createdAt: "asc" },
       }),
+      prisma.paymentTerminal.findMany({
+        where: { clinicId: ctx.clinicId },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.clinicBankAccount.findMany({
+        where: { clinicId: ctx.clinicId },
+        select: { id: true, bankName: true, cardNumber: true },
+        orderBy: { bankName: "asc" },
+      }),
     ]);
 
   const creatorMap = new Map(
@@ -71,12 +87,36 @@ export default async function ReceivablesPage() {
     let credit = 0;
     let walletWithdraw = 0;
 
+    const posBreakdowns: Array<{ terminalId: string; terminalName: string; amount: number }> = [];
+    const cardBreakdowns: Array<{ cardKey: string; cardLabel: string; amount: number }> = [];
+
     for (const p of inv.payments) {
-      if (p.paymentMethod === "CARD_TO_CARD") cardToCard += p.amount;
-      else if (p.paymentMethod === "POS") pos += p.amount;
-      else if (p.paymentMethod === "CASH") cash += p.amount;
-      else if (p.paymentMethod === "CREDIT") credit += p.amount;
-      else if (p.paymentMethod === "WALLET") walletWithdraw += p.amount;
+      if (p.paymentMethod === "CARD_TO_CARD") {
+        cardToCard += p.amount;
+        const bank = p.terminal?.bankAccount;
+        const cleanDigits = (bank?.cardNumber || "").replace(/\D/g, "");
+        const last4 = cleanDigits ? cleanDigits.slice(-4) : "----";
+        const cardName = bank?.bankName || "کارت بانکی";
+        cardBreakdowns.push({
+          cardKey: bank?.id || `${cardName}-${last4}`,
+          cardLabel: `${cardName} (•••• ${last4})`,
+          amount: p.amount,
+        });
+      } else if (p.paymentMethod === "POS") {
+        pos += p.amount;
+        const termName = p.terminal?.name || "کارت‌خوان";
+        posBreakdowns.push({
+          terminalId: p.terminalId || termName,
+          terminalName: termName,
+          amount: p.amount,
+        });
+      } else if (p.paymentMethod === "CASH") {
+        cash += p.amount;
+      } else if (p.paymentMethod === "CREDIT") {
+        credit += p.amount;
+      } else if (p.paymentMethod === "WALLET") {
+        walletWithdraw += p.amount;
+      }
     }
 
     const checkSum = inv.installments.reduce((s, c) => s + c.amount, 0);
@@ -102,6 +142,8 @@ export default async function ReceivablesPage() {
       checkSum,
       receivedSum,
       grandSum,
+      posBreakdowns,
+      cardBreakdowns,
       serviceId: firstSrv?.subService.service.id || "NONE",
       serviceTitle:
         Array.from(new Set(inv.providedServices.map((s) => s.subService.service.title))).join("، ") || "—",
@@ -117,6 +159,8 @@ export default async function ReceivablesPage() {
   return (
     <ReceivablesReportClient
       rows={rows}
+      terminals={terminals}
+      bankAccounts={bankAccounts}
       services={services.map((s) => ({ value: s.id, label: s.title }))}
       therapists={therapists.map((t) => ({
         value: t.id,

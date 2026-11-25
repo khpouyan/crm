@@ -10,7 +10,6 @@ import {
   Receipt,
   AlertCircle,
   CheckCircle2,
-  Filter,
   RotateCcw,
   Sparkles,
 } from "lucide-react";
@@ -35,9 +34,11 @@ import {
 } from "@/components/ui/table";
 import {
   AccountingStatCard,
+  CollapsibleFilterPanel,
   formatJalaliShort,
   formatTimeShort,
   formatToman,
+  getTodayDate,
 } from "./accounting-shared";
 
 export interface ServiceReportRow {
@@ -93,8 +94,8 @@ export function AccountingServicesClient({
 }: ServicesReportClientProps) {
   const router = useRouter();
 
-  const [fromDate, setFromDate] = useState<Date | null>(null);
-  const [toDate, setToDate] = useState<Date | null>(null);
+  const [fromDate, setFromDate] = useState<Date | null>(() => getTodayDate());
+  const [toDate, setToDate] = useState<Date | null>(() => getTodayDate());
   const [serviceId, setServiceId] = useState("ALL");
   const [subServiceId, setSubServiceId] = useState("ALL");
   const [therapistId, setTherapistId] = useState("ALL");
@@ -195,26 +196,29 @@ export function AccountingServicesClient({
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold">خدمات</h1>
-        <p className="mt-1 text-xs text-muted-foreground">
-          گزارش جامع مبلغ کل خدمات ارائه‌شده (حتی در صورت پرداخت قسطی) — با کلیک روی هر ردیف وارد پرونده مراجع می‌شوید
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-bold">خدمات</h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            گزارش جامع مبلغ کل خدمات ارائه‌شده (پیش‌فرض تاریخ امروز) — با کلیک روی هر ردیف وارد پرونده مراجع می‌شوید
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            const today = getTodayDate();
+            setFromDate(today);
+            setToDate(today);
+          }}
+        >
+          <RotateCcw className="ml-1 size-3.5" />
+          امروز
+        </Button>
       </div>
 
-      {/* فیلترها */}
-      <div className="rounded-xl border bg-card p-4 shadow-2xs">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-sm font-bold">
-            <Filter className="size-4 text-primary" />
-            فیلترها
-          </div>
-          <Button type="button" variant="ghost" size="sm" onClick={resetFilters}>
-            <RotateCcw className="ml-1 size-3.5" />
-            پاک کردن فیلترها
-          </Button>
-        </div>
-
+      <CollapsibleFilterPanel onReset={resetFilters} resetLabel="نمایش همه تاریخ‌ها">
         <FieldGroup>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Field>
@@ -364,10 +368,10 @@ export function AccountingServicesClient({
             </label>
           </div>
         </FieldGroup>
-      </div>
+      </CollapsibleFilterPanel>
 
-      {/* کارت‌های جمع مبالغ (شامل باکس اعتباری) */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* کارت‌های جمع مبالغ (۲ ستون در موبایل) */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <AccountingStatCard title="جمع مبلغ سرویس" amount={totals.serviceSum} icon={<DollarSign className="size-4" />} tone="blue" />
         <AccountingStatCard title="جمع مبلغ تخفیف" amount={totals.discountSum} icon={<Percent className="size-4" />} tone="emerald" />
         <AccountingStatCard title="جمع مبلغ اضافه پرداخت" amount={totals.extraSum} icon={<PlusCircle className="size-4" />} tone="purple" />

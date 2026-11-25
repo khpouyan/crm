@@ -1,9 +1,9 @@
-// components/clinic-dashboard/(dashboard)/accounting/wallet-report-client.tsx
+// components/clinic-dashboard/accounting/wallet-report-client.tsx
 "use client";
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Filter, RotateCcw, Wallet } from "lucide-react";
+import { RotateCcw, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
@@ -24,9 +24,11 @@ import {
 } from "@/components/ui/table";
 import {
   AccountingStatCard,
+  CollapsibleFilterPanel,
   formatJalaliShort,
   formatTimeShort,
   formatToman,
+  getTodayDate,
 } from "./accounting-shared";
 
 export interface WalletReportRow {
@@ -52,8 +54,8 @@ const METHOD_LABELS: Record<string, string> = {
 
 export function AccountingWalletClient({ rows }: { rows: WalletReportRow[] }) {
   const router = useRouter();
-  const [fromDate, setFromDate] = useState<Date | null>(null);
-  const [toDate, setToDate] = useState<Date | null>(null);
+  const [fromDate, setFromDate] = useState<Date | null>(() => getTodayDate());
+  const [toDate, setToDate] = useState<Date | null>(() => getTodayDate());
   const [typeFilter, setTypeFilter] = useState("ALL");
 
   const filtered = useMemo(() => {
@@ -87,34 +89,36 @@ export function AccountingWalletClient({ rows }: { rows: WalletReportRow[] }) {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold">کیف پول</h1>
-        <p className="mt-1 text-xs text-muted-foreground">
-          کل تراکنش‌های واریز، برداشت و بیعانه کیف پول مراجعین — کلیک روی هر سطر پرونده مراجع را باز می‌کند
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-bold">کیف پول</h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            تراکنش‌های واریز، برداشت و بیعانه کیف پول مراجعین (پیش‌فرض تاریخ امروز) — کلیک روی هر سطر پرونده مراجع را باز می‌کند
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            const today = getTodayDate();
+            setFromDate(today);
+            setToDate(today);
+          }}
+        >
+          <RotateCcw className="ml-1 size-3.5" />
+          امروز
+        </Button>
       </div>
 
-      <div className="rounded-xl border bg-card p-4 shadow-2xs">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-sm font-bold">
-            <Filter className="size-4 text-primary" />
-            فیلترها
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setFromDate(null);
-              setToDate(null);
-              setTypeFilter("ALL");
-            }}
-          >
-            <RotateCcw className="ml-1 size-3.5" />
-            پاک کردن فیلترها
-          </Button>
-        </div>
-
+      <CollapsibleFilterPanel
+        resetLabel="نمایش همه تاریخ‌ها"
+        onReset={() => {
+          setFromDate(null);
+          setToDate(null);
+          setTypeFilter("ALL");
+        }}
+      >
         <FieldGroup>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field>
@@ -148,9 +152,9 @@ export function AccountingWalletClient({ rows }: { rows: WalletReportRow[] }) {
             </Field>
           </div>
         </FieldGroup>
-      </div>
+      </CollapsibleFilterPanel>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3">
         <AccountingStatCard title="جمع واریزی‌ها" amount={totals.deposits} icon={<Wallet className="size-4" />} tone="emerald" />
         <AccountingStatCard title="جمع برداشت‌ها" amount={totals.withdraws} icon={<Wallet className="size-4" />} tone="rose" />
       </div>

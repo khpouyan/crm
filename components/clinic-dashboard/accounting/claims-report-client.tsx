@@ -3,7 +3,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Filter, RotateCcw, Search } from "lucide-react";
+import { AlertCircle, RotateCcw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/table";
 import {
   AccountingStatCard,
+  CollapsibleFilterPanel,
   formatJalaliShort,
   formatToman,
 } from "./accounting-shared";
@@ -94,28 +95,15 @@ export function ClaimsReportClient({ rows }: { rows: ClaimRow[] }) {
         </p>
       </div>
 
-      <div className="rounded-xl border bg-card p-4 shadow-2xs">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-sm font-bold">
-            <Filter className="size-4 text-primary" />
-            فیلتر مطالبات
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setSearch("");
-              setStatusFilter("ALL");
-              setFromDate(null);
-              setToDate(null);
-            }}
-          >
-            <RotateCcw className="ml-1 size-3.5" />
-            نمایش همه
-          </Button>
-        </div>
-
+      <CollapsibleFilterPanel
+        resetLabel="نمایش همه"
+        onReset={() => {
+          setSearch("");
+          setStatusFilter("ALL");
+          setFromDate(null);
+          setToDate(null);
+        }}
+      >
         <FieldGroup>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Field>
@@ -159,9 +147,9 @@ export function ClaimsReportClient({ rows }: { rows: ClaimRow[] }) {
             </Field>
           </div>
         </FieldGroup>
-      </div>
+      </CollapsibleFilterPanel>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3">
         <AccountingStatCard
           title="مجموع کل مطالبات (مانده حساب‌ها)"
           amount={totalClaims}

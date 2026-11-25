@@ -10,7 +10,6 @@ import {
   Wallet,
   FileCheck2,
   Calculator,
-  Filter,
   RotateCcw,
   ExternalLink,
   Plus,
@@ -39,9 +38,11 @@ import {
 import { createAccountingDescriptionAction } from "@/app/clinic-dashboard/(dashboard)/accounting/actions";
 import {
   AccountingStatCard,
+  CollapsibleFilterPanel,
   formatJalaliShort,
   formatTimeShort,
   formatToman,
+  getTodayDate,
 } from "./accounting-shared";
 
 export interface ReceivableRow {
@@ -61,6 +62,8 @@ export interface ReceivableRow {
   checkSum: number;
   receivedSum: number;
   grandSum: number;
+  posBreakdowns: Array<{ terminalId: string; terminalName: string; amount: number }>;
+  cardBreakdowns: Array<{ cardKey: string; cardLabel: string; amount: number }>;
   serviceId: string;
   serviceTitle: string;
   therapistId: string;
@@ -77,6 +80,8 @@ interface SelectOption {
 
 export function ReceivablesReportClient({
   rows,
+  terminals,
+  bankAccounts,
   services,
   therapists,
   operators,
@@ -84,6 +89,8 @@ export function ReceivablesReportClient({
   descriptions: initialDescriptions,
 }: {
   rows: ReceivableRow[];
+  terminals: Array<{ id: string; name: string }>;
+  bankAccounts: Array<{ id: string; bankName: string; cardNumber: string | null }>;
   services: SelectOption[];
   therapists: SelectOption[];
   operators: SelectOption[];
@@ -91,8 +98,8 @@ export function ReceivablesReportClient({
   descriptions: { id: string; title: string }[];
 }) {
   const router = useRouter();
-  const [fromDate, setFromDate] = useState<Date | null>(null);
-  const [toDate, setToDate] = useState<Date | null>(null);
+  const [fromDate, setFromDate] = useState<Date | null>(() => getTodayDate());
+  const [toDate, setToDate] = useState<Date | null>(() => getTodayDate());
   const [serviceId, setServiceId] = useState("ALL");
   const [therapistId, setTherapistId] = useState("ALL");
   const [clientId, setClientId] = useState("ALL");
@@ -125,7 +132,22 @@ export function ReceivablesReportClient({
   }, [rows, fromDate, toDate, serviceId, therapistId, clientId, operatorId, paymentMethod]);
 
   const totals = useMemo(() => {
-    return filtered.reduce(
+    const posByTerminal = new Map<string, { label: string; amount: number }>();
+    for (const t of terminals) {
+      posByTerminal.set(t.id, { label: t.name, amount: 0 });
+    }
+
+    const cardByAccount = new Map<string, { label: string; amount: number }>();
+    for (const b of bankAccounts) {
+      const cleanDigits = (b.cardNumber || "").replace(/\D/g, "");
+      const last4 = cleanDigits ? cleanDigits.slice(-4) : "----";
+      cardByAccount.set(b.id, {
+        label: `${b.bankName} (•••• ${last4})`,
+        amount: 0,
+      });
+    }
+
+    const base = filtered.reduce(
       (acc, r) => {
         acc.cash += r.cash;
         acc.pos += r.pos;
@@ -136,6 +158,25 @@ export function ReceivablesReportClient({
         acc.checkSum += r.checkSum;
         acc.receivedSum += r.receivedSum;
         acc.grandSum += r.grandSum;
+
+        for (const pb of r.posBreakdowns) {
+          const cur = posByTerminal.get(pb.terminalId) || {
+            label: pb.terminalName,
+            amount: 0,
+          };
+          cur.amount += pb.amount;
+          posByTerminal.set(pb.terminalId, cur);
+        }
+
+        for (const cb of r.cardBreakdowns) {
+          const cur = cardByAccount.get(cb.cardKey) || {
+            label: cb.cardLabel,
+            amount: 0,
+          };
+          cur.amount += cb.amount;
+          cardByAccount.set(cb.cardKey, cur);
+        }
+
         return acc;
       },
       {
@@ -150,7 +191,13 @@ export function ReceivablesReportClient({
         grandSum: 0,
       }
     );
-  }, [filtered]);
+
+    return {
+      ...base,
+      posBreakdownItems: Array.from(posByTerminal.values()),
+      cardBreakdownItems: Array.from(cardByAccount.values()),
+    };
+  }, [filtered, terminals, bankAccounts]);
 
   async function handleAddDescription() {
     if (!newDescText.trim()) return;
@@ -169,38 +216,40 @@ export function ReceivablesReportClient({
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold">دریافتی</h1>
-        <p className="mt-1 text-xs text-muted-foreground">
-          جزئیات مبالغ دریافتی به تفکیک روش پرداخت — کلیک روی هر سطر مستقیماً پرونده مراجع را باز می‌کند
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-bold">دریافتی</h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            جزئیات مبالغ دریافتی به تفکیک روش پرداخت (پیش‌فرض تاریخ امروز) — کلیک روی هر سطر پرونده مراجع را باز می‌کند
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            const today = getTodayDate();
+            setFromDate(today);
+            setToDate(today);
+          }}
+        >
+          <RotateCcw className="ml-1 size-3.5" />
+          امروز
+        </Button>
       </div>
 
-      <div className="rounded-xl border bg-card p-4 shadow-2xs">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-sm font-bold">
-            <Filter className="size-4 text-primary" />
-            فیلترها
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setFromDate(null);
-              setToDate(null);
-              setServiceId("ALL");
-              setTherapistId("ALL");
-              setClientId("ALL");
-              setOperatorId("ALL");
-              setPaymentMethod("ALL");
-            }}
-          >
-            <RotateCcw className="ml-1 size-3.5" />
-            پاک کردن فیلترها
-          </Button>
-        </div>
-
+      <CollapsibleFilterPanel
+        resetLabel="نمایش همه تاریخ‌ها"
+        onReset={() => {
+          setFromDate(null);
+          setToDate(null);
+          setServiceId("ALL");
+          setTherapistId("ALL");
+          setClientId("ALL");
+          setOperatorId("ALL");
+          setPaymentMethod("ALL");
+        }}
+      >
         <FieldGroup>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <Field>
@@ -325,13 +374,25 @@ export function ReceivablesReportClient({
             </Field>
           </div>
         </FieldGroup>
-      </div>
+      </CollapsibleFilterPanel>
 
-      {/* کارت‌های خلاصه دریافتی (شامل باکس اعتباری) */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {/* کارت‌های خلاصه دریافتی (۲ ستون در موبایل + تفکیک کارت‌خوان و کارت به کارت) */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <AccountingStatCard title="نقدی" amount={totals.cash} icon={<Banknote className="size-4" />} tone="emerald" />
-        <AccountingStatCard title="کارت‌خوان" amount={totals.pos} icon={<CreditCard className="size-4" />} tone="blue" />
-        <AccountingStatCard title="کارت به کارت" amount={totals.cardToCard} icon={<ArrowLeftRight className="size-4" />} tone="purple" />
+        <AccountingStatCard
+          title="کارت‌خوان"
+          amount={totals.pos}
+          icon={<CreditCard className="size-4" />}
+          tone="blue"
+          breakdownItems={totals.posBreakdownItems}
+        />
+        <AccountingStatCard
+          title="کارت به کارت"
+          amount={totals.cardToCard}
+          icon={<ArrowLeftRight className="size-4" />}
+          tone="purple"
+          breakdownItems={totals.cardBreakdownItems}
+        />
         <AccountingStatCard title="اعتباری" amount={totals.credit} icon={<Sparkles className="size-4" />} tone="blue" />
         <AccountingStatCard title="برداشت از کیف پول" amount={totals.walletWithdraw} icon={<Wallet className="size-4" />} tone="amber" />
         <AccountingStatCard title="واریز به کیف پول (بیعانه)" amount={totals.walletDeposit} icon={<Wallet className="size-4" />} tone="purple" />
