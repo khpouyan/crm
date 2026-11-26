@@ -67,6 +67,14 @@ export async function createClientAction(input: CreateClientInput) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      const clinicSettings = await tx.clinic.findUnique({
+        where: { id: ctx.clinicId },
+        select: {
+          fileNumberAutoEnabled: true,
+          fileNumberStartFrom: true,
+        },
+      });
+
       if (!input.noPhone && normalizedPhone) {
         const duplicatePhoneClient = await tx.client.findFirst({
           where: {
@@ -113,21 +121,28 @@ export async function createClientAction(input: CreateClientInput) {
         }
       }
 
-      let targetFileNumber = input.fileNumber;
-      if (!targetFileNumber) {
+      let targetFileNumber: number | null = input.fileNumber ?? null;
+      const autoFileEnabled = clinicSettings?.fileNumberAutoEnabled ?? true;
+      const startFrom = clinicSettings?.fileNumberStartFrom ?? 1001;
+
+      if (!targetFileNumber && autoFileEnabled) {
         const lastClient = await tx.client.findFirst({
           where: { clinicId: ctx.clinicId, fileNumber: { not: null } },
           orderBy: { fileNumber: "desc" },
           select: { fileNumber: true },
         });
-        targetFileNumber = (lastClient?.fileNumber || 1000) + 1;
+        targetFileNumber = lastClient?.fileNumber
+          ? Math.max(lastClient.fileNumber + 1, startFrom)
+          : startFrom;
       }
 
-      const existingFile = await tx.client.findFirst({
-        where: { clinicId: ctx.clinicId, fileNumber: targetFileNumber },
-      });
-      if (existingFile) {
-        throw new Error(`شماره پرونده ${targetFileNumber} قبلاً ثبت شده است.`);
+      if (targetFileNumber) {
+        const existingFile = await tx.client.findFirst({
+          where: { clinicId: ctx.clinicId, fileNumber: targetFileNumber },
+        });
+        if (existingFile) {
+          throw new Error(`شماره پرونده ${targetFileNumber} قبلاً ثبت شده است.`);
+        }
       }
 
       let user = await tx.user.findUnique({
@@ -354,7 +369,11 @@ export async function saveMultiServiceInvoiceAction(
         }),
         tx.clinic.findUnique({
           where: { id: ctx.clinicId },
-          select: { vatPercent: true },
+          select: {
+            vatPercent: true,
+            invoiceNumberAutoEnabled: true,
+            invoiceNumberStartFrom: true,
+          },
         }),
       ]);
       if (!client) throw new Error("پرونده مراجع یافت نشد.");
@@ -457,15 +476,20 @@ export async function saveMultiServiceInvoiceAction(
         throw new Error(calc.validationError);
       }
 
-      const nextInvoiceNumber =
-        existingInvoiceNumber ??
-        ((
-          await tx.invoice.findFirst({
-            where: { clinicId: ctx.clinicId, invoiceNumber: { not: null } },
-            orderBy: { invoiceNumber: "desc" },
-            select: { invoiceNumber: true },
-          })
-        )?.invoiceNumber || 150000) + 1;
+      const invoiceAutoEnabled = clinic?.invoiceNumberAutoEnabled ?? true;
+      const invoiceStartFrom = clinic?.invoiceNumberStartFrom ?? 150001;
+
+      let resolvedInvoiceNumber: number | null = existingInvoiceNumber;
+      if (!resolvedInvoiceNumber && invoiceAutoEnabled) {
+        const lastInv = await tx.invoice.findFirst({
+          where: { clinicId: ctx.clinicId, invoiceNumber: { not: null } },
+          orderBy: { invoiceNumber: "desc" },
+          select: { invoiceNumber: true },
+        });
+        resolvedInvoiceNumber = lastInv?.invoiceNumber
+          ? Math.max(lastInv.invoiceNumber + 1, invoiceStartFrom)
+          : invoiceStartFrom;
+      }
 
       const invoice = input.invoiceId
         ? await tx.invoice.update({
@@ -492,7 +516,7 @@ export async function saveMultiServiceInvoiceAction(
             data: {
               clinicId: ctx.clinicId,
               clientId: client.id,
-              invoiceNumber: nextInvoiceNumber,
+              invoiceNumber: resolvedInvoiceNumber,
               subTotalAmount: calc.subTotal,
               discountAmount: calc.discountAmount,
               discountReason: input.discountReason?.trim() || null,
@@ -671,6 +695,8 @@ export async function saveMultiServiceInvoiceAction(
         });
       }
 
+      const invoiceLabel = resolvedInvoiceNumber ? `#${resolvedInvoiceNumber}` : "";
+
       if (calc.walletUsedTotal > 0) {
         await tx.client.update({
           where: { id: client.id },
@@ -682,7 +708,7 @@ export async function saveMultiServiceInvoiceAction(
             type: "WITHDRAW",
             amount: calc.walletUsedTotal,
             paymentMethod: "INVOICE_PAYMENT",
-            description: `${input.invoiceId ? "ویرایش پرداخت" : "پرداخت"} فاکتور شماره ${nextInvoiceNumber}`,
+            description: `${input.invoiceId ? "ویرایش پرداخت" : "پرداخت"} فاکتور ${invoiceLabel}`.trim(),
             createdById: ctx.clinicUserId,
           },
         });
@@ -699,7 +725,7 @@ export async function saveMultiServiceInvoiceAction(
             type: "DEPOSIT",
             amount: calc.depositAmount,
             paymentMethod: "DEPOSIT",
-            description: `بیعانه بابت سرویس «${input.depositServiceTitle}» — فاکتور #${nextInvoiceNumber}`,
+            description: `بیعانه بابت سرویس «${input.depositServiceTitle}» — فاکتور ${invoiceLabel}`.trim(),
             createdById: ctx.clinicUserId,
           },
         });

@@ -258,6 +258,11 @@ const COLLAPSIBLE_GROUPS: NavGroupItem[] = [
     ],
     items: [
       {
+        title: "تنظیمات پنل",
+        href: "/clinic-dashboard/settings/panel",
+        requiredAnyPermissions: ["management.settings"],
+      },
+      {
         title: "مشخصات و اطلاعات مرکز",
         href: "/clinic-dashboard/settings/clinic-profile",
         requiredAnyPermissions: ["management.settings"],

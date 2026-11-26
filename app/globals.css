@@ -4,15 +4,143 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Digit-script utilities. The body enables the FA font's Farsi-digits
-   stylistic set globally (ss01 = Vazirmatn, ss20 = Estedad — the CLI
-   rewrites it per preset), so num-en turns it off for Latin digits and
-   num-fa turns it on
-   explicitly (for use inside num-en scopes). Width is NOT handled here —
-   compose with Tailwind's built-in tabular-nums for equal-width digits:
-   e.g. `num-fa tabular-nums` or `num-en tabular-nums`. Using
-   font-variant-numeric for width (not font-feature-settings) is what
-   makes that composition work. */
+/* فونت‌های سرو‌شده از public/fonts */
+@font-face {
+  font-family: "IRANSansX";
+  src: url("/fonts/IranSansX/IRANSansX-Thin.woff2") format("woff2");
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IRANSansX";
+  src: url("/fonts/IranSansX/IRANSansX-UltraLight.woff2") format("woff2");
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IRANSansX";
+  src: url("/fonts/IranSansX/IRANSansX-Light.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IRANSansX";
+  src: url("/fonts/IranSansX/IRANSansX-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IRANSansX";
+  src: url("/fonts/IranSansX/IRANSansX-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IRANSansX";
+  src: url("/fonts/IranSansX/IRANSansX-DemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IRANSansX";
+  src: url("/fonts/IranSansX/IRANSansX-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IRANSansX";
+  src: url("/fonts/IranSansX/IRANSansX-ExtraBold.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IRANSansX";
+  src: url("/fonts/IranSansX/IRANSansX-Black.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Yekan";
+  src: url("/fonts/yekan/Yekan-Thin.woff2") format("woff2");
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Yekan";
+  src: url("/fonts/yekan/Yekan-Light.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Yekan";
+  src: url("/fonts/yekan/Yekan-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Yekan";
+  src: url("/fonts/yekan/Yekan-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Yekan";
+  src: url("/fonts/yekan/Yekan-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Yekan";
+  src: url("/fonts/yekan/Yekan-ExtraBold.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Yekan";
+  src: url("/fonts/yekan/Yekan-Black.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("/fonts/Vazirmatn.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 @utility num-fa {
   font-feature-settings: "ss01" on;
 }
@@ -66,15 +194,9 @@
 }
 
 :root {
-        /* Our custom Vazirmatn cut first (variable, digits + Arabic, NO Latin
-       letters — built by scripts/build-vazirmatn-subset.py). It owns
-       Persian glyphs AND digits; body ss01 (below) turns typed 0-9
-       into Farsi digits. English falls through to Geist — the cut has
-       no Latin letters. No system fallbacks by design. Mono stays
-       Geist Mono first so code numbers keep their width. */
-    --font-sans: var(--font-fa), var(--font-geist);
-    --font-heading: var(--font-fa), var(--font-geist);
-    --font-mono: var(--font-mono-geist-mono), var(--font-fa);
+    --font-sans: "IRANSansX", "Vazirmatn", Tahoma, sans-serif;
+    --font-heading: var(--font-sans);
+    --font-mono: var(--font-mono-geist-mono), "Vazirmatn", monospace;
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
@@ -147,16 +269,13 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
+  }
   body {
     @apply bg-background text-foreground;
-    /* The FA font's "Farsi Digits" stylistic set (ss01 Vazirmatn /
-       ss20 Estedad): renders every digit (Latin 0-9 and Arabic ٠-٩) as
-       Farsi ۰-۹. Tabular numbers: add "tnum". */
+    font-family: var(--font-sans, "IRANSansX", "Vazirmatn", Tahoma, sans-serif);
     font-feature-settings: "ss01";
-    }
+  }
   html {
     @apply font-sans;
-    }
- 
+  }
 }

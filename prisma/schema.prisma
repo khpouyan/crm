@@ -153,6 +153,13 @@ model Clinic {
   smsBalance    Int       @default(50)
   vatPercent    Float     @default(0)
 
+  // تنظیمات شماره‌گذاری پرونده و فاکتور و تکمیل پرونده
+  fileNumberAutoEnabled    Boolean @default(true)
+  fileNumberStartFrom      Int     @default(1001)
+  invoiceNumberAutoEnabled Boolean @default(true)
+  invoiceNumberStartFrom   Int     @default(150001)
+  fileCompletenessConfig   Json    @default("{}")
+
   createdAt DateTime @default(now())
 
   roles               ClinicRole[]
