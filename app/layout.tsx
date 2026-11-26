@@ -2,6 +2,7 @@
 import { DirectionProvider } from "@base-ui/react/direction-provider"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { ToastProvider } from "@/components/ui/toast"
 import { fontVariables } from "@/lib/fonts"
 
 export default function RootLayout({
@@ -18,10 +19,11 @@ export default function RootLayout({
     >
       <body>
         <DirectionProvider direction="rtl">
-          <ThemeProvider>{children}</ThemeProvider>
+          <ThemeProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </ThemeProvider>
         </DirectionProvider>
       </body>
     </html>
   )
 }
-

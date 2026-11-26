@@ -4,7 +4,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Save, HeartPulse, ClipboardList } from "lucide-react";
-import { toast } from "sonner";
+import { toastManager } from "@/components/ui/toast";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -105,11 +105,19 @@ export function ClientMedicalFileClient({
       });
 
       if (!res.success) {
-        toast.error(res.error || "خطا در ذخیره پرونده پزشکی");
+        toastManager.add({
+          type: "error",
+          title: "خطا در ذخیره‌سازی",
+          description: res.error || "خطا در ذخیره پرونده پزشکی",
+        });
         return;
       }
 
-      toast.success("تغییرات پرونده پزشکی با موفقیت ذخیره شد.");
+      toastManager.add({
+        type: "success",
+        title: "ذخیره انجام شد",
+        description: "تغییرات پرونده پزشکی با موفقیت ذخیره شد.",
+      });
       router.refresh();
     });
   }

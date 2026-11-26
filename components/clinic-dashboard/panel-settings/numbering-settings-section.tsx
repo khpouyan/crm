@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Hash, Save } from "lucide-react";
-import { toast } from "sonner";
+import { toastManager } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -49,10 +49,18 @@ export function NumberingSettingsSection({
         invoiceNumberStartFrom: parseInt(invoiceStart, 10) || 150001,
       });
       if (!res.success) {
-        toast.error(res.error || "خطا در ذخیره تنظیمات");
+        toastManager.add({
+          type: "error",
+          title: "خطا در ذخیره‌سازی",
+          description: res.error || "ذخیره تنظیمات شماره‌گذاری ناموفق بود.",
+        });
         return;
       }
-      toast.success("تنظیمات شماره پرونده و شماره فاکتور ذخیره شد.");
+      toastManager.add({
+        type: "success",
+        title: "ذخیره انجام شد",
+        description: "تنظیمات شماره پرونده و شماره فاکتور با موفقیت ذخیره شد.",
+      });
       router.refresh();
     });
   }

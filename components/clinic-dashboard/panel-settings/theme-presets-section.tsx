@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useTheme } from "next-themes";
 import { Check, Moon, Sun, Monitor, Palette } from "lucide-react";
-import { toast } from "sonner";
+import { toastManager } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -67,19 +67,37 @@ export function applyShadcnThemePreset(presetId: string) {
 
 export function ThemePresetsSection() {
   const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = React.useState(false);
   const [selectedPreset, setSelectedPreset] = React.useState<string>("zinc-neutral");
 
   React.useEffect(() => {
+    setMounted(true);
     const saved = window.localStorage.getItem(PRESET_STORAGE_KEY) || "zinc-neutral";
     setSelectedPreset(saved);
     applyShadcnThemePreset(saved);
   }, []);
 
   function handleSelectPreset(presetId: string) {
+    const preset = SHADCN_THEME_PRESETS.find((p) => p.id === presetId);
     setSelectedPreset(presetId);
     window.localStorage.setItem(PRESET_STORAGE_KEY, presetId);
     applyShadcnThemePreset(presetId);
-    toast.success("قالب انتخاب‌شده روی پنل اعمال شد.");
+    toastManager.add({
+      type: "success",
+      title: "قالب ذخیره شد",
+      description: `قالب «${preset?.name || presetId}» روی پنل اعمال شد.`,
+    });
+  }
+
+  function handleModeSelect(mode: "light" | "dark" | "system") {
+    setTheme(mode);
+    const label =
+      mode === "light" ? "روشن" : mode === "dark" ? "تیره" : "سیستمی";
+    toastManager.add({
+      type: "success",
+      title: "حالت نمایش ذخیره شد",
+      description: `حالت «${label}» برای پنل فعال شد.`,
+    });
   }
 
   return (
@@ -99,9 +117,9 @@ export function ThemePresetsSection() {
           <Button
             type="button"
             size="sm"
-            variant={theme === "light" ? "default" : "ghost"}
+            variant={mounted && theme === "light" ? "default" : "ghost"}
             className="h-8 gap-1 text-xs"
-            onClick={() => setTheme("light")}
+            onClick={() => handleModeSelect("light")}
           >
             <Sun className="size-3.5" />
             روشن
@@ -109,9 +127,9 @@ export function ThemePresetsSection() {
           <Button
             type="button"
             size="sm"
-            variant={theme === "dark" ? "default" : "ghost"}
+            variant={mounted && theme === "dark" ? "default" : "ghost"}
             className="h-8 gap-1 text-xs"
-            onClick={() => setTheme("dark")}
+            onClick={() => handleModeSelect("dark")}
           >
             <Moon className="size-3.5" />
             تیره
@@ -119,9 +137,9 @@ export function ThemePresetsSection() {
           <Button
             type="button"
             size="sm"
-            variant={theme === "system" ? "default" : "ghost"}
+            variant={mounted && theme === "system" ? "default" : "ghost"}
             className="h-8 gap-1 text-xs"
-            onClick={() => setTheme("system")}
+            onClick={() => handleModeSelect("system")}
           >
             <Monitor className="size-3.5" />
             سیستم

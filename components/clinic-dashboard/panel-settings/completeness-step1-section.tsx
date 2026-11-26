@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { ClipboardCheck, Save } from "lucide-react";
-import { toast } from "sonner";
+import { toastManager } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { saveFileCompletenessConfigAction } from "@/app/clinic-dashboard/(dashboard)/settings/panel/actions";
@@ -72,10 +72,18 @@ export function CompletenessStep1Section({
         ...rules,
       });
       if (!res.success) {
-        toast.error(res.error || "خطا در ذخیره تنظیمات تکمیل پرونده");
+        toastManager.add({
+          type: "error",
+          title: "خطا در ذخیره‌سازی",
+          description: res.error || "ذخیره تنظیمات تکمیل پرونده ناموفق بود.",
+        });
         return;
       }
-      toast.success("تنظیمات تکمیل / ناقص بودن پرونده ذخیره شد.");
+      toastManager.add({
+        type: "success",
+        title: "ذخیره انجام شد",
+        description: "تنظیمات تکمیل / ناقص بودن پرونده با موفقیت ذخیره شد.",
+      });
       router.refresh();
     });
   }

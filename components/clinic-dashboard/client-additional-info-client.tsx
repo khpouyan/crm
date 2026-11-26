@@ -4,7 +4,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Save, UserCog, X } from "lucide-react";
-import { toast } from "sonner";
+import { toastManager } from "@/components/ui/toast";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -153,12 +153,20 @@ export function ClientAdditionalInfoClient({
     e.preventDefault();
 
     if (isPhoneInvalid) {
-      toast.error("شماره موبایل وارد شده معتبر نیست.");
+      toastManager.add({
+        type: "error",
+        title: "خطا در اعتبارسنجی",
+        description: "شماره موبایل وارد شده معتبر نیست. ذخیره انجام نشد.",
+      });
       return;
     }
 
     if (isNationalIdInvalid) {
-      toast.error("کد ملی وارد شده معتبر نیست.");
+      toastManager.add({
+        type: "error",
+        title: "خطا در اعتبارسنجی",
+        description: "کد ملی وارد شده معتبر نیست. ذخیره انجام نشد.",
+      });
       return;
     }
 
@@ -191,11 +199,19 @@ export function ClientAdditionalInfoClient({
       });
 
       if (!res.success) {
-        toast.error(res.error || "خطا در ذخیره اطلاعات");
+        toastManager.add({
+          type: "error",
+          title: "خطا در ذخیره‌سازی",
+          description: res.error || "خطا در ذخیره اطلاعات پرونده",
+        });
         return;
       }
 
-      toast.success("اطلاعات تکمیلی پرونده با موفقیت ذخیره شد.");
+      toastManager.add({
+        type: "success",
+        title: "ذخیره انجام شد",
+        description: "اطلاعات تکمیلی پرونده با موفقیت ذخیره شد.",
+      });
       router.refresh();
     });
   }

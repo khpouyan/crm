@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { Type } from "lucide-react";
-import { toast } from "sonner";
+import { toastManager } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 export interface FontOption {
@@ -78,17 +78,27 @@ export function FontSettingsSection() {
   }, []);
 
   function handleFontChange(nextFont: string) {
+    const font = PERSIAN_FONT_OPTIONS.find((f) => f.id === nextFont);
     setSelectedFont(nextFont);
     window.localStorage.setItem(FONT_STORAGE_KEY, nextFont);
     applyFontPreferences(nextFont, selectedSize);
-    toast.success("فونت پنل تغییر کرد.");
+    toastManager.add({
+      type: "success",
+      title: "فونت تغییر کرد",
+      description: `فونت «${font?.label || nextFont}» ذخیره و اعمال شد.`,
+    });
   }
 
   function handleSizeChange(nextSize: string) {
+    const size = FONT_SIZE_OPTIONS.find((s) => s.id === nextSize);
     setSelectedSize(nextSize);
     window.localStorage.setItem(FONT_SIZE_STORAGE_KEY, nextSize);
     applyFontPreferences(selectedFont, nextSize);
-    toast.success("اندازه فونت پنل تغییر کرد.");
+    toastManager.add({
+      type: "success",
+      title: "اندازه فونت تغییر کرد",
+      description: `اندازه فونت «${size?.label || nextSize} (${size?.percent || ""})» ذخیره شد.`,
+    });
   }
 
   return (
