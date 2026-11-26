@@ -105,6 +105,7 @@ export interface ClientListItem {
   invoicesCount: number
   walletTransactionsCount: number
   isComplete: boolean
+  missingReasons?: string[]
   createdAt: string
 }
 
@@ -126,6 +127,7 @@ interface ClientsListClientProps {
   initialQuery: string
   initialStatus: "ALL" | "INCOMPLETE" | "COMPLETE"
   initialSort: string
+  fileNumberAutoEnabled?: boolean
   nextSuggestedFileNumber: number
   staffReferrers: { id: string; label: string }[]
   clientReferrers: { id: string; label: string }[]
@@ -219,6 +221,7 @@ export function ClientsListClient({
   initialQuery,
   initialStatus,
   initialSort,
+  fileNumberAutoEnabled = true,
   nextSuggestedFileNumber,
   staffReferrers,
   clientReferrers,
@@ -239,7 +242,9 @@ export function ClientsListClient({
   // استیت‌های فرم ایجاد پرونده جدید
   const [fullName, setFullName] = useState("")
   const [nickname, setNickname] = useState("")
-  const [fileNumber, setFileNumber] = useState(String(nextSuggestedFileNumber))
+  const [fileNumber, setFileNumber] = useState(
+    fileNumberAutoEnabled ? String(nextSuggestedFileNumber) : ""
+  )
   const [gender, setGender] = useState<"FEMALE" | "MALE">("FEMALE")
   const [phone, setPhone] = useState("")
   const [noPhone, setNoPhone] = useState(false)
@@ -296,6 +301,11 @@ export function ClientsListClient({
       : []
   const hasDuplicateName = matchingClients.length > 0
 
+  function openCreateDialog() {
+    setFileNumber(fileNumberAutoEnabled ? String(nextSuggestedFileNumber) : "")
+    setIsCreateOpen(true)
+  }
+
   function updateQueryParams(
     updates: Record<string, string | null>,
     resetPage = true
@@ -335,7 +345,7 @@ export function ClientsListClient({
   function resetCreateForm() {
     setFullName("")
     setNickname("")
-    setFileNumber(String(nextSuggestedFileNumber))
+    setFileNumber(fileNumberAutoEnabled ? String(nextSuggestedFileNumber) : "")
     setGender("FEMALE")
     setPhone("")
     setNoPhone(false)
@@ -354,7 +364,8 @@ export function ClientsListClient({
       const res = await createClientAction({
         fullName,
         nickname: hasDuplicateName ? nickname.trim() || null : null,
-        fileNumber: fileNumber ? Number(fileNumber) : null,
+        fileNumber:
+          fileNumberAutoEnabled && fileNumber ? Number(fileNumber) : null,
         gender,
         phone,
         noPhone,
@@ -501,7 +512,7 @@ export function ClientsListClient({
           <div className="flex flex-wrap items-center gap-2">
             <ExportDataMenu entity="CLIENTS" canExport={canExport} />
             {canCreate && (
-              <Button onClick={() => setIsCreateOpen(true)}>
+              <Button onClick={openCreateDialog}>
                 <UserPlus className="ml-2 size-4" />
                 پرونده جدید
               </Button>
@@ -630,178 +641,182 @@ export function ClientsListClient({
           </div>
         ) : viewMode === "card" ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {clients.map((client) => (
-              <div
-                key={client.id}
-                className="group overflow-hidden rounded-xl border bg-card shadow-xs transition-all hover:border-primary/40 hover:shadow-md"
-              >
-                {/* هدر آبی کارت مراجع */}
-                <div className="flex items-center justify-between gap-2 bg-primary px-3.5 py-2.5 text-primary-foreground">
-                  <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <Link
-                      href={`/clinic-dashboard/clients/${client.id}`}
-                      className="flex min-w-0 items-center gap-2 font-semibold hover:underline"
-                    >
-                      <span
-                        className={`size-2.5 shrink-0 rounded-full ${
-                          client.isComplete ? "bg-emerald-300" : "bg-amber-300"
-                        }`}
-                        title={
-                          client.isComplete
-                            ? "پرونده تکمیل شده"
-                            : "نیاز به تکمیل شماره تماس"
-                        }
-                      />
-                      <span className="truncate text-sm">
-                        {client.fullName}
+            {clients.map((client) => {
+              const statusTooltip = client.isComplete
+                ? "پرونده تکمیل شده"
+                : client.missingReasons && client.missingReasons.length > 0
+                  ? `نقص پرونده: ${client.missingReasons.join(" • ")}`
+                  : "نیاز به تکمیل پرونده"
+
+              return (
+                <div
+                  key={client.id}
+                  className="group overflow-hidden rounded-xl border bg-card shadow-xs transition-all hover:border-primary/40 hover:shadow-md"
+                >
+                  {/* هدر آبی کارت مراجع */}
+                  <div className="flex items-center justify-between gap-2 bg-primary px-3.5 py-2.5 text-primary-foreground">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <Link
+                        href={`/clinic-dashboard/clients/${client.id}`}
+                        className="flex min-w-0 items-center gap-2 font-semibold hover:underline"
+                      >
+                        <span
+                          className={`size-2.5 shrink-0 rounded-full ${
+                            client.isComplete ? "bg-emerald-300" : "bg-amber-300"
+                          }`}
+                          title={statusTooltip}
+                        />
+                        <span className="truncate text-sm">
+                          {client.fullName}
+                        </span>
+                      </Link>
+
+                      {client.nickname && (
+                        <NicknameTooltipButton
+                          nickname={client.nickname}
+                          variant="card"
+                        />
+                      )}
+                    </div>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger className="rounded-md p-1 hover:bg-primary-foreground/15">
+                        <MoreVertical className="size-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() =>
+                            router.push(`/clinic-dashboard/clients/${client.id}`)
+                          }
+                        >
+                          <FolderOpen className="ml-2 size-4" />
+                          مشاهده پرونده و خدمات
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            router.push(
+                              `/clinic-dashboard/clients/${client.id}/additional-info`
+                            )
+                          }
+                        >
+                          <FileText className="ml-2 size-4" />
+                          اطلاعات تکمیلی
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            router.push(
+                              `/clinic-dashboard/clients/${client.id}/wallet`
+                            )
+                          }
+                        >
+                          <Wallet className="ml-2 size-4" />
+                          کیف پول
+                        </DropdownMenuItem>
+
+                        {canEdit && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => openQuickEditModal(client)}
+                            >
+                              <Pencil className="ml-2 size-4" />
+                              ویرایش سریع نام و مشخصات
+                            </DropdownMenuItem>
+                          </>
+                        )}
+
+                        {canDelete && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => setDeletingClient(client)}
+                            >
+                              <Trash2 className="ml-2 size-4" />
+                              حذف پرونده
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  {/* بدنه اطلاعات کارت */}
+                  <div className="space-y-2.5 p-3.5 text-xs">
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <Phone className="size-3.5" />
+                        موبایل
                       </span>
-                    </Link>
+                      <span
+                        className="font-mono font-medium text-foreground"
+                        dir="ltr"
+                      >
+                        {client.phone || "ثبت نشده"}
+                      </span>
+                    </div>
 
-                    {client.nickname && (
-                      <NicknameTooltipButton
-                        nickname={client.nickname}
-                        variant="card"
-                      />
-                    )}
-                  </div>
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <FileText className="size-3.5" />
+                        شماره پرونده
+                      </span>
+                      <span className="font-semibold text-foreground">
+                        {client.fileNumber ?? "—"}
+                      </span>
+                    </div>
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger className="rounded-md p-1 hover:bg-primary-foreground/15">
-                      <MoreVertical className="size-4" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() =>
-                          router.push(`/clinic-dashboard/clients/${client.id}`)
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <CreditCard className="size-3.5" />
+                        تعداد خدمات
+                      </span>
+                      <Badge variant="secondary" className="text-[11px]">
+                        {client.servicesCount.toLocaleString("fa-IR")} سرویس
+                      </Badge>
+                    </div>
+
+                    {/* انتخاب برچسب */}
+                    <div className="pt-1">
+                      <Select
+                        value={client.tag || "NONE"}
+                        items={CLIENT_TAGS}
+                        disabled={!canEdit}
+                        onValueChange={(val) =>
+                          handleTagChange(client.id, val || "NONE")
                         }
                       >
-                        <FolderOpen className="ml-2 size-4" />
-                        مشاهده پرونده و خدمات
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() =>
-                          router.push(
-                            `/clinic-dashboard/clients/${client.id}/additional-info`
-                          )
-                        }
-                      >
-                        <FileText className="ml-2 size-4" />
-                        اطلاعات تکمیلی
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() =>
-                          router.push(
-                            `/clinic-dashboard/clients/${client.id}/wallet`
-                          )
-                        }
-                      >
-                        <Wallet className="ml-2 size-4" />
-                        کیف پول
-                      </DropdownMenuItem>
+                        <SelectTrigger className="h-8 text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <Tag className="size-3 text-muted-foreground" />
+                            <SelectValue placeholder="انتخاب برچسب" />
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CLIENT_TAGS.map((t) => (
+                            <SelectItem key={t.value} value={t.value}>
+                              {t.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                      {canEdit && (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => openQuickEditModal(client)}
-                          >
-                            <Pencil className="ml-2 size-4" />
-                            ویرایش سریع نام و مشخصات
-                          </DropdownMenuItem>
-                        </>
-                      )}
-
-                      {canDelete && (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => setDeletingClient(client)}
-                          >
-                            <Trash2 className="ml-2 size-4" />
-                            حذف پرونده
-                          </DropdownMenuItem>
-                        </>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-
-                {/* بدنه اطلاعات کارت */}
-                <div className="space-y-2.5 p-3.5 text-xs">
-                  <div className="flex items-center justify-between text-muted-foreground">
-                    <span className="flex items-center gap-1.5">
-                      <Phone className="size-3.5" />
-                      موبایل
-                    </span>
-                    <span
-                      className="font-mono font-medium text-foreground"
-                      dir="ltr"
-                    >
-                      {client.phone || "ثبت نشده"}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-muted-foreground">
-                    <span className="flex items-center gap-1.5">
-                      <FileText className="size-3.5" />
-                      شماره پرونده
-                    </span>
-                    <span className="font-semibold text-foreground">
-                      {client.fileNumber ?? "—"}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-muted-foreground">
-                    <span className="flex items-center gap-1.5">
-                      <CreditCard className="size-3.5" />
-                      تعداد خدمات
-                    </span>
-                    <Badge variant="secondary" className="text-[11px]">
-                      {client.servicesCount.toLocaleString("fa-IR")} سرویس
-                    </Badge>
-                  </div>
-
-                  {/* انتخاب برچسب */}
-                  <div className="pt-1">
-                    <Select
-                      value={client.tag || "NONE"}
-                      items={CLIENT_TAGS}
-                      disabled={!canEdit}
-                      onValueChange={(val) =>
-                        handleTagChange(client.id, val || "NONE")
+                    <Button
+                      render={
+                        <Link href={`/clinic-dashboard/clients/${client.id}`} />
                       }
+                      nativeButton={false}
+                      variant="outline"
+                      size="sm"
+                      className="mt-1 w-full text-xs"
                     >
-                      <SelectTrigger className="h-8 text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <Tag className="size-3 text-muted-foreground" />
-                          <SelectValue placeholder="انتخاب برچسب" />
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CLIENT_TAGS.map((t) => (
-                          <SelectItem key={t.value} value={t.value}>
-                            {t.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      ورود به پرونده
+                    </Button>
                   </div>
-
-                  <Button
-                    render={
-                      <Link href={`/clinic-dashboard/clients/${client.id}`} />
-                    }
-                    nativeButton={false}
-                    variant="outline"
-                    size="sm"
-                    className="mt-1 w-full text-xs"
-                  >
-                    ورود به پرونده
-                  </Button>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <div className="overflow-hidden rounded-xl border bg-card">
@@ -857,6 +872,12 @@ export function ClientsListClient({
                         <Badge
                           variant="outline"
                           className="border-amber-500/50 text-amber-600"
+                          title={
+                            client.missingReasons &&
+                            client.missingReasons.length > 0
+                              ? client.missingReasons.join(" • ")
+                              : undefined
+                          }
                         >
                           <AlertCircle className="ml-1 size-3" />
                           نیاز به تکمیل
@@ -929,7 +950,7 @@ export function ClientsListClient({
         {canCreate && (
           <Button
             type="button"
-            onClick={() => setIsCreateOpen(true)}
+            onClick={openCreateDialog}
             className="fixed bottom-6 left-6 z-40 size-13 rounded-full shadow-lg"
             title="افزودن پرونده جدید"
           >
@@ -1052,17 +1073,16 @@ export function ClientsListClient({
                             شماره موبایل وارد شده معتبر نیست.
                           </FieldError>
                         )}
-                         {/* شماره تماس تکراری*/}
-                      {duplicatePhoneClient  && (
+                        {duplicatePhoneClient && (
                           <FieldError className="text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                          این شماره در پرونده «
-                          {duplicatePhoneClient.fullName || "بدون نام"}»
-                          {duplicatePhoneClient.fileNumber
-                            ? ` (#${duplicatePhoneClient.fileNumber})`
-                            : ""}{" "}
-                          ثبت شده است.          
+                            این شماره در پرونده «
+                            {duplicatePhoneClient.fullName || "بدون نام"}»
+                            {duplicatePhoneClient.fileNumber
+                              ? ` (#${duplicatePhoneClient.fileNumber})`
+                              : ""}{" "}
+                            ثبت شده است.
                           </FieldError>
-                          )}
+                        )}
                         <Field orientation="horizontal" className="pt-1">
                           <Checkbox
                             id="noPhone"
@@ -1080,7 +1100,7 @@ export function ClientsListClient({
                           </FieldLabel>
                         </Field>
                       </Field>
-                      
+
                       {/* کد ملی + فاقد کد ملی */}
                       <Field data-invalid={isNationalIdInvalid || undefined}>
                         <FieldLabel htmlFor="nationalId">
@@ -1100,17 +1120,16 @@ export function ClientsListClient({
                         {isNationalIdInvalid && (
                           <FieldError>کد ملی وارد شده معتبر نیست.</FieldError>
                         )}
-                        {/* کد ملی مشابه*/}
-                      {duplicateNationalIdClient && (
+                        {duplicateNationalIdClient && (
                           <FieldError className="text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                          این کد ملی در پرونده «
-                          {duplicateNationalIdClient.fullName || "بدون نام"}»
-                          {duplicateNationalIdClient.fileNumber
-                            ? ` (#${duplicateNationalIdClient.fileNumber})`
-                            : ""}{" "}
-                          ثبت شده است.          
+                            این کد ملی در پرونده «
+                            {duplicateNationalIdClient.fullName || "بدون نام"}»
+                            {duplicateNationalIdClient.fileNumber
+                              ? ` (#${duplicateNationalIdClient.fileNumber})`
+                              : ""}{" "}
+                            ثبت شده است.
                           </FieldError>
-                          )}
+                        )}
                         <Field orientation="horizontal" className="pt-1">
                           <Checkbox
                             id="noNationalId"
@@ -1128,22 +1147,27 @@ export function ClientsListClient({
                           </FieldLabel>
                         </Field>
                       </Field>
-                      
                     </div>
 
-                    {/* شماره پرونده و جنسیت */}
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <Field>
-                        <FieldLabel htmlFor="fileNumber">
-                          شماره پرونده
-                        </FieldLabel>
-                        <Input
-                          id="fileNumber"
-                          type="number"
-                          value={fileNumber}
-                          onChange={(e) => setFileNumber(e.target.value)}
-                        />
-                      </Field>
+                    {/* شماره پرونده (در صورت فعال بودن) و جنسیت */}
+                    <div
+                      className={`grid grid-cols-1 gap-4 ${
+                        fileNumberAutoEnabled ? "sm:grid-cols-2" : ""
+                      }`}
+                    >
+                      {fileNumberAutoEnabled && (
+                        <Field>
+                          <FieldLabel htmlFor="fileNumber">
+                            شماره پرونده
+                          </FieldLabel>
+                          <Input
+                            id="fileNumber"
+                            type="number"
+                            value={fileNumber}
+                            onChange={(e) => setFileNumber(e.target.value)}
+                          />
+                        </Field>
+                      )}
 
                       <Field>
                         <FieldLabel htmlFor="gender">جنسیت *</FieldLabel>

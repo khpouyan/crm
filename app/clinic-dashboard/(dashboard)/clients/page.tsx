@@ -6,11 +6,91 @@ import { hasPermission } from "@/lib/permissions";
 import { parsePaginationParams } from "@/lib/inventory/pagination-helper";
 import { checkClinicExportCapability } from "@/lib/export/data-export";
 import { normalizePersianDigits } from "@/lib/normalize-persian-digits";
-import { ClientsListClient } from "@/components/clinic-dashboard/clients-list-client";
+import { isValidNationalId } from "@/lib/national-id";
+import {
+  ClientsListClient,
+  type ClientListItem,
+} from "@/components/clinic-dashboard/clients-list-client";
 
 export const metadata = {
   title: "پرونده‌ها و مراجعین | پنل کلینیک",
 };
+
+interface CompletenessConfig {
+  requirePhone?: boolean;
+  requireNationalId?: boolean;
+  requireGender?: boolean;
+  requireBirthDate?: boolean;
+  requireAddress?: boolean;
+  requireAtLeastOneService?: boolean;
+}
+
+function evaluateClientCompleteness(
+  record: {
+    fullName: string | null;
+    phone: string;
+    nationalId: string | null;
+    gender: string | null;
+    birthDate: Date | null;
+    additionalInfo: unknown;
+    servicesCount: number;
+    appointmentsCount: number;
+  },
+  config: CompletenessConfig
+): { isComplete: boolean; missingReasons: string[] } {
+  const missingReasons: string[] = [];
+  const isNoPhone = record.phone.startsWith("NO_PHONE_");
+
+  if (!record.fullName || !record.fullName.trim()) {
+    missingReasons.push("نام و نام خانوادگی ثبت نشده است");
+  }
+
+  if (config.requirePhone && (isNoPhone || !record.phone.trim())) {
+    missingReasons.push("شماره تماس معتبر ثبت نشده است");
+  }
+
+  if (config.requireNationalId) {
+    const cleanNat = normalizePersianDigits(record.nationalId || "").replace(
+      /\D/g,
+      ""
+    );
+    if (!cleanNat || !isValidNationalId(cleanNat)) {
+      missingReasons.push("کد ملی معتبر ثبت نشده است");
+    }
+  }
+
+  if (config.requireGender && !record.gender) {
+    missingReasons.push("جنسیت ثبت نشده است");
+  }
+
+  if (config.requireBirthDate && !record.birthDate) {
+    missingReasons.push("تاریخ تولد ثبت نشده است");
+  }
+
+  if (config.requireAddress) {
+    const addInfo =
+      record.additionalInfo && typeof record.additionalInfo === "object"
+        ? (record.additionalInfo as Record<string, unknown>)
+        : {};
+    const address = String(addInfo.address || "").trim();
+    if (!address) {
+      missingReasons.push("آدرس در اطلاعات تکمیلی ثبت نشده است");
+    }
+  }
+
+  if (
+    config.requireAtLeastOneService &&
+    record.servicesCount === 0 &&
+    record.appointmentsCount === 0
+  ) {
+    missingReasons.push("حداقل یک سرویس یا نوبت ثبت نشده است");
+  }
+
+  return {
+    isComplete: missingReasons.length === 0,
+    missingReasons,
+  };
+}
 
 export default async function ClientsPage({
   searchParams,
@@ -19,8 +99,8 @@ export default async function ClientsPage({
     page?: string;
     pageSize?: string;
     q?: string;
-    status?: string; // ALL | INCOMPLETE | COMPLETE
-    sort?: string;   // fileNumber_desc | fileNumber_asc | newest | oldest
+    status?: string;
+    sort?: string;
   }>;
 }) {
   const ctx = await getCurrentClinicContext();
@@ -31,7 +111,7 @@ export default async function ClientsPage({
   }
 
   const params = await searchParams;
-  const { page, pageSize, skip, take } = parsePaginationParams(params);
+  const { page, pageSize } = parsePaginationParams(params);
   const query = normalizePersianDigits(params.q || "").trim();
   const statusFilter =
     params.status === "INCOMPLETE" || params.status === "COMPLETE"
@@ -39,34 +119,35 @@ export default async function ClientsPage({
       : "ALL";
   const sortParam = params.sort || "fileNumber_desc";
 
-  // تعریف شرط تکمیل بودن پرونده: دارای نام، شماره موبایل واقعی (نه NO_PHONE) و کد ملی
-  const completeCondition = {
-    user: {
-      fullName: { not: null },
-      phone: { not: { startsWith: "NO_PHONE_" } },
+  const clinicMeta = await prisma.clinic.findUnique({
+    where: { id: ctx.clinicId },
+    select: {
+      fileNumberAutoEnabled: true,
+      fileNumberStartFrom: true,
+      fileCompletenessConfig: true,
     },
-  };
+  });
 
-  const incompleteCondition = {
-    OR: [
-      { user: { fullName: null } },
-      { user: { phone: { startsWith: "NO_PHONE_" } } },
-    ],
-  };
+  const fileNumberAutoEnabled = clinicMeta?.fileNumberAutoEnabled ?? true;
+  const fileNumberStartFrom = clinicMeta?.fileNumberStartFrom ?? 1001;
+  const completenessConfig: CompletenessConfig =
+    clinicMeta?.fileCompletenessConfig &&
+    typeof clinicMeta.fileCompletenessConfig === "object"
+      ? (clinicMeta.fileCompletenessConfig as CompletenessConfig)
+      : {};
 
   const numericQuery = /^\d+$/.test(query) ? Number(query) : null;
 
-  const whereClause = {
+  const searchWhereClause = {
     clinicId: ctx.clinicId,
-    ...(statusFilter === "COMPLETE"
-      ? completeCondition
-      : statusFilter === "INCOMPLETE"
-      ? incompleteCondition
-      : {}),
     ...(query
       ? {
           OR: [
-            { user: { fullName: { contains: query, mode: "insensitive" as const } } },
+            {
+              user: {
+                fullName: { contains: query, mode: "insensitive" as const },
+              },
+            },
             { nickname: { contains: query, mode: "insensitive" as const } },
             { user: { phone: { contains: query } } },
             { user: { nationalId: { contains: query } } },
@@ -92,16 +173,14 @@ export default async function ClientsPage({
         ];
 
   const [
-    totalCount,
-    clients,
+    matchingClientsRows,
     canExport,
     lastClient,
     staffReferrers,
     allClinicClients,
   ] = await Promise.all([
-    prisma.client.count({ where: whereClause }),
     prisma.client.findMany({
-      where: whereClause,
+      where: searchWhereClause,
       include: {
         user: {
           select: {
@@ -113,14 +192,13 @@ export default async function ClientsPage({
         _count: {
           select: {
             providedServices: true,
+            appointments: true,
             invoices: true,
             walletTransactions: true,
           },
         },
       },
       orderBy,
-      skip,
-      take,
     }),
     checkClinicExportCapability(ctx.clinicId),
     prisma.client.findFirst({
@@ -150,11 +228,25 @@ export default async function ClientsPage({
     }),
   ]);
 
-  const nextSuggestedFileNumber = (lastClient?.fileNumber || 1000) + 1;
+  const nextSuggestedFileNumber = lastClient?.fileNumber
+    ? Math.max(lastClient.fileNumber + 1, fileNumberStartFrom)
+    : fileNumberStartFrom;
 
-  const serializedClients = clients.map((c) => {
+  const evaluatedAll: ClientListItem[] = matchingClientsRows.map((c) => {
     const isNoPhone = c.user.phone.startsWith("NO_PHONE_");
-    const isComplete = Boolean(c.user.fullName && !isNoPhone);
+    const evalResult = evaluateClientCompleteness(
+      {
+        fullName: c.user.fullName,
+        phone: c.user.phone,
+        nationalId: c.user.nationalId,
+        gender: c.gender,
+        birthDate: c.birthDate,
+        additionalInfo: c.additionalInfo,
+        servicesCount: c._count.providedServices,
+        appointmentsCount: c._count.appointments,
+      },
+      completenessConfig
+    );
 
     return {
       id: c.id,
@@ -167,12 +259,23 @@ export default async function ClientsPage({
       tag: c.tag,
       walletBalance: c.walletBalance,
       servicesCount: c._count.providedServices,
-      isComplete,
+      isComplete: evalResult.isComplete,
+      missingReasons: evalResult.missingReasons,
       createdAt: c.createdAt.toISOString(),
       invoicesCount: c._count.invoices,
       walletTransactionsCount: c._count.walletTransactions,
     };
   });
+
+  const statusFilteredList = evaluatedAll.filter((item) => {
+    if (statusFilter === "COMPLETE") return item.isComplete;
+    if (statusFilter === "INCOMPLETE") return !item.isComplete;
+    return true;
+  });
+
+  const totalCount = statusFilteredList.length;
+  const startIdx = (page - 1) * pageSize;
+  const paginatedClients = statusFilteredList.slice(startIdx, startIdx + pageSize);
 
   const existingClientsSummary = allClinicClients.map((c) => ({
     id: c.id,
@@ -185,7 +288,7 @@ export default async function ClientsPage({
 
   return (
     <ClientsListClient
-      clients={serializedClients}
+      clients={paginatedClients}
       existingClients={existingClientsSummary}
       totalCount={totalCount}
       page={page}
@@ -193,6 +296,7 @@ export default async function ClientsPage({
       initialQuery={query}
       initialStatus={statusFilter}
       initialSort={sortParam}
+      fileNumberAutoEnabled={fileNumberAutoEnabled}
       nextSuggestedFileNumber={nextSuggestedFileNumber}
       staffReferrers={staffReferrers.map((s) => ({
         id: s.id,
